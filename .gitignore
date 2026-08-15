@@ -1,1 +1,63 @@
+# ==========================================================================
+# flamingo-driver — .gitignore
+#
+# مبدأ أساسي: كل ما يُولَّد آلياً أو يحمل سراً لا يدخل Git.
+# استثناء مقصود: google-services.json و GoogleService-Info.plist يبقيان
+# متتبَّعَين لأن إضافة com.google.gms.google-services تحتاجهما وقت البناء،
+# و app.config.js يشير إليهما بمسار الجذر افتراضياً.
+# ==========================================================================
+
+# --- أسرار ومتغيرات بيئة ---
+.env
+.env.*
+!.env.example
+
+# --- مفاتيح التوقيع: لا يُرفع أي منها إطلاقاً ---
+*.keystore
+*.jks
+*.p8
+*.p12
+*.pepk
+*.mobileprovision
+keystore.properties
+
+# --- مجلدات المنصات المولّدة عبر expo prebuild ---
+# هذه ليست مصدراً: تُولَّد من app.json + app.config.js في CI وعلى الجهاز.
+/android
+/ios
+
+# --- الاعتماديات ---
 node_modules/
+
+# --- مخرجات البناء و Expo ---
+.expo/
+.expo-shared/
+dist/
+web-build/
+*.apk
+*.aab
+*.tsbuildinfo
+
+# --- اختبارات وتغطية ---
+coverage/
+
+# --- سجلات وملفات مؤقتة ---
+*.log
+npm-debug.log*
+yarn-error.log*
+ci-logs/
+tmp/
+config.log
+expo-config-output.txt
+expo-config-error.txt
+
+# --- نسخ احتياطية لا معنى لها في السجل ---
+*.bak
+*.backup
+
+# --- نظام التشغيل والمحررات ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
