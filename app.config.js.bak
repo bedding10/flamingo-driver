@@ -1,0 +1,69 @@
+const read = (name) => process.env[name]?.trim();
+
+const requireNativeConfig =
+  process.env.FLAMINGO_REQUIRE_NATIVE_CONFIG === "1";
+
+module.exports = ({ config }) => {
+  const androidMapsKey = read("GOOGLE_MAPS_ANDROID_API_KEY");
+  const iosMapsKey = read("GOOGLE_MAPS_IOS_API_KEY");
+
+  const googleJson = read("GOOGLE_SERVICES_JSON");
+  const googlePlist = read("GOOGLE_SERVICES_PLIST");
+
+  if (requireNativeConfig) {
+    const missing = [
+      ["GOOGLE_MAPS_ANDROID_API_KEY", androidMapsKey],
+      ["GOOGLE_MAPS_IOS_API_KEY", iosMapsKey],
+      ["GOOGLE_SERVICES_JSON", googleJson],
+    ]
+      .filter(([, value]) => !value)
+      .map(([name]) => name);
+
+    if (missing.length) {
+      throw new Error(
+        `Missing protected native configuration: ${missing.join(", ")}`
+      );
+    }
+  }
+
+  return {
+  ...config,
+
+  android: {
+    ...config.android,
+    ...(googleJson
+      ? { googleServicesFile: googleJson }
+      : {}),
+
+    config: {
+      ...(config.android?.config || {}),
+      googleMaps: {
+        apiKey: androidMapsKey || "",
+      },
+    },
+  },
+
+  ios: {
+    ...config.ios,
+
+    ...(googlePlist
+      ? { googleServicesFile: googlePlist }
+      : {}),
+
+    config: {
+      ...(config.ios?.config || {}),
+      googleMapsApiKey: iosMapsKey || "",
+    },
+  },
+
+      extra: {
+      ...config.extra,
+
+      eas: {
+        projectId:
+          read("EAS_PROJECT_ID") ||
+          "4188ec50-c27c-4d53-b15e-3b8de5ab2a2a",
+      },
+    },
+  };
+};

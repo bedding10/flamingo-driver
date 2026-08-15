@@ -1,0 +1,99 @@
+{
+  "expo": {
+    "name": "flaminGO Driver",
+    "slug": "flamingo-driver",
+    "scheme": "flamingodriver",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "assetBundlePatterns": [
+      "assets/*.png",
+      "assets/*.webp"
+    ],
+    "newArchEnabled": false,
+    "jsEngine": "hermes",
+    "platforms": [
+      "ios",
+      "android"
+    ],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.flamingo.driver",
+      "buildNumber": "1",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSLocationWhenInUseUsageDescription": "flaminGO Driver uses your location to receive nearby ride offers and to share your position with the passenger during a trip.",
+        "NSCameraUsageDescription": "flaminGO Driver uses the camera to photograph your documents.",
+        "NSPhotoLibraryUsageDescription": "flaminGO Driver needs photo access to upload your documents."
+      }
+    },
+    "android": {
+      "package": "com.flamingo.driver",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "POST_NOTIFICATIONS",
+        "CAMERA",
+        "RECORD_AUDIO"
+      ],
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FFFFFF"
+      }
+    },
+    "plugins": [
+      "@react-native-firebase/app",
+      "@react-native-firebase/crashlytics",
+      "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "flaminGO Driver uses your location to receive nearby ride offers and share your position during trips."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "flaminGO Driver needs photo access to upload your documents.",
+          "cameraPermission": "flaminGO Driver uses the camera to photograph your documents."
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "enableProguardInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true,
+            "usesCleartextTraffic": false,
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35
+          },
+          "ios": {
+            "deploymentTarget": "15.1"
+          }
+        }
+      ]
+    ],
+    "icon": "./assets/app-icon.png",
+    "splash": {
+      "image": "./assets/brand-master-logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FFFFFF"
+    },
+    "notification": {
+      "icon": "./assets/notification-icon.png",
+      "color": "#D9A520"
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "4188ec50-c27c-4d53-b15e-3b8de5ab2a2a"
+      }
+    },
+    "updates": {
+      "url": "https://u.expo.dev/4188ec50-c27c-4d53-b15e-3b8de5ab2a2a"
+    }
+  }
+}
