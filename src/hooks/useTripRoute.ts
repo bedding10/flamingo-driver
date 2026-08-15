@@ -23,19 +23,18 @@ import type { Trip, TripStatus } from "../types/trip";
  * reads `coords`, so nothing else moves.
  */
 
+/**
+ * Also the value DriverMap compares against to pick the polyline colour
+ * (`route?.leg === "to_pickup"` -> gold, otherwise teal), so these two strings
+ * are a contract with that component and must not be renamed on their own.
+ */
 export type RouteLeg = "to_pickup" | "to_destination";
 
 /** react-native-maps coordinate shape, not the API's { lat, lng }. */
 export type RouteCoord = { latitude: number; longitude: number };
 
 export type ActiveRoute = {
-  /**
-   * Identifies the leg so the map can fit it to the screen exactly once.
-   * Includes the trip id: two consecutive trips both starting with a
-   * "to_pickup" leg must not be mistaken for the same leg.
-   */
-  leg: string;
-  kind: RouteLeg;
+  leg: RouteLeg;
   coords: RouteCoord[];
   /** End of the current leg: the passenger, then the drop-off point. */
   destination: RouteCoord | null;
@@ -75,12 +74,12 @@ export function useTripRoute(trip: Trip | null | undefined): ActiveRoute | null 
 
   const status = trip?.status;
   const tripId = trip?.id;
-  const kind = status ? LEG_BY_STATUS[status] ?? null : null;
+  const leg = status ? LEG_BY_STATUS[status] ?? null : null;
 
   const target =
-    kind === "to_pickup"
+    leg === "to_pickup"
       ? toCoord(trip?.pickupLat, trip?.pickupLng)
-      : kind === "to_destination"
+      : leg === "to_destination"
         ? toCoord(trip?.destLat, trip?.destLng)
         : null;
 
@@ -90,7 +89,7 @@ export function useTripRoute(trip: Trip | null | undefined): ActiveRoute | null 
   const targetLng = target?.longitude;
 
   return useMemo(() => {
-    if (!tripId || !kind || !target) return null;
+    if (!tripId || !leg || !target) return null;
 
     const origin = toCoord(originLat, originLng);
 
@@ -99,13 +98,8 @@ export function useTripRoute(trip: Trip | null | undefined): ActiveRoute | null 
     // so a single-point array renders the marker alone.
     const coords = origin ? [origin, target] : [target];
 
-    return {
-      leg: tripId + ":" + kind,
-      kind,
-      coords,
-      destination: target,
-    };
+    return { leg, coords, destination: target };
     // target is rebuilt every render, so the primitives are the real inputs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tripId, kind, originLat, originLng, targetLat, targetLng]);
+  }, [tripId, leg, originLat, originLng, targetLat, targetLng]);
 }
