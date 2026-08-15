@@ -32,6 +32,24 @@ import { useCities, useWilayas } from "../../hooks/useGeography";
 import { toApiError } from "../../api/client";
 import type { UpdateDriverProfileInput } from "../../types/driver";
 
+// Phase 11 - display labels only, mirroring ActiveTripCard.
+//
+// This map was USED twice below and never defined, which threw a
+// ReferenceError the moment a driver whose profile carries a profileLevel
+// opened this screen. It is a runtime-only failure: the reference is legal
+// JavaScript, so Metro bundles it and the crash happens on render.
+//
+// It is a lookup table and nothing more: the level itself is decided by the
+// backend from COMPLETED trips, and no threshold (10 / 50 / 100 / 500) is
+// introduced here. An unknown level falls back to the raw server value.
+const LEVEL_LABELS: Record<string, string> = {
+  BRONZE: strings.level.bronze,
+  SILVER: strings.level.silver,
+  GOLD: strings.level.gold,
+  DIAMOND: strings.level.diamond,
+  LEGENDARY: strings.level.legendary,
+};
+
 /**
  * Driver identity + active vehicle, saved in a single PATCH /driver/me.
  *

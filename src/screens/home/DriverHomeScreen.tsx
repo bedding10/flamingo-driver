@@ -190,6 +190,20 @@ export function DriverHomeScreen() {
   const recenter = useCallback(() => setFollow(true), []);
   const onPanByUser = useCallback(() => setFollow(false), []);
 
+  /**
+   * Opens the trip chat with the passenger.
+   *
+   * ActiveTripCard declares `onChat` as REQUIRED and this screen never passed
+   * it, so the TripChat route registered in DriverNavigator was unreachable:
+   * the driver had no way at all to answer a passenger message. The id comes
+   * from the running trip rather than a store read, matching the route param
+   * contract in navigation/types.ts.
+   */
+  const openChat = useCallback(() => {
+    if (!trip) return;
+    navigation.navigate("TripChat", { tripId: trip.id });
+  }, [navigation, trip]);
+
   const linkTone: PillTone =
     link === "connected" ? "approved" : link === "connecting" ? "pending" : "rejected";
   const linkLabel =
@@ -265,6 +279,7 @@ export function DriverHomeScreen() {
           onAdvance={() => void advance()}
           onCancel={() => void cancelTripNow()}
           onSos={() => void raiseSos()}
+          onChat={openChat}
         />
       ) : offer ? (
         <RideOfferCard
