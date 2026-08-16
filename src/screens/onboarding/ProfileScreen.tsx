@@ -14,7 +14,7 @@ import { InputField } from "../../components/InputField";
 import { PrimaryButton } from "../../components/PrimaryButton";
 import { SectionCard } from "../../components/SectionCard";
 import { VehicleCard } from "../../components/VehicleCard";
-import { ProfileAvatar } from "../../components/ProfileAvatar";
+import { ProfilePhotoPicker } from "../../components/ProfilePhotoPicker";
 import { PasswordSetupCard } from "../../components/PasswordSetupCard";
 import { strings } from "../../i18n/strings";
 import {
@@ -95,6 +95,12 @@ function sameFeatures(a: string[], b: string[]): boolean {
  *    assign it during vehicle review, on purpose, so a driver cannot quietly
  *    relabel an approved van as "economy" to pick up more offers. The server
  *    no longer accepts rideClass on this endpoint at all.
+ *
+ * PHASE 1C: the profile photo is NOT part of this form and has no Save button
+ * of its own here. It travels through the document upload flow
+ * (upload-url → PUT → POST /driver/documents), which is a different contract
+ * with a different failure mode, so mixing it into the PATCH payload would
+ * make one failure look like the other.
  */
 export function ProfileScreen() {
   const insets = useSafeAreaInsets();
@@ -264,9 +270,10 @@ export function ProfileScreen() {
         <Text style={styles.heading}>{strings.profile.title}</Text>
 
         {/* المرحلة 11: الصورة داخل إطار المستوى. الإطار والمستوى وعدد
-            الرحلات تأتي كلها من GET /driver/me. */}
+            الرحلات تأتي كلها من GET /driver/me.
+            PHASE 1C: نفس العرض، مع إمكانية التقاط الصورة أو تغييرها. */}
         <View style={styles.levelHero}>
-          <ProfileAvatar
+          <ProfilePhotoPicker
             avatarUrl={profile?.photoUrl}
             frameUrl={profile?.profileFrameUrl}
             size={112}
