@@ -10,6 +10,8 @@
 #    إن غابت الأسرار بدل توقيعها بمفتاح debug.
 #  • google-services.json متتبَّع في الجذر ومطابق للحزمة com.flamingo.driver،
 #    وهو شرط إضافة @react-native-firebase/app.
+#  • حزمة JS تُبنى مرة مبكرة (expo export) قبل Gradle: أي وحدة مفقودة تفشل
+#    خلال ثوانٍ بدل أربع دقائق داخل createBundleReleaseJsAndAssets.
 # ==========================================================================
 
 name: Android APK Build (Driver)
@@ -150,7 +152,32 @@ jobs:
           echo "google-services.json موجود ومطابق للحزمة com.flamingo.driver."
 
       - name: Install npm dependencies
-        run: npm ci --no-audit --no-fund || npm install --no-audit --no-fund
+        run: |
+          set -euo pipefail
+          # package-lock.json يُولَّد محلياً؛ إن تأخر عن package.json يفشل npm ci
+          # عمداً (EUSAGE) ونكمل بـ npm install بدل تثبيت شجرة ناقصة بصمت.
+          if ! npm ci --no-audit --no-fund; then
+            echo "::warning::npm ci فشل (غالباً package-lock.json غير محدَّث) — المتابعة بـ npm install."
+            npm install --no-audit --no-fund
+          fi
+
+      # ------------------------------------------------------------------
+      # بوابة الحل المبكر.
+      #
+      # فشل البناء مرتين عند :app:createBundleReleaseJsAndAssets بسبب وحدة
+      # لا يستطيع Metro حلها (ملف مفقود ثم حزمة npm غير معلنة). تلك المهمة
+      # لا تعمل إلا بعد إعداد Gradle كاملاً، أي بعد ~4 دقائق من كل محاولة.
+      # expo export يبني نفس الرسم البياني لـ Metro بنفس الإعدادات، فيظهر
+      # الخطأ نفسه خلال ثوانٍ. NODE_ENV=production يُسكت أيضاً تحذير
+      # expo-constants الذي يظهر في السجل.
+      # ------------------------------------------------------------------
+      - name: Verify every imported module resolves (fast fail)
+        env:
+          NODE_ENV: production
+        run: |
+          set -euo pipefail
+          npx expo export --platform android --output-dir "$RUNNER_TEMP/bundle-check"
+          echo "حزمة JS اكتملت — كل مسار مستورد قابل للحل."
 
       - name: Generate native android project (expo prebuild)
         run: |
@@ -275,6 +302,8 @@ jobs:
 
       - name: Build APK
         working-directory: android
+        env:
+          NODE_ENV: production
         run: |
           set -euo pipefail
           ./gradlew ${{ steps.cfg.outputs.task }} \
