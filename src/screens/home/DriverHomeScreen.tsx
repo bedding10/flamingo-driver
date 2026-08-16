@@ -27,6 +27,7 @@ import type { SocketStatus } from "../../types/socket";
 import type { DriverStackParamList } from "../../navigation/types";
 import { strings } from "../../i18n/strings";
 import { requestStrings } from "../../i18n/strings.requests";
+import { menuStrings } from "../../i18n/strings.menu";
 import {
   colors,
   radius,
@@ -270,10 +271,16 @@ export function DriverHomeScreen() {
       />
 
       <View style={[styles.topBar, { paddingTop: insets.top + spacing.sm }]}>
+        {/*
+          PHASE 5: the hamburger opens the menu, not the profile form. It used to
+          navigate straight to Profile, which made the wallet, the earnings and
+          the sign-out unreachable and turned a settings form into the app's
+          only side door.
+        */}
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={strings.approval.openProfile}
-          onPress={() => navigation.navigate("Profile")}
+          accessibilityLabel={menuStrings.title}
+          onPress={() => navigation.navigate("Menu")}
           style={styles.roundButton}
         >
           <Text style={styles.roundButtonGlyph}>{"\u2261"}</Text>
