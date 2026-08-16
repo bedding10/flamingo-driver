@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { StyleSheet, Text } from "react-native";
 import { InputField } from "./InputField";
 import { PrimaryButton } from "./PrimaryButton";
@@ -7,7 +7,7 @@ import { authApi } from "../api";
 import { toApiError } from "../api/client";
 import { strings } from "../i18n/strings";
 import { pw } from "../i18n/strings.password";
-import { colors, spacing, typography } from "../theme";
+import { spacing, typography, usePalette, type Palette } from "../theme";
 
 /** Mirrors ChangePasswordDto on the server: MinLength(6), MaxLength(72). */
 const MIN_LENGTH = 6;
@@ -15,7 +15,7 @@ const MIN_LENGTH = 6;
 const MAX_LENGTH = 72;
 
 /**
- * PHASE 1 — optional password for a phone-authenticated driver.
+ * PHASE 1 - optional password for a phone-authenticated driver.
  *
  * Sign-in stays Firebase phone verification: this card does not create a second
  * account, does not touch the phone number, and does not issue tokens. It only
@@ -24,10 +24,13 @@ const MAX_LENGTH = 72;
  *
  * The "current password" field is optional by design: an account created by the
  * Firebase flow has no hash yet, and the server accepts the first set without
- * one. Once a password exists the server requires it again — the client does
+ * one. Once a password exists the server requires it again - the client does
  * not decide that, it only sends what it has.
  */
 export function PasswordSetupCard() {
+  const palette = usePalette();
+  const styles = useMemo(() => makeStyles(palette), [palette]);
+
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -130,24 +133,25 @@ export function PasswordSetupCard() {
   );
 }
 
-const styles = StyleSheet.create({
-  hint: {
-    ...typography.caption,
-    color: colors.textOnDarkSecondary,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  error: {
-    ...typography.caption,
-    color: colors.danger,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  success: {
-    ...typography.caption,
-    color: colors.online,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  action: { marginTop: spacing.sm },
-});
+const makeStyles = (palette: Palette) =>
+  StyleSheet.create({
+    hint: {
+      ...typography.caption,
+      color: palette.textSecondary,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+    error: {
+      ...typography.caption,
+      color: palette.danger,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+    success: {
+      ...typography.caption,
+      color: palette.online,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+    action: { marginTop: spacing.sm },
+  });

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   KeyboardAvoidingView,
   Modal,
@@ -10,7 +10,15 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { colors, radius, spacing, touchTarget, typography, withAlpha } from "../theme";
+import {
+  radius,
+  spacing,
+  touchTarget,
+  typography,
+  usePalette,
+  withAlpha,
+  type Palette,
+} from "../theme";
 import { strings } from "../i18n/strings";
 import { DOC_LABELS, p1 } from "../i18n/strings.phase1";
 import { formatDateInput, parseIsoDay } from "../utils/documentDates";
@@ -28,6 +36,8 @@ type Props = {
   onConfirm: (type: DocumentType, dates: DocumentDates) => void;
 };
 
+type Styles = ReturnType<typeof makeStyles>;
+
 /**
  * Asks for the dates printed on the document BEFORE the camera opens.
  *
@@ -42,6 +52,9 @@ type Props = {
  * the very next read.
  */
 export function DocumentDatesModal({ type, onCancel, onConfirm }: Props) {
+  const palette = usePalette();
+  const styles = useMemo(() => makeStyles(palette), [palette]);
+
   const [issued, setIssued] = useState("");
   const [expires, setExpires] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -123,6 +136,8 @@ export function DocumentDatesModal({ type, onCancel, onConfirm }: Props) {
 
             {rule.issued ? (
               <DateField
+                styles={styles}
+                palette={palette}
                 label={p1.documents.issuedAtLabel}
                 value={issued}
                 onChange={setIssued}
@@ -131,6 +146,8 @@ export function DocumentDatesModal({ type, onCancel, onConfirm }: Props) {
 
             {rule.expires ? (
               <DateField
+                styles={styles}
+                palette={palette}
                 label={p1.documents.expiresAtLabel}
                 value={expires}
                 onChange={setExpires}
@@ -170,10 +187,14 @@ export function DocumentDatesModal({ type, onCancel, onConfirm }: Props) {
 }
 
 function DateField({
+  styles,
+  palette,
   label,
   value,
   onChange,
 }: {
+  styles: Styles;
+  palette: Palette;
   label: string;
   value: string;
   onChange: (next: string) => void;
@@ -185,7 +206,8 @@ function DateField({
         value={value}
         onChangeText={(text) => onChange(formatDateInput(text))}
         placeholder={p1.documents.datePlaceholder}
-        placeholderTextColor={colors.textOnDarkSecondary}
+        placeholderTextColor={withAlpha(palette.textSecondary, 0.6)}
+        selectionColor={palette.primary}
         keyboardType="number-pad"
         maxLength={10}
         style={styles.input}
@@ -194,93 +216,94 @@ function DateField({
   );
 }
 
-const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: withAlpha(colors.ink, 0.8),
-    justifyContent: "center",
-    padding: spacing.xl,
-  },
-  sheet: {
-    maxHeight: "85%",
-    backgroundColor: colors.surfaceDark,
-    borderRadius: radius.card,
-    borderWidth: 1,
-    borderColor: colors.divider,
-    padding: spacing.xl,
-  },
-  title: {
-    ...typography.title,
-    color: colors.textOnDark,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  docName: {
-    ...typography.label,
-    color: colors.gold,
-    textAlign: "right",
-    writingDirection: "rtl",
-    marginTop: spacing.xs,
-  },
-  subtitle: {
-    ...typography.caption,
-    color: colors.textOnDarkSecondary,
-    textAlign: "right",
-    writingDirection: "rtl",
-    marginTop: spacing.xs,
-  },
-  field: { marginTop: spacing.lg },
-  fieldLabel: {
-    ...typography.caption,
-    color: colors.textOnDarkSecondary,
-    textAlign: "right",
-    writingDirection: "rtl",
-    marginBottom: spacing.xs,
-  },
-  input: {
-    minHeight: touchTarget.normal,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.divider,
-    backgroundColor: withAlpha(colors.offWhite, 0.06),
-    paddingHorizontal: spacing.lg,
-    color: colors.textOnDark,
-    // The value is always YYYY-MM-DD, which is a Latin-digit sequence: forcing
-    // LTR here stops RTL layout from displaying it back to front.
-    textAlign: "left",
-    writingDirection: "ltr",
-    ...typography.body,
-  },
-  error: {
-    ...typography.body,
-    color: colors.danger,
-    textAlign: "right",
-    writingDirection: "rtl",
-    marginTop: spacing.lg,
-  },
-  primary: {
-    minHeight: touchTarget.critical,
-    borderRadius: radius.md,
-    backgroundColor: colors.gold,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: spacing.xl,
-  },
-  primaryLabel: {
-    ...typography.label,
-    color: colors.ink,
-    writingDirection: "rtl",
-  },
-  secondary: {
-    minHeight: touchTarget.normal,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: spacing.sm,
-  },
-  secondaryLabel: {
-    ...typography.body,
-    color: colors.textOnDarkSecondary,
-    writingDirection: "rtl",
-  },
-  pressed: { opacity: 0.75 },
-});
+const makeStyles = (palette: Palette) =>
+  StyleSheet.create({
+    backdrop: {
+      flex: 1,
+      backgroundColor: palette.scrim,
+      justifyContent: "center",
+      padding: spacing.xl,
+    },
+    sheet: {
+      maxHeight: "85%",
+      backgroundColor: palette.surface,
+      borderRadius: radius.card,
+      borderWidth: 1,
+      borderColor: palette.border,
+      padding: spacing.xl,
+    },
+    title: {
+      ...typography.title,
+      color: palette.textPrimary,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+    docName: {
+      ...typography.label,
+      color: palette.primaryText,
+      textAlign: "right",
+      writingDirection: "rtl",
+      marginTop: spacing.xs,
+    },
+    subtitle: {
+      ...typography.caption,
+      color: palette.textSecondary,
+      textAlign: "right",
+      writingDirection: "rtl",
+      marginTop: spacing.xs,
+    },
+    field: { marginTop: spacing.lg },
+    fieldLabel: {
+      ...typography.caption,
+      color: palette.textSecondary,
+      textAlign: "right",
+      writingDirection: "rtl",
+      marginBottom: spacing.xs,
+    },
+    input: {
+      minHeight: touchTarget.normal,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: palette.border,
+      backgroundColor: palette.surfaceSunken,
+      paddingHorizontal: spacing.lg,
+      color: palette.textPrimary,
+      // The value is always YYYY-MM-DD, which is a Latin-digit sequence:
+      // forcing LTR stops RTL layout from displaying it back to front.
+      textAlign: "left",
+      writingDirection: "ltr",
+      ...typography.body,
+    },
+    error: {
+      ...typography.body,
+      color: palette.danger,
+      textAlign: "right",
+      writingDirection: "rtl",
+      marginTop: spacing.lg,
+    },
+    primary: {
+      minHeight: touchTarget.critical,
+      borderRadius: radius.md,
+      backgroundColor: palette.primary,
+      alignItems: "center",
+      justifyContent: "center",
+      marginTop: spacing.xl,
+    },
+    primaryLabel: {
+      ...typography.label,
+      color: palette.onPrimary,
+      writingDirection: "rtl",
+    },
+    secondary: {
+      minHeight: touchTarget.normal,
+      alignItems: "center",
+      justifyContent: "center",
+      marginTop: spacing.sm,
+    },
+    secondaryLabel: {
+      ...typography.body,
+      color: palette.textSecondary,
+      writingDirection: "rtl",
+    },
+    pressed: { opacity: 0.75 },
+  });

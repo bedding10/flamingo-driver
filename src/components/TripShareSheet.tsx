@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
@@ -21,13 +21,14 @@ import {
 import { shareStrings } from "../i18n/strings.phase7";
 import { formatDateTime } from "../utils/datetime";
 import {
-  colors,
   radius,
   shadows,
   spacing,
   touchTarget,
   typography,
+  usePalette,
   withAlpha,
+  type Palette,
 } from "../theme";
 
 /**
@@ -40,6 +41,10 @@ import {
  * The link is created only when the driver presses the button, never on open:
  * every creation writes a row and mints a token, so opening the sheet to read
  * what it does must not leave links behind.
+ *
+ * NOTE (carried, unchanged this round): the public follow page itself is a
+ * Dashboard + PUBLIC_SHARE_BASE_URL task and is still open. Nothing here works
+ * around that on the client.
  */
 export function TripShareSheet({
   visible,
@@ -52,6 +57,8 @@ export function TripShareSheet({
   onClose: () => void;
 }) {
   const insets = useSafeAreaInsets();
+  const palette = usePalette();
+  const styles = useMemo(() => makeStyles(palette), [palette]);
   const [ttl, setTtl] = useState<ShareTtlMinutes>(60);
   const [busy, setBusy] = useState(false);
   const [active, setActive] = useState<ActiveTripShare[] | null>(null);
@@ -157,7 +164,7 @@ export function TripShareSheet({
 
               <Text style={styles.sectionLabel}>{shareStrings.activeTitle}</Text>
               {active === null ? (
-                <ActivityIndicator color={colors.gold} />
+                <ActivityIndicator color={palette.primary} />
               ) : active.length === 0 ? (
                 <Text style={styles.muted}>{shareStrings.activeEmpty}</Text>
               ) : (
@@ -202,108 +209,109 @@ export function TripShareSheet({
   );
 }
 
-const styles = StyleSheet.create({
-  scrim: { flex: 1, backgroundColor: colors.scrim },
-  sheet: {
-    backgroundColor: colors.ink,
-    borderTopLeftRadius: radius.sheet,
-    borderTopRightRadius: radius.sheet,
-    borderTopWidth: 1,
-    borderColor: colors.divider,
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.md,
-    maxHeight: "82%",
-    gap: spacing.md,
-    ...shadows.sheet,
-  },
-  handle: {
-    alignSelf: "center",
-    width: 44,
-    height: 4,
-    borderRadius: radius.pill,
-    backgroundColor: withAlpha(colors.white, 0.22),
-  },
-  title: {
-    ...typography.title,
-    color: colors.textOnDark,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  body: { gap: spacing.md, paddingBottom: spacing.md },
-  text: {
-    ...typography.body,
-    color: colors.textOnDark,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  privacy: {
-    ...typography.caption,
-    color: colors.textOnDarkSecondary,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  sectionLabel: {
-    ...typography.label,
-    color: colors.gold,
-    textAlign: "right",
-    writingDirection: "rtl",
-    marginTop: spacing.sm,
-  },
-  chips: {
-    flexDirection: "row-reverse",
-    flexWrap: "wrap",
-    gap: spacing.sm,
-  },
-  chip: {
-    minHeight: 44,
-    justifyContent: "center",
-    paddingHorizontal: spacing.lg,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.divider,
-    backgroundColor: colors.surfaceDark,
-  },
-  chipOn: {
-    borderColor: withAlpha(colors.gold, 0.6),
-    backgroundColor: withAlpha(colors.gold, 0.14),
-  },
-  chipLabel: {
-    ...typography.subtitle,
-    color: colors.textOnDarkSecondary,
-    writingDirection: "rtl",
-  },
-  chipLabelOn: { color: colors.gold },
-  submit: { marginTop: spacing.sm },
-  muted: {
-    ...typography.caption,
-    color: colors.textOnDarkSecondary,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  linkRow: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: spacing.md,
-    backgroundColor: colors.surfaceDark,
-    borderRadius: radius.card,
-    borderWidth: 1,
-    borderColor: colors.divider,
-    padding: spacing.md,
-  },
-  linkInfo: { flex: 1, gap: 2 },
-  linkWhen: {
-    ...typography.subtitle,
-    color: colors.textOnDark,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  revoke: {
-    minHeight: touchTarget.normal - 12,
-    justifyContent: "center",
-    paddingHorizontal: spacing.lg,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: withAlpha(colors.danger, 0.5),
-  },
-  revokeLabel: { ...typography.label, color: colors.danger },
-});
+const makeStyles = (palette: Palette) =>
+  StyleSheet.create({
+    scrim: { flex: 1, backgroundColor: palette.scrim },
+    sheet: {
+      backgroundColor: palette.background,
+      borderTopLeftRadius: radius.sheet,
+      borderTopRightRadius: radius.sheet,
+      borderTopWidth: 1,
+      borderColor: palette.border,
+      paddingHorizontal: spacing.xl,
+      paddingTop: spacing.md,
+      maxHeight: "82%",
+      gap: spacing.md,
+      ...shadows.sheet,
+    },
+    handle: {
+      alignSelf: "center",
+      width: 44,
+      height: 4,
+      borderRadius: radius.pill,
+      backgroundColor: palette.borderStrong,
+    },
+    title: {
+      ...typography.title,
+      color: palette.textPrimary,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+    body: { gap: spacing.md, paddingBottom: spacing.md },
+    text: {
+      ...typography.body,
+      color: palette.textPrimary,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+    privacy: {
+      ...typography.caption,
+      color: palette.textSecondary,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+    sectionLabel: {
+      ...typography.label,
+      color: palette.primaryText,
+      textAlign: "right",
+      writingDirection: "rtl",
+      marginTop: spacing.sm,
+    },
+    chips: {
+      flexDirection: "row-reverse",
+      flexWrap: "wrap",
+      gap: spacing.sm,
+    },
+    chip: {
+      minHeight: 44,
+      justifyContent: "center",
+      paddingHorizontal: spacing.lg,
+      borderRadius: radius.pill,
+      borderWidth: 1,
+      borderColor: palette.border,
+      backgroundColor: palette.surface,
+    },
+    chipOn: {
+      borderColor: withAlpha(palette.primary, 0.6),
+      backgroundColor: palette.primaryWash,
+    },
+    chipLabel: {
+      ...typography.subtitle,
+      color: palette.textSecondary,
+      writingDirection: "rtl",
+    },
+    chipLabelOn: { color: palette.primaryText },
+    submit: { marginTop: spacing.sm },
+    muted: {
+      ...typography.caption,
+      color: palette.textSecondary,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+    linkRow: {
+      flexDirection: "row-reverse",
+      alignItems: "center",
+      gap: spacing.md,
+      backgroundColor: palette.surface,
+      borderRadius: radius.card,
+      borderWidth: 1,
+      borderColor: palette.border,
+      padding: spacing.md,
+    },
+    linkInfo: { flex: 1, gap: 2 },
+    linkWhen: {
+      ...typography.subtitle,
+      color: palette.textPrimary,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+    revoke: {
+      minHeight: touchTarget.normal - 12,
+      justifyContent: "center",
+      paddingHorizontal: spacing.lg,
+      borderRadius: radius.pill,
+      borderWidth: 1,
+      borderColor: withAlpha(palette.danger, 0.5),
+    },
+    revokeLabel: { ...typography.label, color: palette.danger },
+  });
