@@ -118,6 +118,12 @@ export function MenuScreen() {
         hint={menuStrings.requestsHint}
         onPress={() => navigation.navigate("Requests")}
       />
+      {/* PHASE 6 rows. */}
+      <MenuRow
+        label={menuStrings.notifications}
+        hint={menuStrings.notificationsHint}
+        onPress={() => navigation.navigate("Notifications")}
+      />
       <MenuRow
         label={menuStrings.profile}
         hint={menuStrings.profileHint}
@@ -127,6 +133,16 @@ export function MenuScreen() {
         label={menuStrings.documents}
         hint={menuStrings.documentsHint}
         onPress={() => navigation.navigate("Documents")}
+      />
+      <MenuRow
+        label={menuStrings.support}
+        hint={menuStrings.supportHint}
+        onPress={() => navigation.navigate("Support")}
+      />
+      <MenuRow
+        label={menuStrings.safety}
+        hint={menuStrings.safetyHint}
+        onPress={() => navigation.navigate("Safety")}
       />
 
       <PrimaryButton

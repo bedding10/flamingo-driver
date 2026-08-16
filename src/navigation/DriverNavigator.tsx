@@ -3,6 +3,10 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { DriverHomeScreen } from "../screens/home/DriverHomeScreen";
 import { MenuScreen } from "../screens/menu/MenuScreen";
 import { WalletScreen } from "../screens/wallet/WalletScreen";
+import { NotificationsScreen } from "../screens/notifications/NotificationsScreen";
+import { SupportScreen } from "../screens/support/SupportScreen";
+import { TicketScreen } from "../screens/support/TicketScreen";
+import { SafetyScreen } from "../screens/safety/SafetyScreen";
 import { ProfileScreen } from "../screens/onboarding/ProfileScreen";
 import { DocumentsScreen } from "../screens/onboarding/DocumentsScreen";
 import { RequestsScreen } from "../screens/requests/RequestsScreen";
@@ -11,6 +15,11 @@ import { ApprovalGate } from "./ApprovalGate";
 import { strings } from "../i18n/strings";
 import { requestStrings } from "../i18n/strings.requests";
 import { menuStrings, walletStrings } from "../i18n/strings.menu";
+import {
+  notificationStrings,
+  safetyStrings,
+  supportStrings,
+} from "../i18n/strings.support";
 import { colors } from "../theme";
 import type { DriverStackParamList } from "./types";
 
@@ -54,6 +63,30 @@ export function DriverNavigator() {
           name="Wallet"
           component={WalletScreen}
           options={{ headerShown: true, title: walletStrings.title }}
+        />
+        {/*
+          PHASE 6: notifications, support and safety. All three read server
+          state that existed long before any screen could show it.
+        */}
+        <Stack.Screen
+          name="Notifications"
+          component={NotificationsScreen}
+          options={{ headerShown: true, title: notificationStrings.title }}
+        />
+        <Stack.Screen
+          name="Support"
+          component={SupportScreen}
+          options={{ headerShown: true, title: supportStrings.title }}
+        />
+        <Stack.Screen
+          name="Ticket"
+          component={TicketScreen}
+          options={{ headerShown: true, title: supportStrings.threadTitle }}
+        />
+        <Stack.Screen
+          name="Safety"
+          component={SafetyScreen}
+          options={{ headerShown: true, title: safetyStrings.title }}
         />
         <Stack.Screen
           name="Profile"

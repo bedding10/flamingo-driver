@@ -35,6 +35,21 @@ export type DriverStackParamList = {
    */
   Requests: undefined;
   /**
+   * PHASE 6 - the stored notification inbox (GET /notifications/me). It is also
+   * where a tapped push lands when its payload is not a trip message, so an
+   * unrecognised notification still leads somewhere useful.
+   */
+  Notifications: undefined;
+  /** PHASE 6 - support tickets: open one and list the driver's own. */
+  Support: undefined;
+  /**
+   * PHASE 6 - a single support thread. The id is a param so a ticket can be
+   * opened straight after creating it, before any list refetch has landed.
+   */
+  Ticket: { ticketId: string };
+  /** PHASE 6 - emergency contacts and the driver's own SOS reports. */
+  Safety: undefined;
+  /**
    * Trip chat. tripId is required rather than read from the trip store so a
    * push notification tapped from a cold start can route straight here before
    * the store has been hydrated.

@@ -16,6 +16,13 @@ export const menuStrings = {
   documentsHint: "رخصة السياقة، البطاقة الرمادية، التأمين، المراقبة التقنية",
   profile: "ملفي وسيارتي",
   profileHint: "الاسم، المدينة، بيانات السيارة وكلمة المرور",
+  // PHASE 6 rows.
+  notifications: "الإشعارات",
+  notificationsHint: "كل الإشعارات محفوظة هنا حتى بعد إخفاء التنبيه",
+  support: "الدعم",
+  supportHint: "فتح تذكرة ومتابعة الردود",
+  safety: "الأمان",
+  safetyHint: "جهات الطوارئ وبلاغات SOS السابقة",
   ratingLabel: "التقييم",
   tripsLabel: "الرحلات المكتملة",
   vehicleMissing: "لا توجد سيارة مسجّلة",

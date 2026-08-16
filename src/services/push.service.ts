@@ -25,16 +25,26 @@ let detachOpened: (() => void) | null = null;
  * on `data`, not on the title text, so re-wording the Arabic copy can never
  * break navigation.
  *
- * Unknown types are ignored on purpose: opening the app is already the right
- * behaviour for a notification this build does not understand, and guessing a
- * destination is worse than landing on Home.
+ * PHASE 6: any other typed notification now lands on the notification inbox
+ * instead of being dropped. Every notification the server sends is also stored
+ * and readable there, so the inbox is a correct destination for a payload this
+ * build does not recognise - which is what the old "ignore it" branch could not
+ * offer, because before PHASE 6 there was nowhere to land.
+ *
+ * A payload with no `data` at all is still ignored: opening the app is already
+ * the right behaviour and there is nothing to route on.
  */
 function routeFromData(data?: Record<string, unknown> | null): void {
   if (!data) return;
-  if (data.type !== "TRIP_MESSAGE") return;
-  const tripId = typeof data.tripId === "string" ? data.tripId : null;
-  if (!tripId) return;
-  navigateWhenReady("TripChat", { tripId });
+  if (data.type === "TRIP_MESSAGE") {
+    const tripId = typeof data.tripId === "string" ? data.tripId : null;
+    if (!tripId) return;
+    navigateWhenReady("TripChat", { tripId });
+    return;
+  }
+  if (typeof data.type === "string" && data.type.length > 0) {
+    navigateWhenReady("Notifications");
+  }
 }
 
 /**

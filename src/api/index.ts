@@ -6,3 +6,6 @@ export * as earningsApi from "./earnings.api";
 export * as walletApi from "./wallet.api";
 export * as safetyApi from "./safety.api";
 export * as geographyApi from "./geography.api";
+export * as notificationsApi from "./notifications.api";
+export * as supportApi from "./support.api";
+export * as emergencyApi from "./emergency.api";
