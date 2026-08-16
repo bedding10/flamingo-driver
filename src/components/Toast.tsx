@@ -1,14 +1,21 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Animated, StyleSheet, Text } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { colors, motion, radius, shadows, spacing, typography, withAlpha } from "../theme";
+import {
+  motion,
+  radius,
+  shadows,
+  spacing,
+  typography,
+  usePalette,
+} from "../theme";
 
 /**
- * PHASE 7 - transient feedback.
+ * PHASE 7 - transient feedback. PHASE 7.5 - theme-aware, pink for neutral tone.
  *
  * Everything that succeeded used to be announced with Alert.alert(), which
- * blocks the screen and needs a tap to dismiss. On the map that is dangerous:
- * a driver must not have to acknowledge a dialog to see the road again. A toast
+ * blocks the screen and needs a tap to dismiss. On the map that is dangerous: a
+ * driver must not have to acknowledge a dialog to see the road again. A toast
  * says the same thing without stealing the touch surface, so Alert is kept only
  * for decisions (sign out, delete) and for real failures that need reading.
  *
@@ -34,6 +41,7 @@ const VISIBLE_MS = 3200;
 
 export function ToastHost() {
   const insets = useSafeAreaInsets();
+  const palette = usePalette();
   const [message, setMessage] = useState<ToastMessage | null>(null);
   const opacity = useRef(new Animated.Value(0)).current;
 
@@ -70,10 +78,10 @@ export function ToastHost() {
 
   const tint =
     message.tone === "success"
-      ? colors.online
+      ? palette.online
       : message.tone === "error"
-        ? colors.danger
-        : colors.gold;
+        ? palette.danger
+        : palette.primaryText;
 
   return (
     <Animated.View
@@ -84,7 +92,8 @@ export function ToastHost() {
         styles.host,
         {
           opacity,
-          borderColor: withAlpha(tint, 0.5),
+          backgroundColor: palette.surface,
+          borderColor: tint,
           bottom: insets.bottom + spacing["4xl"] * 2,
         },
       ]}
@@ -99,7 +108,6 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: spacing.xl,
     right: spacing.xl,
-    backgroundColor: colors.surfaceDark,
     borderRadius: radius.card,
     borderWidth: 1,
     paddingHorizontal: spacing.lg,

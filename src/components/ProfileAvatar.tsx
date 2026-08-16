@@ -9,7 +9,7 @@ import {
   type ViewStyle,
 } from "react-native";
 import { SvgXml } from "react-native-svg";
-import { colors, withAlpha } from "../theme";
+import { usePalette } from "../theme";
 
 /**
  * Phase 11 - the single avatar component of the driver app.
@@ -20,7 +20,12 @@ import { colors, withAlpha } from "../theme";
  *
  * `frameUrl` always comes from the backend (`profileFrameUrl`). This file holds
  * no R2 host, no object key, no thresholds: the driver app never computes a
- * level, it renders the one the server sent.
+ * level, it renders the one the server sent. PHASE 7.5 note: the level frames
+ * are server-side artwork and are NOT recoloured here - if a level frame
+ * contains gold, that is the award artwork, not the app's interface colour.
+ *
+ * PHASE 7.5: the placeholder ring and initial now take the theme's pink and
+ * work on a light surface. Nothing about the caching changed.
  *
  * Cache: the SVG markup is fetched once per URL per app session and stored in a
  * module-level map keyed by the URL. A level change produces a different URL, so
@@ -52,6 +57,7 @@ export function ProfileAvatar({
   style,
   accessibilityLabel,
 }: ProfileAvatarProps) {
+  const palette = usePalette();
   const [markup, setMarkup] = useState<string | null>(() =>
     frameUrl ? frameCache.get(frameUrl) ?? null : null,
   );
@@ -118,11 +124,11 @@ export function ProfileAvatar({
           overflow: "hidden",
           alignItems: "center",
           justifyContent: "center",
-          backgroundColor: withAlpha(colors.gold, 0.14),
+          backgroundColor: palette.primaryWash,
         }}
       >
         {loading ? (
-          <ActivityIndicator size="small" color={colors.gold} />
+          <ActivityIndicator size="small" color={palette.primaryText} />
         ) : showImage ? (
           <Image
             source={{ uri: avatarUrl as string }}
@@ -132,7 +138,7 @@ export function ProfileAvatar({
         ) : (
           <Text
             style={{
-              color: colors.gold,
+              color: palette.primaryText,
               fontSize: Math.round(inner * 0.42),
               fontWeight: "800",
             }}

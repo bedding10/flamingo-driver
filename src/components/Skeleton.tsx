@@ -1,16 +1,23 @@
 import React, { useEffect, useRef } from "react";
-import { Animated, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
-import { colors, radius, spacing, withAlpha } from "../theme";
+import {
+  Animated,
+  StyleSheet,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from "react-native";
+import { radius, spacing, usePalette } from "../theme";
 
 /**
- * PHASE 7 - the app's loading placeholder.
+ * PHASE 7 - the app's loading placeholder. PHASE 7.5 - theme-aware.
  *
- * Until now every screen showed a centred spinner, which tells the driver that
- * something is happening but not what is coming. A skeleton keeps the layout
- * stable, so the content does not jump when it lands.
+ * A centred spinner tells the driver that something is happening but not what is
+ * coming; a skeleton keeps the layout stable so content does not jump when it
+ * lands. It used to be hardcoded to a white-on-dark wash, which was invisible on
+ * a light surface - it now reads its colour from the palette.
  *
- * The pulse is driven with the native driver and looped forever while mounted;
- * it is stopped on unmount so no animation survives the screen.
+ * The pulse runs on the native driver and is stopped on unmount, so no animation
+ * survives the screen.
  */
 export function Skeleton({
   width,
@@ -23,6 +30,7 @@ export function Skeleton({
   round?: number;
   style?: StyleProp<ViewStyle>;
 }) {
+  const palette = usePalette();
   const pulse = useRef(new Animated.Value(0.4)).current;
 
   useEffect(() => {
@@ -51,7 +59,7 @@ export function Skeleton({
           width: width ?? "100%",
           height,
           borderRadius: round,
-          backgroundColor: withAlpha(colors.white, 0.08),
+          backgroundColor: palette.skeleton,
           opacity: pulse,
         },
         style,
@@ -62,8 +70,14 @@ export function Skeleton({
 
 /** A card-shaped skeleton, sized like the list rows used across the app. */
 export function SkeletonCard() {
+  const palette = usePalette();
   return (
-    <View style={styles.card}>
+    <View
+      style={[
+        styles.card,
+        { backgroundColor: palette.surface, borderColor: palette.border },
+      ]}
+    >
       <Skeleton width="55%" height={18} />
       <Skeleton width="85%" height={13} />
       <Skeleton width="35%" height={13} />
@@ -85,10 +99,8 @@ export function SkeletonList({ count = 3 }: { count?: number }) {
 const styles = StyleSheet.create({
   list: { padding: spacing.xl, gap: spacing.md },
   card: {
-    backgroundColor: colors.surfaceDark,
     borderRadius: radius.card,
     borderWidth: 1,
-    borderColor: colors.divider,
     padding: spacing.lg,
     gap: spacing.sm,
   },
