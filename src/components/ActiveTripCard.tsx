@@ -25,6 +25,12 @@ type Props = {
   onSos: () => void;
   /** Opens the trip chat with the passenger. */
   onChat: () => void;
+  /**
+   * PHASE 4 - dials the passenger. Passed only when the server actually
+   * authorised a number for this trip; absent otherwise, and the card then
+   * keeps saying the number is hidden.
+   */
+  onCall?: () => void;
   /** Passenger messages this driver has not opened yet. */
   unreadCount?: number;
 };
@@ -70,6 +76,7 @@ function ActiveTripCardComponent({
   onCancel,
   onSos,
   onChat,
+  onCall,
   unreadCount = 0,
 }: Props) {
   const status = trip.status;
@@ -146,17 +153,14 @@ function ActiveTripCardComponent({
       </View>
 
       {/*
-        Passenger identity line and the way to reach them, on one row.
+        Passenger identity line and the two ways to reach them, on one row.
 
-        The number stays hidden ON THIS CARD by design, and phoneHidden remains
-        the honest label here: the card never receives a phone number from the
-        server. /driver/me/trips returns the passenger phone masked through
-        maskPhone().
-
-        Calling is not dead, though - since Phase 6 the product officially uses
-        direct tel: dialling. The real number is served only by
-        GET /trip-communication/:tripId, so the call button lives on the chat
-        screen, one tap away, where the server has already authorised it.
+        PHASE 4: the call button appears here only when `onCall` was passed,
+        which the screen does only after GET /trip-communication/:tripId returned
+        canCall AND a number. The card still holds no phone number of its own -
+        /driver/me/trips keeps returning the passenger phone masked through
+        maskPhone(), and "phoneHidden" is shown exactly when the server refused
+        to reveal it (phoneMode HIDDEN, or a trip that is no longer callable).
       */}
       <View style={styles.contactRow}>
         {/* Phase 11 - passenger photo inside the level frame, then name and
@@ -171,8 +175,7 @@ function ActiveTripCardComponent({
         <View style={styles.passengerBlock}>
           <Text style={styles.passenger} numberOfLines={1}>
             {(trip.passenger?.name || strings.offer.passengerFallback) +
-              " \u00b7 " +
-              strings.trip.phoneHidden}
+              (onCall ? "" : " \u00b7 " + strings.trip.phoneHidden)}
           </Text>
           {trip.passenger?.profileLevel ? (
             <Text style={styles.passengerLevel} numberOfLines={1}>
@@ -184,6 +187,20 @@ function ActiveTripCardComponent({
             </Text>
           ) : null}
         </View>
+
+        {onCall ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={strings.chat.call}
+            onPress={onCall}
+            style={({ pressed }) => [
+              styles.callButton,
+              pressed ? styles.pressed : null,
+            ]}
+          >
+            <Text style={styles.callIcon}>{"\u2706"}</Text>
+          </Pressable>
+        ) : null}
 
         <Pressable
           accessibilityRole="button"
@@ -328,6 +345,19 @@ const styles = StyleSheet.create({
     textAlign: "right",
     writingDirection: "rtl",
   },
+  // PHASE 4: نفس هوية زر المحادثة لكن دائري وأصغر، فالاتصال إجراء ثانوي
+  // بجانب المحادثة ولا يجوز أن ينافس الزر الذهبي الأساسي.
+  callButton: {
+    width: touchTarget.normal - 8,
+    height: touchTarget.normal - 8,
+    borderRadius: radius.pill,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: withAlpha(colors.gold, 0.5),
+    backgroundColor: withAlpha(colors.gold, 0.12),
+  },
+  callIcon: { fontSize: 20, color: colors.gold },
   chatButton: {
     flexDirection: "row-reverse",
     alignItems: "center",

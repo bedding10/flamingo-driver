@@ -12,6 +12,7 @@ import { useAvailability } from "../../hooks/useAvailability";
 import { useRideOffer } from "../../hooks/useRideOffer";
 import { useTripLifecycle } from "../../hooks/useTripLifecycle";
 import { useTripRoute } from "../../hooks/useTripRoute";
+import { useTripCommunication } from "../../hooks/useTripCommunication";
 import { useDriverProfile } from "../../hooks/useDriverProfile";
 import { useDriverStore } from "../../stores/driver.store";
 import { useLocationStore } from "../../stores/location.store";
@@ -78,6 +79,15 @@ export function DriverHomeScreen() {
   // the trip status, so the line switches to the destination only after
   // Start Trip has actually been accepted by the backend.
   const activeRoute = useTripRoute(trip);
+
+  // PHASE 4: unread messages and callability for the running trip, both read
+  // from GET /trip-communication/:tripId. Nothing is decided locally.
+  const {
+    unreadCount,
+    callablePhone,
+    call: callPassenger,
+    clearUnread,
+  } = useTripCommunication(trip);
 
   // SOS.
   //
@@ -199,11 +209,29 @@ export function DriverHomeScreen() {
    * the driver had no way at all to answer a passenger message. The id comes
    * from the running trip rather than a store read, matching the route param
    * contract in navigation/types.ts.
+   *
+   * PHASE 4: the badge is dropped on the way in. The authoritative receipt is
+   * still the chat screen's POST /messages/read; this only stops the card from
+   * showing a count for a thread the driver is currently reading.
    */
   const openChat = useCallback(() => {
     if (!trip) return;
+    clearUnread();
     navigation.navigate("TripChat", { tripId: trip.id });
-  }, [navigation, trip]);
+  }, [clearUnread, navigation, trip]);
+
+  /**
+   * PHASE 4: direct dial from the trip card.
+   *
+   * The number is never chosen here - `callablePhone` is null unless the server
+   * returned canCall together with a number, so a HIDDEN phone policy simply
+   * removes the button instead of dialling something masked.
+   */
+  const dialPassenger = useCallback(() => {
+    void callPassenger().then((ok) => {
+      if (!ok) Alert.alert(strings.safety.errorTitle, strings.chat.callFailed);
+    });
+  }, [callPassenger]);
 
   const linkTone: PillTone =
     link === "connected" ? "approved" : link === "connecting" ? "pending" : "rejected";
@@ -301,6 +329,8 @@ export function DriverHomeScreen() {
           onCancel={() => void cancelTripNow()}
           onSos={() => void raiseSos()}
           onChat={openChat}
+          onCall={callablePhone ? dialPassenger : undefined}
+          unreadCount={unreadCount}
         />
       ) : offer ? (
         <RideOfferCard
