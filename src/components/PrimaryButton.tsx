@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -8,14 +8,26 @@ import {
   type StyleProp,
   type ViewStyle,
 } from "react-native";
-import { colors, radius, touchTarget, typography, withAlpha } from "../theme";
+import {
+  radius,
+  touchTarget,
+  typography,
+  usePalette,
+  withAlpha,
+  type Palette,
+} from "../theme";
 
 type Props = {
   label: string;
   onPress: () => void;
   loading?: boolean;
   disabled?: boolean;
-  variant?: "gold" | "outline";
+  /**
+   * "primary" is the filled flamingo-pink button. "gold" is the PHASE 6 name
+   * for the same thing and is kept only so existing callers keep compiling;
+   * there is no gold anywhere in the rendered result.
+   */
+  variant?: "primary" | "gold" | "outline";
   style?: StyleProp<ViewStyle>;
 };
 
@@ -31,10 +43,14 @@ export function PrimaryButton({
   onPress,
   loading = false,
   disabled = false,
-  variant = "gold",
+  variant = "primary",
   style,
 }: Props) {
+  const palette = usePalette();
+  const styles = useMemo(() => makeStyles(palette), [palette]);
+  const filled = variant !== "outline";
   const isBlocked = disabled || loading;
+
   return (
     <Pressable
       accessibilityRole="button"
@@ -43,7 +59,7 @@ export function PrimaryButton({
       onPress={onPress}
       style={({ pressed }) => [
         styles.base,
-        variant === "gold" ? styles.gold : styles.outline,
+        filled ? styles.filled : styles.outline,
         pressed && !isBlocked ? styles.pressed : null,
         isBlocked ? styles.blocked : null,
         style,
@@ -52,13 +68,13 @@ export function PrimaryButton({
       <View style={styles.content}>
         {loading ? (
           <ActivityIndicator
-            color={variant === "gold" ? colors.ink : colors.gold}
+            color={filled ? palette.onPrimary : palette.primaryText}
           />
         ) : (
           <Text
             style={[
               styles.label,
-              variant === "gold" ? styles.labelOnGold : styles.labelOnDark,
+              filled ? styles.labelOnFilled : styles.labelOnSurface,
             ]}
             numberOfLines={1}
           >
@@ -70,22 +86,23 @@ export function PrimaryButton({
   );
 }
 
-const styles = StyleSheet.create({
-  base: {
-    minHeight: touchTarget.critical,
-    borderRadius: radius.pill,
-    justifyContent: "center",
-  },
-  gold: { backgroundColor: colors.gold },
-  outline: {
-    backgroundColor: "transparent",
-    borderWidth: 1,
-    borderColor: withAlpha(colors.gold, 0.55),
-  },
-  pressed: { opacity: 0.82 },
-  blocked: { opacity: 0.5 },
-  content: { alignItems: "center", justifyContent: "center" },
-  label: { ...typography.label, writingDirection: "rtl" },
-  labelOnGold: { color: colors.ink },
-  labelOnDark: { color: colors.gold },
-});
+const makeStyles = (palette: Palette) =>
+  StyleSheet.create({
+    base: {
+      minHeight: touchTarget.critical,
+      borderRadius: radius.pill,
+      justifyContent: "center",
+    },
+    filled: { backgroundColor: palette.primary },
+    outline: {
+      backgroundColor: "transparent",
+      borderWidth: 1,
+      borderColor: withAlpha(palette.primary, 0.55),
+    },
+    pressed: { opacity: 0.82 },
+    blocked: { opacity: 0.5 },
+    content: { alignItems: "center", justifyContent: "center" },
+    label: { ...typography.label, writingDirection: "rtl" },
+    labelOnFilled: { color: palette.onPrimary },
+    labelOnSurface: { color: palette.primaryText },
+  });

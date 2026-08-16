@@ -1,8 +1,14 @@
-import React from "react";
-import { StyleSheet, Text, View, type ViewStyle, type StyleProp } from "react-native";
-import { colors, radius, spacing, typography } from "../theme";
+import React, { useMemo } from "react";
+import {
+  StyleSheet,
+  Text,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from "react-native";
+import { radius, spacing, typography, usePalette, type Palette } from "../theme";
 
-/** Dark surface grouping related fields, with an optional hint line. */
+/** Surface grouping related fields, with an optional hint line. */
 export function SectionCard({
   title,
   hint,
@@ -14,6 +20,9 @@ export function SectionCard({
   children: React.ReactNode;
   style?: StyleProp<ViewStyle>;
 }) {
+  const palette = usePalette();
+  const styles = useMemo(() => makeStyles(palette), [palette]);
+
   return (
     <View style={[styles.card, style]}>
       <Text style={styles.title}>{title}</Text>
@@ -23,26 +32,27 @@ export function SectionCard({
   );
 }
 
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: colors.surfaceDark,
-    borderRadius: radius.card,
-    borderWidth: 1,
-    borderColor: colors.divider,
-    padding: spacing.lg,
-  },
-  title: {
-    ...typography.subtitle,
-    color: colors.textOnDark,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  hint: {
-    ...typography.caption,
-    color: colors.textOnDarkSecondary,
-    textAlign: "right",
-    writingDirection: "rtl",
-    marginTop: spacing.xs,
-  },
-  body: { marginTop: spacing.lg, gap: spacing.lg },
-});
+const makeStyles = (palette: Palette) =>
+  StyleSheet.create({
+    card: {
+      backgroundColor: palette.surface,
+      borderRadius: radius.card,
+      borderWidth: 1,
+      borderColor: palette.border,
+      padding: spacing.lg,
+    },
+    title: {
+      ...typography.subtitle,
+      color: palette.textPrimary,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+    hint: {
+      ...typography.caption,
+      color: palette.textSecondary,
+      textAlign: "right",
+      writingDirection: "rtl",
+      marginTop: spacing.xs,
+    },
+    body: { marginTop: spacing.lg, gap: spacing.lg },
+  });
