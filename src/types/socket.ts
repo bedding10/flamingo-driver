@@ -33,6 +33,14 @@ export const DRIVER_LISTEN = {
    */
   tripMessagesRead: "trip:messages_read",
   error: "ride:error",
+  /**
+   * PHASE 3 - negotiation. FareOffersService pushes these to the driver's own
+   * room `user:{id}` with emitToUser(). They are NOT part of the `ride:*`
+   * matching flow and carry a fareQuoteId, not only a tripId.
+   */
+  fareOfferAccepted: "fare:offer_accepted",
+  fareOfferRejected: "fare:offer_rejected",
+  fareOfferExpired: "fare:offer_expired",
 } as const;
 
 export type DriverLocationPayload = {
@@ -98,6 +106,32 @@ export type ProfileLevelPayload = {
   previousLevel: string;
 };
 
+/**
+ * PHASE 3 - the passenger picked this driver's bid. The trip already exists and
+ * the driver is already assigned to it inside the same transaction, so the app
+ * joins the trip room and re-reads the authoritative record.
+ */
+export type FareOfferAcceptedPayload = {
+  quoteId: string;
+  offerId: string;
+  tripId: string;
+  tripStatus: TripStatus;
+  amount: number;
+};
+
+/**
+ * `reason` is "passenger_rejected" (explicit reject) or
+ * "another_offer_accepted" (a sibling bid won).
+ */
+export type FareOfferRejectedPayload = {
+  quoteId: string;
+  offerId: string;
+  reason?: string;
+};
+
+/** The 30s cron closed a PENDING bid that outlived its expiresAt. */
+export type FareOfferExpiredPayload = { quoteId: string; offerId: string };
+
 /** Maps every inbound event name to its payload type. */
 export type DriverInboundEvents = {
   "ride:offer": RideOffer;
@@ -109,6 +143,9 @@ export type DriverInboundEvents = {
   "trip:messages_read": TripMessagesReadPayload;
   "ride:error": RideErrorPayload;
   "profile:level": ProfileLevelPayload;
+  "fare:offer_accepted": FareOfferAcceptedPayload;
+  "fare:offer_rejected": FareOfferRejectedPayload;
+  "fare:offer_expired": FareOfferExpiredPayload;
 };
 
 export type SocketStatus =

@@ -22,6 +22,11 @@ export type DriverStackParamList = {
   Profile: undefined;
   Documents: undefined;
   /**
+   * PHASE 3 - open bidding requests (FareQuote / FareOffer). No params: the
+   * list is always the driver's own eligible requests, decided server side.
+   */
+  Requests: undefined;
+  /**
    * Trip chat. tripId is required rather than read from the trip store so a
    * push notification tapped from a cold start can route straight here before
    * the store has been hydrated.

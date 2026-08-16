@@ -25,6 +25,7 @@ import { connectSocket, onSocketStatus } from "../../socket/socket.service";
 import type { SocketStatus } from "../../types/socket";
 import type { DriverStackParamList } from "../../navigation/types";
 import { strings } from "../../i18n/strings";
+import { requestStrings } from "../../i18n/strings.requests";
 import {
   colors,
   radius,
@@ -252,14 +253,30 @@ export function DriverHomeScreen() {
 
         <StatusPill label={linkLabel} tone={linkTone} />
 
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={strings.approval.openDocuments}
-          onPress={() => navigation.navigate("Documents")}
-          style={styles.roundButton}
-        >
-          <Text style={styles.roundButtonGlyph}>{"\u25a4"}</Text>
-        </Pressable>
+        <View style={styles.topActions}>
+          {/*
+            PHASE 3: the only entry point to the bidding requests list. It is
+            shown always (not only when ONLINE) so the driver can read why the
+            list is empty instead of hunting for a hidden button.
+          */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={requestStrings.title}
+            onPress={() => navigation.navigate("Requests")}
+            style={styles.roundButton}
+          >
+            <Text style={styles.roundButtonGlyph}>{"\u25ce"}</Text>
+          </Pressable>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={strings.approval.openDocuments}
+            onPress={() => navigation.navigate("Documents")}
+            style={styles.roundButton}
+          >
+            <Text style={styles.roundButtonGlyph}>{"\u25a4"}</Text>
+          </Pressable>
+        </View>
       </View>
 
       {!follow ? (
@@ -325,6 +342,23 @@ export function DriverHomeScreen() {
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
+        {/*
+          PHASE 3: a second, secondary way into the requests list from the
+          sheet the driver already reads while idle.
+        */}
+        {isOnline && !onTrip ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={requestStrings.title}
+            onPress={() => navigation.navigate("Requests")}
+            style={styles.requestsLink}
+          >
+            <Text style={styles.requestsLinkLabel}>
+              {requestStrings.title}
+            </Text>
+          </Pressable>
+        ) : null}
+
         <OnlineToggle
           availability={availability}
           pending={pending}
@@ -355,6 +389,11 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: spacing.lg,
     gap: spacing.md,
+  },
+  topActions: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: spacing.sm,
   },
   roundButton: {
     width: touchTarget.normal,
@@ -427,6 +466,15 @@ const styles = StyleSheet.create({
     textAlign: "right",
     writingDirection: "rtl",
   },
+  requestsLink: {
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.divider,
+    backgroundColor: withAlpha(colors.white, 0.06),
+    paddingVertical: spacing.md,
+    alignItems: "center",
+  },
+  requestsLinkLabel: { ...typography.subtitle, color: colors.gold },
   blocked: {
     ...typography.caption,
     color: colors.textOnDarkSecondary,
