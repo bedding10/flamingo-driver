@@ -31,9 +31,23 @@ const socketUrl = (
   process.env.EXPO_PUBLIC_SOCKET_URL ?? apiUrl.replace(/\/api$/, "")
 ).replace(/\/+$/, "");
 
-const environment: Environment =
-  (process.env.EXPO_PUBLIC_ENV as Environment | undefined) ??
-  (__DEV__ ? "development" : "production");
+/**
+ * PHASE 2 - public media host (Cloudflare R2).
+ *
+ * The map marker artwork lives in the same public bucket the backend serves
+ * media from, so it is fetched directly instead of through an authenticated
+ * endpoint: a marker is not private data, and routing it through the API would
+ * add a signed-URL round trip to the very first frame of the map.
+ *
+ * It is overridable through EXPO_PUBLIC_R2_PUBLIC_URL and NOT required, because
+ * the bucket host is a deployment detail rather than a secret and a missing
+ * variable must not stop the app from starting. The default matches the
+ * project's existing R2_PUBLIC_URL; nothing here changes that value.
+ */
+const mediaBaseUrl = (
+  process.env.EXPO_PUBLIC_R2_PUBLIC_URL ??
+  "https://pub-7fa9666bc2604d239dd2f616f8c85a62.r2.dev"
+).replace(/\/+$/, "");
 
 export const config = {
   environment,
@@ -50,6 +64,18 @@ export const config = {
     reconnectionDelayMs: 800,
     reconnectionDelayMaxMs: 8_000,
     randomizationFactor: 0.35,
+  },
+
+  /**
+   * Public media. Object keys are the ones already uploaded to the bucket and
+   * must stay byte-identical to them, capital "Car/" included.
+   */
+  media: {
+    publicBaseUrl: mediaBaseUrl,
+    vehicleMarkers: {
+      car: "Car/vehicle-car.png",
+      moto: "Car/vehicle-moto.png",
+    },
   },
 
   /**

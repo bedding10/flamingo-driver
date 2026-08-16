@@ -1,7 +1,8 @@
 import React, { useEffect, useRef } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from "react-native-maps";
-import { colors, withAlpha } from "../theme";
+import { colors } from "../theme";
+import { VehicleMarker } from "./VehicleMarker";
 import type { DriverFix } from "../stores/location.store";
 import type { ActiveRoute } from "../hooks/useTripRoute";
 
@@ -17,6 +18,10 @@ import type { ActiveRoute } from "../hooks/useTripRoute";
  * controlled `region` prop. A controlled region fights the driver's own
  * panning: every incoming fix would yank the view back mid-gesture. Here the
  * map stays uncontrolled and only follows while `follow` is true.
+ *
+ * PHASE 2: the driver's own position is drawn by VehicleMarker, which owns the
+ * remote-image loading rules. This file deliberately keeps no marker artwork
+ * logic so the expensive map component is not re-rendered by image state.
  */
 
 type Props = {
@@ -29,6 +34,8 @@ type Props = {
    * useTripRoute, which gets it from the backend - the app never routes.
    */
   route?: ActiveRoute | null;
+  /** Approved ride class of the driver's vehicle; picks the marker artwork. */
+  rideClass?: string | null;
 };
 
 const DEFAULT_ZOOM = 16;
@@ -41,7 +48,13 @@ const FALLBACK_REGION = {
   longitudeDelta: 0.05,
 };
 
-function DriverMapComponent({ fix, follow, onPanByUser, route }: Props) {
+function DriverMapComponent({
+  fix,
+  follow,
+  onPanByUser,
+  route,
+  rideClass,
+}: Props) {
   const mapRef = useRef<MapView | null>(null);
   const fittedLegRef = useRef<string | null>(null);
 
@@ -136,19 +149,7 @@ function DriverMapComponent({ fix, follow, onPanByUser, route }: Props) {
         </Marker>
       ) : null}
 
-      {fix ? (
-        <Marker
-          coordinate={{ latitude: fix.lat, longitude: fix.lng }}
-          anchor={{ x: 0.5, y: 0.5 }}
-          flat
-          rotation={fix.heading ?? 0}
-          tracksViewChanges={false}
-        >
-          <View style={styles.puckHalo}>
-            <View style={styles.puck} />
-          </View>
-        </Marker>
-      ) : null}
+      {fix ? <VehicleMarker fix={fix} rideClass={rideClass} /> : null}
     </MapView>
   );
 }
@@ -156,22 +157,6 @@ function DriverMapComponent({ fix, follow, onPanByUser, route }: Props) {
 export const DriverMap = React.memo(DriverMapComponent);
 
 const styles = StyleSheet.create({
-  puckHalo: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: withAlpha(colors.gold, 0.22),
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  puck: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: colors.gold,
-    borderWidth: 2,
-    borderColor: colors.ink,
-  },
   target: {
     width: 26,
     height: 26,
