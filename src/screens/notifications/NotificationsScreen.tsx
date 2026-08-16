@@ -45,10 +45,18 @@ export function NotificationsScreen() {
 
   const confirmRemove = useCallback(
     (id: string) => {
-      Alert.alert(notificationStrings.deleteAction, notificationStrings.hiddenNote, [
-        { text: notificationStrings.deleteAction, style: "destructive", onPress: () => remove(id) },
-        { text: "\u2715", style: "cancel" },
-      ]);
+      Alert.alert(
+        notificationStrings.deleteTitle,
+        notificationStrings.hiddenNote,
+        [
+          { text: notificationStrings.cancel, style: "cancel" },
+          {
+            text: notificationStrings.deleteAction,
+            style: "destructive",
+            onPress: () => remove(id),
+          },
+        ],
+      );
     },
     [remove],
   );
