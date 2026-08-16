@@ -12,7 +12,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { InputField } from "../../components/InputField";
 import { PrimaryButton } from "../../components/PrimaryButton";
 import { strings } from "../../i18n/strings";
-import { colors, spacing, typography } from "../../theme";
+import { pw } from "../../i18n/strings.password";
+import { colors, radius, spacing, typography, withAlpha } from "../../theme";
 import { authErrorMessage } from "../../auth/auth-errors";
 import {
   confirmPhoneCode,
@@ -20,17 +21,25 @@ import {
   requestPhoneCode,
   type PhoneConfirmation,
 } from "../../auth/firebase";
+import { authApi } from "../../api";
+import { toApiError } from "../../api/client";
 import { useAuthStore } from "../../auth/auth.store";
 
 const CODE_LENGTH = 6;
 const RESEND_SECONDS = 60;
+const MIN_PASSWORD_LENGTH = 6;
 
 /**
  * Phone -> SMS code -> backend session.
  *
  * Firebase verifies the number, then POST /auth/firebase exchanges the ID token
- * for the backend JWTs, which go straight into secure storage. There is no local
- * OTP path: the server's own OTP endpoints are disabled.
+ * for the backend JWTs, which go straight into secure storage.
+ *
+ * PHASE 1 adds a SECOND door to the SAME account, not a second account: once the
+ * driver has set a password from the profile screen, POST /auth/login accepts
+ * the same phone number plus that password and returns the same kind of tokens.
+ * Account CREATION still happens only through Firebase — the local OTP routes
+ * stay disabled, and an account with no password simply fails this path.
  *
  * The screen holds no token and no user object; it hands the tokens to the auth
  * store and unmounts when the root tree switches to the signed-in stack.
@@ -39,9 +48,11 @@ export function LoginScreen() {
   const insets = useSafeAreaInsets();
   const signIn = useAuthStore((state) => state.signIn);
 
+  const [mode, setMode] = useState<"sms" | "password">("sms");
   const [step, setStep] = useState<"phone" | "code">("phone");
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
+  const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(0);
@@ -105,6 +116,37 @@ export function LoginScreen() {
     }
   }, [code, signIn]);
 
+  /**
+   * PHASE 1 — returning driver, no SMS.
+   *
+   * The number is normalised to E.164 with the same helper the Firebase flow
+   * uses, because the stored User.phone came from a Firebase token: sending
+   * "0555..." would look up a row that does not exist.
+   */
+  const passwordSignIn = useCallback(async () => {
+    setError(null);
+    setBusy(true);
+    try {
+      const normalized = normalizeE164(phone);
+      const session = await authApi.passwordLogin({
+        phone: normalized,
+        password,
+      });
+      await signIn(session);
+    } catch (loginError) {
+      if (!mountedRef.current) return;
+      const apiError = toApiError(loginError);
+      setError(
+        apiError.offline
+          ? strings.errors.network
+          : loginError instanceof Error && loginError.message === "INVALID_PHONE"
+            ? authErrorMessage(loginError)
+            : pw.login.failed,
+      );
+      setBusy(false);
+    }
+  }, [password, phone, signIn]);
+
   const backToPhone = useCallback(() => {
     confirmationRef.current = null;
     setStep("phone");
@@ -112,8 +154,18 @@ export function LoginScreen() {
     setError(null);
   }, []);
 
+  const switchMode = useCallback((nextMode: "sms" | "password") => {
+    confirmationRef.current = null;
+    setMode(nextMode);
+    setStep("phone");
+    setCode("");
+    setPassword("");
+    setError(null);
+  }, []);
+
   const phoneReady = phone.replace(/\D/g, "").length >= 8;
   const codeReady = code.trim().length === CODE_LENGTH;
+  const passwordReady = phoneReady && password.length >= MIN_PASSWORD_LENGTH;
 
   return (
     <KeyboardAvoidingView
@@ -133,7 +185,84 @@ export function LoginScreen() {
           <Text style={styles.role}>{strings.login.role}</Text>
         </View>
 
+        {/* PHASE 1: the two doors to the same account. Hidden while an SMS is
+            being confirmed, so a mis-tap cannot drop a pending code. */}
         {step === "phone" ? (
+          <View style={styles.modeRow}>
+            <Pressable
+              onPress={() => switchMode("sms")}
+              disabled={busy}
+              style={[styles.mode, mode === "sms" && styles.modeActive]}
+              accessibilityRole="button"
+              accessibilityState={{ selected: mode === "sms" }}
+            >
+              <Text
+                style={[
+                  styles.modeText,
+                  mode === "sms" && styles.modeTextActive,
+                ]}
+              >
+                {pw.login.modeSms}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => switchMode("password")}
+              disabled={busy}
+              style={[styles.mode, mode === "password" && styles.modeActive]}
+              accessibilityRole="button"
+              accessibilityState={{ selected: mode === "password" }}
+            >
+              <Text
+                style={[
+                  styles.modeText,
+                  mode === "password" && styles.modeTextActive,
+                ]}
+              >
+                {pw.login.modePassword}
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
+
+        {mode === "password" ? (
+          <View style={styles.card}>
+            <Text style={styles.title}>{pw.login.passwordTitle}</Text>
+            <Text style={styles.subtitle}>{pw.login.passwordSubtitle}</Text>
+            <InputField
+              label={strings.login.phoneLabel}
+              placeholder={strings.login.phonePlaceholder}
+              value={phone}
+              onChangeText={setPhone}
+              keyboardType="phone-pad"
+              textContentType="telephoneNumber"
+              autoComplete="tel"
+              editable={!busy}
+              numeric
+            />
+            <View style={styles.spacer} />
+            <InputField
+              label={pw.login.passwordLabel}
+              placeholder={pw.login.passwordPlaceholder}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+              textContentType="password"
+              editable={!busy}
+              maxLength={72}
+            />
+            {error ? <Text style={styles.error}>{error}</Text> : null}
+            <PrimaryButton
+              label={pw.login.submit}
+              onPress={() => void passwordSignIn()}
+              loading={busy}
+              disabled={!passwordReady}
+              style={styles.action}
+            />
+            <Text style={styles.footNote}>{pw.login.noPasswordHint}</Text>
+          </View>
+        ) : step === "phone" ? (
           <View style={styles.card}>
             <Text style={styles.title}>{strings.login.phoneTitle}</Text>
             <Text style={styles.subtitle}>{strings.login.phoneSubtitle}</Text>
@@ -224,7 +353,33 @@ const styles = StyleSheet.create({
     letterSpacing: 3,
     marginTop: spacing.xs,
   },
+  modeRow: {
+    flexDirection: "row-reverse",
+    gap: spacing.xs,
+    marginBottom: spacing.xl,
+  },
+  mode: {
+    flex: 1,
+    minHeight: 44,
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.divider,
+    backgroundColor: withAlpha(colors.offWhite, 0.06),
+  },
+  modeActive: {
+    borderColor: colors.gold,
+    backgroundColor: withAlpha(colors.gold, 0.16),
+  },
+  modeText: {
+    ...typography.caption,
+    color: colors.textOnDarkSecondary,
+    writingDirection: "rtl",
+  },
+  modeTextActive: { color: colors.gold },
   card: { width: "100%" },
+  spacer: { height: spacing.md },
   title: {
     ...typography.title,
     color: colors.textOnDark,
@@ -248,6 +403,13 @@ const styles = StyleSheet.create({
   error: {
     ...typography.caption,
     color: colors.danger,
+    textAlign: "right",
+    writingDirection: "rtl",
+    marginTop: spacing.md,
+  },
+  footNote: {
+    ...typography.caption,
+    color: colors.textOnDarkSecondary,
     textAlign: "right",
     writingDirection: "rtl",
     marginTop: spacing.md,
