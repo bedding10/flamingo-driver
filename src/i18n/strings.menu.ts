@@ -1,5 +1,7 @@
 /**
  * PHASE 5 copy: the menu, the wallet and the withdrawal request.
+ * PHASE 6 added the notifications / support / safety rows.
+ * PHASE 7 added the section headers, the account and vehicle rows and legal.
  *
  * It lives in its own module for the same reason as strings.phase1.ts,
  * strings.password.ts, strings.photo.ts and strings.requests.ts: src/i18n/strings.ts
@@ -8,6 +10,20 @@
  */
 export const menuStrings = {
   title: "القائمة",
+  // PHASE 7 - section headers.
+  sectionAccount: "الحساب",
+  sectionWork: "العمل",
+  sectionMoney: "المال",
+  sectionVehicle: "السيارة",
+  sectionSupport: "الدعم والأمان",
+  sectionLegal: "أخرى",
+  account: "ملفي الشخصي",
+  accountHint: "الاسم، المدينة، الصورة وكلمة المرور",
+  vehicle: "سيارتي",
+  vehicleHint: "الماركة، اللوحة، اللون وحالة المراجعة",
+  legal: "الشروط والخصوصية",
+  legalHint: "ما يُجمع من بيانات، ومتى، ولماذا",
+  unread: "جديد",
   wallet: "المحفظة والأرباح",
   walletHint: "الرصيد، أرباح اليوم والأسبوع، وطلب سحب",
   requests: "الطلبات المفتوحة",
@@ -25,6 +41,8 @@ export const menuStrings = {
   safetyHint: "جهات الطوارئ وبلاغات SOS السابقة",
   ratingLabel: "التقييم",
   tripsLabel: "الرحلات المكتملة",
+  totalTripsLabel: "إجمالي الرحلات",
+  ratingCountNote: "الخادم يعيد متوسّط التقييم بلا عدد المقيّمين، لذلك لا يُعرض عدد.",
   vehicleMissing: "لا توجد سيارة مسجّلة",
   signOut: "تسجيل الخروج",
   signOutTitle: "تسجيل الخروج",

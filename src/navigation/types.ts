@@ -49,6 +49,8 @@ export type DriverStackParamList = {
   Ticket: { ticketId: string };
   /** PHASE 6 - emergency contacts and the driver's own SOS reports. */
   Safety: undefined;
+  /** PHASE 7 - terms, privacy and the installed build identity. */
+  Legal: undefined;
   /**
    * Trip chat. tripId is required rather than read from the trip store so a
    * push notification tapped from a cold start can route straight here before

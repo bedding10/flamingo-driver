@@ -1,5 +1,6 @@
 /**
- * PHASE 7 copy: bottom navigation, trip sharing and the legal screen.
+ * PHASE 7 copy: bottom navigation, trip sharing, availability and the legal
+ * screen.
  *
  * A separate module for the same reason as strings.menu.ts and
  * strings.support.ts: src/i18n/strings.ts carries a damaged byte sequence in one
@@ -9,6 +10,13 @@ export const tabStrings = {
   requests: "الطلبات",
   map: "الخريطة",
   menu: "القائمة",
+} as const;
+
+/** The availability state, spelled out. Was only implied by the toggle colour. */
+export const statusStrings = {
+  online: "متصل — تستقبل الطلبات",
+  offline: "غير متصل — لا تصلك طلبات",
+  onTrip: "في رحلة",
 } as const;
 
 export const shareStrings = {
