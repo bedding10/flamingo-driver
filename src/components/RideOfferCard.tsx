@@ -84,6 +84,14 @@ function RideOfferCardComponent({
   const ratio = Math.max(0, Math.min(1, remaining / total));
   const urgent = remaining <= 5000;
 
+  /**
+   * React Native's `width` accepts a number or a `${number}%` token, not any
+   * string, so the percentage is built once and asserted to that token type.
+   * Concatenating a number with "%" produces a plain `string` and does not
+   * type-check under `tsc --noEmit`.
+   */
+  const fillWidth = (Math.round(ratio * 1000) / 10 + "%") as `${number}%`;
+
   // The net is authoritative from the backend (`driverNet`), computed with the
   // same settlement math as the wallet. The app must NOT recompute it: a local
   // fare - fare*pct/100 diverges the moment a coupon is involved.
@@ -111,7 +119,7 @@ function RideOfferCardComponent({
           style={[
             styles.timerFill,
             {
-              width: ratio * 100 + "%",
+              width: fillWidth,
               backgroundColor: urgent ? palette.danger : palette.primary,
             },
           ]}
