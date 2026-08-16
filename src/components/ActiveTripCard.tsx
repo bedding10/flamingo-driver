@@ -1,16 +1,19 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import type { Trip, TripStatus } from "../types/trip";
 import { strings } from "../i18n/strings";
 import { ProfileAvatar } from "./ProfileAvatar";
+import { Icon } from "./Icon";
 import {
   colors,
   radius,
   spacing,
   touchTarget,
   typography,
+  usePalette,
   withAlpha,
   shadows,
+  type Palette,
 } from "../theme";
 
 type Props = {
@@ -65,6 +68,9 @@ function actionLabel(next: TripStatus | null): string | null {
  * The address on display is always the one that matters next: before pickup it
  * is where the passenger waits, after pickup it is where they are going. Two
  * addresses at once is how a driver reads the wrong one at a junction.
+ *
+ * PHASE 7.5 CLOSURE: colours only. The state machine, the confirmations and
+ * the position of the SOS button are exactly as PHASE 6 left them.
  */
 function ActiveTripCardComponent({
   trip,
@@ -79,6 +85,9 @@ function ActiveTripCardComponent({
   onCall,
   unreadCount = 0,
 }: Props) {
+  const palette = usePalette();
+  const styles = useMemo(() => makeStyles(palette), [palette]);
+
   const status = trip.status;
   const heading = statusLabel(status);
   const primary = actionLabel(nextStatus);
@@ -198,7 +207,7 @@ function ActiveTripCardComponent({
               pressed ? styles.pressed : null,
             ]}
           >
-            <Text style={styles.callIcon}>{"\u2706"}</Text>
+            <Icon name="support" size={20} color={palette.primaryText} />
           </Pressable>
         ) : null}
 
@@ -273,156 +282,160 @@ function ActiveTripCardComponent({
 
 export const ActiveTripCard = React.memo(ActiveTripCardComponent);
 
-const styles = StyleSheet.create({
-  sheet: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: colors.surfaceDark,
-    borderTopLeftRadius: radius.sheet,
-    borderTopRightRadius: radius.sheet,
-    borderTopWidth: 1,
-    borderColor: colors.divider,
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.xl,
-    gap: spacing.md,
-    ...shadows.floating,
-  },
-  headRow: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  heading: {
-    ...typography.subtitle,
-    color: colors.textOnDark,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  fare: { ...typography.subtitle, color: colors.gold },
+const makeStyles = (palette: Palette) =>
+  StyleSheet.create({
+    sheet: {
+      position: "absolute",
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: palette.surface,
+      borderTopLeftRadius: radius.sheet,
+      borderTopRightRadius: radius.sheet,
+      borderTopWidth: 1,
+      borderColor: palette.border,
+      paddingHorizontal: spacing.xl,
+      paddingTop: spacing.xl,
+      gap: spacing.md,
+      ...shadows.floating,
+    },
+    headRow: {
+      flexDirection: "row-reverse",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    heading: {
+      ...typography.subtitle,
+      color: palette.textPrimary,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+    fare: { ...typography.subtitle, color: palette.primaryText },
 
-  leg: {
-    flexDirection: "row-reverse",
-    alignItems: "flex-start",
-    gap: spacing.md,
-  },
-  dot: { width: 10, height: 10, borderRadius: radius.pill, marginTop: 6 },
-  dotPickup: { backgroundColor: colors.online },
-  dotDrop: { backgroundColor: colors.coral },
-  legText: { flex: 1, gap: 2 },
-  legLabel: {
-    ...typography.caption,
-    color: colors.textOnDarkSecondary,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  legValue: {
-    ...typography.body,
-    color: colors.textOnDark,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
+    leg: {
+      flexDirection: "row-reverse",
+      alignItems: "flex-start",
+      gap: spacing.md,
+    },
+    dot: { width: 10, height: 10, borderRadius: radius.pill, marginTop: 6 },
+    dotPickup: { backgroundColor: palette.online },
+    // Coral is a route token shared with the map polyline, not brand identity.
+    dotDrop: { backgroundColor: colors.coral },
+    legText: { flex: 1, gap: 2 },
+    legLabel: {
+      ...typography.caption,
+      color: palette.textSecondary,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+    legValue: {
+      ...typography.body,
+      color: palette.textPrimary,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
 
-  contactRow: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: spacing.md,
-  },
-  // المرحلة 11: الاسم فوق وسطر المستوى تحته، دون توسيع البطاقة.
-  passengerBlock: { flex: 1, gap: 2 },
-  passengerLevel: {
-    ...typography.caption,
-    color: colors.gold,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  passenger: {
-    flex: 1,
-    ...typography.caption,
-    color: colors.textOnDarkSecondary,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  // PHASE 4: نفس هوية زر المحادثة لكن دائري وأصغر، فالاتصال إجراء ثانوي
-  // بجانب المحادثة ولا يجوز أن ينافس الزر الذهبي الأساسي.
-  callButton: {
-    width: touchTarget.normal - 8,
-    height: touchTarget.normal - 8,
-    borderRadius: radius.pill,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: withAlpha(colors.gold, 0.5),
-    backgroundColor: withAlpha(colors.gold, 0.12),
-  },
-  callIcon: { fontSize: 20, color: colors.gold },
-  chatButton: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: spacing.sm,
-    minHeight: touchTarget.normal - 12,
-    paddingHorizontal: spacing.lg,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: withAlpha(colors.gold, 0.5),
-    backgroundColor: withAlpha(colors.gold, 0.12),
-  },
-  chatLabel: { ...typography.label, color: colors.gold },
-  badge: {
-    minWidth: 20,
-    height: 20,
-    paddingHorizontal: 5,
-    borderRadius: radius.pill,
-    backgroundColor: colors.coral,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  badgeText: { ...typography.caption, color: colors.white, lineHeight: 16 },
-  error: {
-    ...typography.caption,
-    color: colors.danger,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
+    contactRow: {
+      flexDirection: "row-reverse",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: spacing.md,
+    },
+    passengerBlock: { flex: 1, gap: 2 },
+    passengerLevel: {
+      ...typography.caption,
+      color: palette.primaryText,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+    passenger: {
+      flex: 1,
+      ...typography.caption,
+      color: palette.textSecondary,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+    // Calling is secondary to messaging, so it is a round icon button that
+    // never competes with the filled primary action.
+    callButton: {
+      width: touchTarget.normal - 8,
+      height: touchTarget.normal - 8,
+      borderRadius: radius.pill,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 1,
+      borderColor: withAlpha(palette.primary, 0.5),
+      backgroundColor: palette.primaryWash,
+    },
+    chatButton: {
+      flexDirection: "row-reverse",
+      alignItems: "center",
+      gap: spacing.sm,
+      minHeight: touchTarget.normal - 12,
+      paddingHorizontal: spacing.lg,
+      borderRadius: radius.pill,
+      borderWidth: 1,
+      borderColor: withAlpha(palette.primary, 0.5),
+      backgroundColor: palette.primaryWash,
+    },
+    chatLabel: { ...typography.label, color: palette.primaryText },
+    badge: {
+      minWidth: 20,
+      height: 20,
+      paddingHorizontal: 5,
+      borderRadius: radius.pill,
+      backgroundColor: palette.primary,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    badgeText: {
+      ...typography.caption,
+      color: palette.onPrimary,
+      lineHeight: 16,
+    },
+    error: {
+      ...typography.caption,
+      color: palette.danger,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
 
-  actions: { flexDirection: "row-reverse", gap: spacing.md },
-  primaryButton: {
-    flex: 2,
-    height: touchTarget.critical,
-    borderRadius: radius.pill,
-    backgroundColor: colors.gold,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  primaryLabel: { ...typography.subtitle, color: colors.ink },
-  cancelButton: {
-    flex: 1,
-    height: touchTarget.critical,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: withAlpha(colors.danger, 0.5),
-    backgroundColor: withAlpha(colors.danger, 0.10),
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  cancelLabel: { ...typography.label, color: colors.danger },
+    actions: { flexDirection: "row-reverse", gap: spacing.md },
+    primaryButton: {
+      flex: 2,
+      height: touchTarget.critical,
+      borderRadius: radius.pill,
+      backgroundColor: palette.primary,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    primaryLabel: { ...typography.subtitle, color: palette.onPrimary },
+    cancelButton: {
+      flex: 1,
+      height: touchTarget.critical,
+      borderRadius: radius.pill,
+      borderWidth: 1,
+      borderColor: withAlpha(palette.danger, 0.5),
+      backgroundColor: withAlpha(palette.danger, 0.1),
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    cancelLabel: { ...typography.label, color: palette.danger },
 
-  // Full width and on its own row: the driver must find it without aiming,
-  // but outlined rather than filled so it never competes with the gold
-  // primary action for an unaimed thumb.
-  sosButton: {
-    height: touchTarget.normal,
-    borderRadius: radius.pill,
-    borderWidth: 1.5,
-    borderColor: colors.danger,
-    backgroundColor: withAlpha(colors.danger, 0.08),
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  sosLabel: { ...typography.label, color: colors.danger },
+    // Full width and on its own row: the driver must find it without aiming,
+    // but outlined rather than filled so it never competes with the primary
+    // action for an unaimed thumb.
+    sosButton: {
+      height: touchTarget.normal,
+      borderRadius: radius.pill,
+      borderWidth: 1.5,
+      borderColor: palette.danger,
+      backgroundColor: withAlpha(palette.danger, 0.08),
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    sosLabel: { ...typography.label, color: palette.danger },
 
-  pressed: { opacity: 0.85 },
-  disabled: { opacity: 0.5 },
-});
+    pressed: { opacity: 0.85 },
+    disabled: { opacity: 0.5 },
+  });

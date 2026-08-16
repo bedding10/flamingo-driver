@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { DocumentRow } from "../../components/DocumentRow";
@@ -8,7 +8,14 @@ import {
 } from "../../components/DocumentDatesModal";
 import { strings } from "../../i18n/strings";
 import { DOC_LABELS, p1 } from "../../i18n/strings.phase1";
-import { colors, radius, spacing, typography, withAlpha } from "../../theme";
+import {
+  radius,
+  spacing,
+  typography,
+  usePalette,
+  withAlpha,
+  type Palette,
+} from "../../theme";
 import { useDriverProfile } from "../../hooks/useDriverProfile";
 import { useDocumentUpload } from "../../hooks/useDocumentUpload";
 import {
@@ -38,6 +45,8 @@ import {
  */
 export function DocumentsScreen() {
   const insets = useSafeAreaInsets();
+  const palette = usePalette();
+  const styles = useMemo(() => makeStyles(palette), [palette]);
   const { data: profile } = useDriverProfile();
   const { submit, pending, error, clearError } = useDocumentUpload();
   const [notice, setNotice] = useState<string | null>(null);
@@ -99,7 +108,7 @@ export function DocumentsScreen() {
             <Text style={styles.bannerTitle}>{p1.documents.missingTitle}</Text>
             {missing.map((type) => (
               <Text key={type} style={styles.bannerText}>
-                • {DOC_LABELS[type]}
+                {"\u2022 " + DOC_LABELS[type]}
               </Text>
             ))}
           </View>
@@ -150,86 +159,87 @@ export function DocumentsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.ink },
-  content: { paddingHorizontal: spacing.xl },
-  heading: {
-    ...typography.title,
-    color: colors.textOnDark,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  subtitle: {
-    ...typography.body,
-    color: colors.textOnDarkSecondary,
-    textAlign: "right",
-    writingDirection: "rtl",
-    marginTop: spacing.xs,
-  },
-  banner: {
-    marginTop: spacing.lg,
-    padding: spacing.lg,
-    borderRadius: radius.card,
-    backgroundColor: withAlpha(colors.warning, 0.12),
-    borderWidth: 1,
-    borderColor: withAlpha(colors.warning, 0.4),
-  },
-  bannerTitle: {
-    ...typography.label,
-    color: colors.warning,
-    textAlign: "right",
-    writingDirection: "rtl",
-    marginBottom: spacing.xs,
-  },
-  bannerText: {
-    ...typography.body,
-    color: colors.textOnDark,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  bannerOk: {
-    marginTop: spacing.lg,
-    padding: spacing.lg,
-    borderRadius: radius.card,
-    backgroundColor: withAlpha(colors.online, 0.12),
-    borderWidth: 1,
-    borderColor: withAlpha(colors.online, 0.4),
-  },
-  bannerOkText: {
-    ...typography.body,
-    color: colors.textOnDark,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  hint: {
-    ...typography.caption,
-    color: colors.textOnDarkSecondary,
-    textAlign: "right",
-    writingDirection: "rtl",
-    marginTop: spacing.md,
-  },
-  error: {
-    ...typography.body,
-    color: colors.danger,
-    textAlign: "right",
-    writingDirection: "rtl",
-    marginTop: spacing.lg,
-  },
-  notice: {
-    ...typography.body,
-    color: colors.online,
-    textAlign: "right",
-    writingDirection: "rtl",
-    marginTop: spacing.lg,
-  },
-  list: {
-    marginTop: spacing.xl,
-    backgroundColor: colors.surfaceDark,
-    borderRadius: radius.card,
-    borderWidth: 1,
-    borderColor: colors.divider,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-  },
-  separator: { height: 1, backgroundColor: colors.divider },
-});
+const makeStyles = (palette: Palette) =>
+  StyleSheet.create({
+    root: { flex: 1, backgroundColor: palette.background },
+    content: { paddingHorizontal: spacing.xl },
+    heading: {
+      ...typography.title,
+      color: palette.textPrimary,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+    subtitle: {
+      ...typography.body,
+      color: palette.textSecondary,
+      textAlign: "right",
+      writingDirection: "rtl",
+      marginTop: spacing.xs,
+    },
+    banner: {
+      marginTop: spacing.lg,
+      padding: spacing.lg,
+      borderRadius: radius.card,
+      backgroundColor: withAlpha(palette.warning, 0.12),
+      borderWidth: 1,
+      borderColor: withAlpha(palette.warning, 0.4),
+    },
+    bannerTitle: {
+      ...typography.label,
+      color: palette.warning,
+      textAlign: "right",
+      writingDirection: "rtl",
+      marginBottom: spacing.xs,
+    },
+    bannerText: {
+      ...typography.body,
+      color: palette.textPrimary,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+    bannerOk: {
+      marginTop: spacing.lg,
+      padding: spacing.lg,
+      borderRadius: radius.card,
+      backgroundColor: withAlpha(palette.online, 0.12),
+      borderWidth: 1,
+      borderColor: withAlpha(palette.online, 0.4),
+    },
+    bannerOkText: {
+      ...typography.body,
+      color: palette.textPrimary,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+    hint: {
+      ...typography.caption,
+      color: palette.textSecondary,
+      textAlign: "right",
+      writingDirection: "rtl",
+      marginTop: spacing.md,
+    },
+    error: {
+      ...typography.body,
+      color: palette.danger,
+      textAlign: "right",
+      writingDirection: "rtl",
+      marginTop: spacing.lg,
+    },
+    notice: {
+      ...typography.body,
+      color: palette.online,
+      textAlign: "right",
+      writingDirection: "rtl",
+      marginTop: spacing.lg,
+    },
+    list: {
+      marginTop: spacing.xl,
+      backgroundColor: palette.surface,
+      borderRadius: radius.card,
+      borderWidth: 1,
+      borderColor: palette.border,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.sm,
+    },
+    separator: { height: 1, backgroundColor: palette.border },
+  });

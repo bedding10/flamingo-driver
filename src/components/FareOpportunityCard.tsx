@@ -3,12 +3,13 @@ import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import type { FareOpportunity } from "../types/fareOffer";
 import { requestStrings } from "../i18n/strings.requests";
 import {
-  colors,
   radius,
   spacing,
   touchTarget,
   typography,
+  usePalette,
   withAlpha,
+  type Palette,
 } from "../theme";
 
 type Props = {
@@ -45,6 +46,9 @@ function FareOpportunityCardComponent({
   onBid,
   onWithdraw,
 }: Props) {
+  const palette = usePalette();
+  const styles = useMemo(() => makeStyles(palette), [palette]);
+
   // Narrowed once into a local: this keeps the JSX free of non-null assertions,
   // which `npm run lint` (--max-warnings=0) would flag.
   const myOffer = item.myOffer;
@@ -174,8 +178,8 @@ function FareOpportunityCardComponent({
           keyboardType="numeric"
           editable={!expired && !busy}
           placeholder={requestStrings.amountPlaceholder}
-          placeholderTextColor={withAlpha(colors.textOnDarkSecondary, 0.6)}
-          selectionColor={colors.gold}
+          placeholderTextColor={withAlpha(palette.textSecondary, 0.6)}
+          selectionColor={palette.primary}
           style={styles.amountInput}
           accessibilityLabel={requestStrings.amountLabel}
         />
@@ -230,137 +234,138 @@ function FareOpportunityCardComponent({
 
 export const FareOpportunityCard = React.memo(FareOpportunityCardComponent);
 
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: colors.surfaceDark,
-    borderRadius: radius.card,
-    borderWidth: 1,
-    borderColor: colors.divider,
-    padding: spacing.lg,
-    gap: spacing.md,
-  },
-  cardExpired: { opacity: 0.55 },
+const makeStyles = (palette: Palette) =>
+  StyleSheet.create({
+    card: {
+      backgroundColor: palette.surface,
+      borderRadius: radius.card,
+      borderWidth: 1,
+      borderColor: palette.border,
+      padding: spacing.lg,
+      gap: spacing.md,
+    },
+    cardExpired: { opacity: 0.55 },
 
-  headRow: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: spacing.sm,
-  },
-  passenger: {
-    ...typography.subtitle,
-    color: colors.textOnDark,
-    textAlign: "right",
-    writingDirection: "rtl",
-    flexShrink: 1,
-  },
-  timer: { ...typography.caption, color: colors.gold },
-  timerOff: { color: colors.textOnDarkSecondary },
+    headRow: {
+      flexDirection: "row-reverse",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: spacing.sm,
+    },
+    passenger: {
+      ...typography.subtitle,
+      color: palette.textPrimary,
+      textAlign: "right",
+      writingDirection: "rtl",
+      flexShrink: 1,
+    },
+    timer: { ...typography.caption, color: palette.primaryText },
+    timerOff: { color: palette.textSecondary },
 
-  fareRow: {
-    flexDirection: "row-reverse",
-    alignItems: "flex-end",
-    justifyContent: "space-between",
-    gap: spacing.md,
-  },
-  fare: { ...typography.numeric, color: colors.gold },
-  metaCol: { alignItems: "flex-start", gap: 2, flexShrink: 1 },
-  meta: {
-    ...typography.caption,
-    color: colors.textOnDarkSecondary,
-    textAlign: "left",
-  },
+    fareRow: {
+      flexDirection: "row-reverse",
+      alignItems: "flex-end",
+      justifyContent: "space-between",
+      gap: spacing.md,
+    },
+    fare: { ...typography.numeric, color: palette.primaryText },
+    metaCol: { alignItems: "flex-start", gap: 2, flexShrink: 1 },
+    meta: {
+      ...typography.caption,
+      color: palette.textSecondary,
+      textAlign: "left",
+    },
 
-  leg: {
-    flexDirection: "row-reverse",
-    alignItems: "flex-start",
-    gap: spacing.md,
-  },
-  dot: { width: 10, height: 10, borderRadius: radius.pill, marginTop: 6 },
-  dotPickup: { backgroundColor: colors.online },
-  dotDrop: { backgroundColor: colors.danger },
-  legText: { flex: 1, gap: 2 },
-  legLabel: {
-    ...typography.caption,
-    color: colors.textOnDarkSecondary,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  legValue: {
-    ...typography.body,
-    color: colors.textOnDark,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
+    leg: {
+      flexDirection: "row-reverse",
+      alignItems: "flex-start",
+      gap: spacing.md,
+    },
+    dot: { width: 10, height: 10, borderRadius: radius.pill, marginTop: 6 },
+    dotPickup: { backgroundColor: palette.online },
+    dotDrop: { backgroundColor: palette.danger },
+    legText: { flex: 1, gap: 2 },
+    legLabel: {
+      ...typography.caption,
+      color: palette.textSecondary,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+    legValue: {
+      ...typography.body,
+      color: palette.textPrimary,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
 
-  note: {
-    ...typography.caption,
-    color: colors.textOnDarkSecondary,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  mine: {
-    ...typography.caption,
-    color: colors.info,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
+    note: {
+      ...typography.caption,
+      color: palette.textSecondary,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+    mine: {
+      ...typography.caption,
+      color: palette.info,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
 
-  amountRow: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: spacing.md,
-  },
-  amountLabel: {
-    ...typography.caption,
-    color: colors.textOnDarkSecondary,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  amountInput: {
-    flex: 1,
-    minHeight: touchTarget.normal,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceDarkRaised,
-    borderWidth: 1,
-    borderColor: colors.divider,
-    paddingHorizontal: spacing.lg,
-    color: colors.textOnDark,
-    ...typography.numeric,
-    textAlign: "center",
-    writingDirection: "ltr",
-  },
-  invalid: {
-    ...typography.caption,
-    color: colors.warning,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
+    amountRow: {
+      flexDirection: "row-reverse",
+      alignItems: "center",
+      gap: spacing.md,
+    },
+    amountLabel: {
+      ...typography.caption,
+      color: palette.textSecondary,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+    amountInput: {
+      flex: 1,
+      minHeight: touchTarget.normal,
+      borderRadius: radius.md,
+      backgroundColor: palette.surfaceSunken,
+      borderWidth: 1,
+      borderColor: palette.border,
+      paddingHorizontal: spacing.lg,
+      color: palette.textPrimary,
+      ...typography.numeric,
+      textAlign: "center",
+      writingDirection: "ltr",
+    },
+    invalid: {
+      ...typography.caption,
+      color: palette.warning,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
 
-  actions: { flexDirection: "row-reverse", gap: spacing.md },
-  primaryButton: {
-    flex: 2,
-    height: touchTarget.critical,
-    borderRadius: radius.pill,
-    backgroundColor: colors.gold,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  primaryLabel: { ...typography.subtitle, color: colors.ink },
-  secondaryButton: {
-    flex: 1,
-    height: touchTarget.critical,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.divider,
-    backgroundColor: withAlpha(colors.white, 0.06),
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  secondaryLabel: {
-    ...typography.subtitle,
-    color: colors.textOnDarkSecondary,
-  },
-  pressed: { opacity: 0.85 },
-  disabled: { opacity: 0.5 },
-});
+    actions: { flexDirection: "row-reverse", gap: spacing.md },
+    primaryButton: {
+      flex: 2,
+      height: touchTarget.critical,
+      borderRadius: radius.pill,
+      backgroundColor: palette.primary,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    primaryLabel: { ...typography.subtitle, color: palette.onPrimary },
+    secondaryButton: {
+      flex: 1,
+      height: touchTarget.critical,
+      borderRadius: radius.pill,
+      borderWidth: 1,
+      borderColor: palette.border,
+      backgroundColor: palette.surfaceSunken,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    secondaryLabel: {
+      ...typography.subtitle,
+      color: palette.textSecondary,
+    },
+    pressed: { opacity: 0.85 },
+    disabled: { opacity: 0.5 },
+  });
