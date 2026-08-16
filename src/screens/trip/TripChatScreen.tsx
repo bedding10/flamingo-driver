@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -25,13 +31,15 @@ import {
 import { joinTripRoom, onSocketEvent } from "../../socket/socket.service";
 import type { DriverStackParamList } from "../../navigation/types";
 import { strings } from "../../i18n/strings";
+import { Icon } from "../../components/Icon";
 import {
-  colors,
   radius,
   spacing,
   touchTarget,
   typography,
+  usePalette,
   withAlpha,
+  type Palette,
 } from "../../theme";
 
 /** Mirrors the server's @MaxLength on SendTripMessageDto. */
@@ -53,9 +61,13 @@ type ChatRoute = RouteProp<DriverStackParamList, "TripChat">;
  * the server returns in `participant`, not by a locally stored user id: the
  * driver app keeps a driver profile, and driver.id is NOT the user id used as
  * TripMessage.senderId. Using participant.id avoids that mismatch entirely.
+ *
+ * PHASE 7.5 CLOSURE: colours only.
  */
 export function TripChatScreen() {
   const insets = useSafeAreaInsets();
+  const palette = usePalette();
+  const styles = useMemo(() => makeStyles(palette), [palette]);
   const { tripId } = useRoute<ChatRoute>().params;
 
   const [context, setContext] = useState<TripCommunicationContext | null>(null);
@@ -159,15 +171,12 @@ export function TripChatScreen() {
   const title = context?.participant?.name || strings.chat.passengerFallback;
 
   /**
-   * رقم الراكب للاتصال المباشر، كما حسمه الخادم وحده.
+   * \u0631\u0642\u0645 \u0627\u0644\u0631\u0627\u0643\u0628 \u0644\u0644\u0627\u062a\u0635\u0627\u0644 \u0627\u0644\u0645\u0628\u0627\u0634\u0631\u060c \u0643\u0645\u0627 \u062d\u0633\u0645\u0647 \u0627\u0644\u062e\u0627\u062f\u0645 \u0648\u062d\u062f\u0647.
    *
-   * لا نقرّر هنا شيئًا: `canCall` و`phoneNumber` يأتيان من
-   * GET /trip-communication/:tripId بعد أن يتحقق الخادم من ملكية الرحلة
-   * وحالتها وسياسة passenger.tripCommunication. إن كان phoneMode غير
-   * DIRECT يعود phoneNumber ـ null فلا يظهر الزر أصلاً.
-   *
-   * هذا هو النصف الذي كان ناقصًا: تطبيق الراكب يتصل منذ البداية،
-   * بينما لم يكن لدى السائق أي وسيلة للاتصال بالراكب إطلاقًا.
+   * canCall and phoneNumber both come from GET /trip-communication/:tripId
+   * after the server has checked trip ownership, trip state and the
+   * passenger.tripCommunication policy. When phoneMode is not DIRECT the
+   * server returns phoneNumber null and this button is not rendered at all.
    */
   const callablePhone =
     context?.canCall === true && context.phoneNumber
@@ -186,7 +195,7 @@ export function TripChatScreen() {
   if (loading) {
     return (
       <View style={[styles.root, styles.center]}>
-        <ActivityIndicator color={colors.gold} />
+        <ActivityIndicator color={palette.primary} />
       </View>
     );
   }
@@ -218,7 +227,7 @@ export function TripChatScreen() {
                 pressed ? styles.pressed : null,
               ]}
             >
-              <Text style={styles.callIcon}>{"\u2706"}</Text>
+              <Icon name="support" size={22} color={palette.primaryText} />
             </Pressable>
           ) : null}
         </View>
@@ -299,7 +308,8 @@ export function TripChatScreen() {
           placeholder={
             closed ? strings.chat.closedPlaceholder : strings.chat.placeholder
           }
-          placeholderTextColor={colors.textOnDarkSecondary}
+          placeholderTextColor={withAlpha(palette.textSecondary, 0.6)}
+          selectionColor={palette.primary}
           style={styles.input}
         />
         <Pressable
@@ -322,149 +332,153 @@ export function TripChatScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.ink },
-  center: { alignItems: "center", justifyContent: "center" },
+const makeStyles = (palette: Palette) =>
+  StyleSheet.create({
+    root: { flex: 1, backgroundColor: palette.background },
+    center: { alignItems: "center", justifyContent: "center" },
 
-  header: {
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderColor: colors.divider,
-    gap: 2,
-  },
-  // RTL: الاسم على اليمين وزر الاتصال على اليسار، مثل بقية شاشات التطبيق.
-  headerRow: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: spacing.md,
-  },
-  headerText: { flex: 1, gap: 2 },
-  callButton: {
-    width: touchTarget.normal,
-    height: touchTarget.normal,
-    borderRadius: radius.pill,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: withAlpha(colors.gold, 0.16),
-    borderWidth: 1,
-    borderColor: withAlpha(colors.gold, 0.5),
-  },
-  callIcon: { fontSize: 22, color: colors.gold },
-  headerTitle: {
-    ...typography.subtitle,
-    color: colors.textOnDark,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  headerHint: {
-    ...typography.caption,
-    color: colors.textOnDarkSecondary,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
+    header: {
+      paddingHorizontal: spacing.xl,
+      paddingVertical: spacing.md,
+      borderBottomWidth: 1,
+      borderColor: palette.border,
+      backgroundColor: palette.surface,
+      gap: 2,
+    },
+    headerRow: {
+      flexDirection: "row-reverse",
+      alignItems: "center",
+      gap: spacing.md,
+    },
+    headerText: { flex: 1, gap: 2 },
+    callButton: {
+      width: touchTarget.normal,
+      height: touchTarget.normal,
+      borderRadius: radius.pill,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: palette.primaryWash,
+      borderWidth: 1,
+      borderColor: withAlpha(palette.primary, 0.5),
+    },
+    headerTitle: {
+      ...typography.subtitle,
+      color: palette.textPrimary,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+    headerHint: {
+      ...typography.caption,
+      color: palette.textSecondary,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
 
-  list: { padding: spacing.lg, gap: spacing.sm },
-  empty: {
-    ...typography.caption,
-    color: colors.textOnDarkSecondary,
-    textAlign: "center",
-    marginTop: spacing["3xl"],
-    writingDirection: "rtl",
-  },
+    list: { padding: spacing.lg, gap: spacing.sm },
+    empty: {
+      ...typography.caption,
+      color: palette.textSecondary,
+      textAlign: "center",
+      marginTop: spacing["3xl"],
+      writingDirection: "rtl",
+    },
 
-  row: { flexDirection: "row" },
-  // RTL: the driver's own messages sit on the left, the passenger's on the
-  // right, matching how the passenger app renders the same thread mirrored.
-  rowMine: { justifyContent: "flex-start" },
-  rowTheirs: { justifyContent: "flex-end" },
+    row: { flexDirection: "row" },
+    // RTL: the driver's own messages sit on the left, the passenger's on the
+    // right, matching how the passenger app renders the same thread mirrored.
+    rowMine: { justifyContent: "flex-start" },
+    rowTheirs: { justifyContent: "flex-end" },
 
-  bubble: {
-    maxWidth: "80%",
-    borderRadius: radius.card,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    gap: 2,
-  },
-  bubbleMine: { backgroundColor: colors.gold },
-  bubbleTheirs: {
-    backgroundColor: colors.surfaceDarkRaised,
-    borderWidth: 1,
-    borderColor: colors.divider,
-  },
-  bubbleText: { ...typography.body, textAlign: "right", writingDirection: "rtl" },
-  bubbleTextMine: { color: colors.ink },
-  bubbleTextTheirs: { color: colors.textOnDark },
-  receipt: {
-    ...typography.caption,
-    color: withAlpha(colors.ink, 0.6),
-    textAlign: "left",
-  },
+    bubble: {
+      maxWidth: "80%",
+      borderRadius: radius.card,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      gap: 2,
+    },
+    bubbleMine: { backgroundColor: palette.primary },
+    bubbleTheirs: {
+      backgroundColor: palette.surfaceRaised,
+      borderWidth: 1,
+      borderColor: palette.border,
+    },
+    bubbleText: {
+      ...typography.body,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+    bubbleTextMine: { color: palette.onPrimary },
+    bubbleTextTheirs: { color: palette.textPrimary },
+    receipt: {
+      ...typography.caption,
+      color: withAlpha(palette.onPrimary, 0.75),
+      textAlign: "left",
+    },
 
-  error: {
-    ...typography.caption,
-    color: colors.danger,
-    paddingHorizontal: spacing.xl,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
+    error: {
+      ...typography.caption,
+      color: palette.danger,
+      paddingHorizontal: spacing.xl,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
 
-  quickRow: {
-    flexDirection: "row-reverse",
-    flexWrap: "wrap",
-    gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.sm,
-  },
-  quickChip: {
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.divider,
-    backgroundColor: colors.surfaceDark,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-  },
-  quickText: {
-    ...typography.caption,
-    color: colors.textOnDark,
-    writingDirection: "rtl",
-  },
+    quickRow: {
+      flexDirection: "row-reverse",
+      flexWrap: "wrap",
+      gap: spacing.sm,
+      paddingHorizontal: spacing.lg,
+      paddingBottom: spacing.sm,
+    },
+    quickChip: {
+      borderRadius: radius.pill,
+      borderWidth: 1,
+      borderColor: palette.border,
+      backgroundColor: palette.surface,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+    },
+    quickText: {
+      ...typography.caption,
+      color: palette.textPrimary,
+      writingDirection: "rtl",
+    },
 
-  composer: {
-    flexDirection: "row-reverse",
-    alignItems: "flex-end",
-    gap: spacing.md,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderColor: colors.divider,
-    backgroundColor: colors.surfaceDark,
-  },
-  input: {
-    flex: 1,
-    minHeight: touchTarget.normal,
-    maxHeight: 120,
-    borderRadius: radius.card,
-    borderWidth: 1,
-    borderColor: colors.divider,
-    backgroundColor: colors.surfaceDarkRaised,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
-    ...typography.body,
-    color: colors.textOnDark,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  sendButton: {
-    height: touchTarget.normal,
-    paddingHorizontal: spacing.xl,
-    borderRadius: radius.pill,
-    backgroundColor: colors.gold,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  sendLabel: { ...typography.label, color: colors.ink },
+    composer: {
+      flexDirection: "row-reverse",
+      alignItems: "flex-end",
+      gap: spacing.md,
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.md,
+      borderTopWidth: 1,
+      borderColor: palette.border,
+      backgroundColor: palette.surface,
+    },
+    input: {
+      flex: 1,
+      minHeight: touchTarget.normal,
+      maxHeight: 120,
+      borderRadius: radius.card,
+      borderWidth: 1,
+      borderColor: palette.border,
+      backgroundColor: palette.surfaceSunken,
+      paddingHorizontal: spacing.md,
+      paddingTop: spacing.md,
+      ...typography.body,
+      color: palette.textPrimary,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+    sendButton: {
+      height: touchTarget.normal,
+      paddingHorizontal: spacing.xl,
+      borderRadius: radius.pill,
+      backgroundColor: palette.primary,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    sendLabel: { ...typography.label, color: palette.onPrimary },
 
-  pressed: { opacity: 0.85 },
-  disabled: { opacity: 0.5 },
-});
+    pressed: { opacity: 0.85 },
+    disabled: { opacity: 0.5 },
+  });

@@ -24,12 +24,13 @@ import {
   p1,
 } from "../../i18n/strings.phase1";
 import {
-  colors,
   radius,
   spacing,
   touchTarget,
   typography,
+  usePalette,
   withAlpha,
+  type Palette,
 } from "../../theme";
 import {
   useDriverProfile,
@@ -39,12 +40,9 @@ import { useCities, useWilayas } from "../../hooks/useGeography";
 import { toApiError } from "../../api/client";
 import type { UpdateDriverProfileInput } from "../../types/driver";
 
+type Styles = ReturnType<typeof makeStyles>;
+
 // Phase 11 - display labels only, mirroring ActiveTripCard.
-//
-// This map was USED twice below and never defined, which threw a
-// ReferenceError the moment a driver whose profile carries a profileLevel
-// opened this screen. It is a runtime-only failure: the reference is legal
-// JavaScript, so Metro bundles it and the crash happens on render.
 //
 // It is a lookup table and nothing more: the level itself is decided by the
 // backend from COMPLETED trips, and no threshold (10 / 50 / 100 / 500) is
@@ -86,24 +84,26 @@ function sameFeatures(a: string[], b: string[]): boolean {
  *    data it cannot read.
  *    City is no longer read-only. Phase 8 added an authenticated, non-STAFF
  *    geography surface (GET /geography/public/wilayas + /cities), so the driver
- *    now picks a wilaya and then a city from server data. The list is never
- *    hardcoded here: the official division went 48 → 58 → 69, and a copy baked
- *    into a shipped binary cannot be fixed without a store release.
+ *    now picks a wilaya and then a city from server data.
  *    Only cityId is sent; the wilaya is derived server-side from the city, so a
  *    client cannot claim a cheaper wilaya to influence pricing.
  * 4. Service class (rideClass) is read-only too, for a different reason: staff
  *    assign it during vehicle review, on purpose, so a driver cannot quietly
- *    relabel an approved van as "economy" to pick up more offers. The server
- *    no longer accepts rideClass on this endpoint at all.
+ *    relabel an approved van as "economy" to pick up more offers.
  *
  * PHASE 1C: the profile photo is NOT part of this form and has no Save button
  * of its own here. It travels through the document upload flow
- * (upload-url → PUT → POST /driver/documents), which is a different contract
- * with a different failure mode, so mixing it into the PATCH payload would
- * make one failure look like the other.
+ * (upload-url -> PUT -> POST /driver/documents), which is a different contract
+ * with a different failure mode.
+ *
+ * PHASE 7.5 CLOSURE: colours only - plus the removal of two `colors.primary`
+ * references, a token that does not exist on the colors object and would have
+ * failed `tsc --noEmit`.
  */
 export function ProfileScreen() {
   const insets = useSafeAreaInsets();
+  const palette = usePalette();
+  const styles = useMemo(() => makeStyles(palette), [palette]);
   const { data: profile } = useDriverProfile();
   const mutation = useUpdateDriverProfile();
 
@@ -121,7 +121,7 @@ export function ProfileScreen() {
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
-  // — Phase 8: wilaya → city selection, both from the backend —
+  // - Phase 8: wilaya -> city selection, both from the backend -
   const [wilayaId, setWilayaId] = useState<string | null>(null);
   const [cityId, setCityId] = useState<string | null>(profile?.cityId ?? null);
   const wilayasQuery = useWilayas();
@@ -132,9 +132,7 @@ export function ProfileScreen() {
    *
    * Every field above is initialised from `profile`, which is undefined on the
    * first render whenever the query has no cached data - a cold start, or a
-   * driver who opens this screen before GET /driver/me returns. The state then
-   * kept the empty initial value forever and the driver saw a blank form over
-   * a vehicle that exists.
+   * driver who opens this screen before GET /driver/me returns.
    *
    * It runs once per profile id and never again, so it cannot overwrite text
    * the driver is typing while a background refetch resolves.
@@ -184,7 +182,7 @@ export function ProfileScreen() {
       next.carFeatures = features;
     }
 
-    // Phase 8: only cityId travels. wilayaId is deliberately NOT sent — the
+    // Phase 8: only cityId travels. wilayaId is deliberately NOT sent - the
     // server derives it from the city, which keeps one source of truth and
     // stops a client from claiming a wilaya it does not belong to.
     if (cityId && cityId !== (profile?.cityId ?? null)) {
@@ -215,8 +213,6 @@ export function ProfileScreen() {
 
     // Mirror of the server rule: it throws when the resulting vehicle would have
     // no model or no plate. Checking here keeps the driver out of a round trip.
-    // carFeatures counts as touching the vehicle on the server too, so a driver
-    // cannot create a vehicle out of a feature list alone.
     const touchesVehicle =
       changes.carMake !== undefined ||
       changes.carModel !== undefined ||
@@ -269,9 +265,9 @@ export function ProfileScreen() {
       >
         <Text style={styles.heading}>{strings.profile.title}</Text>
 
-        {/* المرحلة 11: الصورة داخل إطار المستوى. الإطار والمستوى وعدد
-            الرحلات تأتي كلها من GET /driver/me.
-            PHASE 1C: نفس العرض، مع إمكانية التقاط الصورة أو تغييرها. */}
+        {/* Phase 11 - the photo inside the level frame. Frame, level and trip
+            counts all come from GET /driver/me.
+            PHASE 1C: same display, now also capturable. */}
         <View style={styles.levelHero}>
           <ProfilePhotoPicker
             avatarUrl={profile?.photoUrl}
@@ -289,28 +285,32 @@ export function ProfileScreen() {
 
         <View style={styles.statsRow}>
           <Stat
+            styles={styles}
             label={strings.profile.ratingLabel}
-            value={profile ? profile.rating.toFixed(1) : "—"}
+            value={profile ? profile.rating.toFixed(1) : "\u2014"}
           />
           <Stat
+            styles={styles}
             label={strings.profile.tripsLabel}
             value={
               profile
                 ? String(profile.completedTripsCount ?? profile.totalTrips)
-                : "—"
+                : "\u2014"
             }
           />
         </View>
 
-        {/* التقدم نحو المستوى التالي: القيم محسوبة في الخادم، ويختفي السطر
-            عند أعلى مستوى حتى لا يزدحم التصميم. */}
+        {/* Progress to the next level: both numbers are computed server-side,
+            and the row disappears at the top level. */}
         {profile?.nextLevel && profile?.nextLevelAt ? (
           <View style={styles.statsRow}>
             <Stat
+              styles={styles}
               label={strings.level.progress}
               value={`${profile.completedTripsCount ?? 0} / ${profile.nextLevelAt}`}
             />
             <Stat
+              styles={styles}
               label={strings.level.nextLevel}
               value={LEVEL_LABELS[profile.nextLevel] ?? profile.nextLevel}
             />
@@ -327,8 +327,9 @@ export function ProfileScreen() {
             maxLength={120}
           />
           <ReadOnlyRow
+            styles={styles}
             label={strings.profile.phoneLabel}
-            value={profile?.phone ?? "—"}
+            value={profile?.phone ?? "\u2014"}
             hint={strings.profile.phoneLocked}
             ltr
           />
@@ -337,12 +338,10 @@ export function ProfileScreen() {
             <Text style={styles.pickerLabel}>
               {strings.profile.wilayaLabel}
             </Text>
-            <Text style={styles.pickerHint}>
-              {strings.profile.wilayaHint}
-            </Text>
+            <Text style={styles.pickerHint}>{strings.profile.wilayaHint}</Text>
             {wilayasQuery.isLoading && (
               <View style={styles.pickerStatus}>
-                <ActivityIndicator size="small" color={colors.primary} />
+                <ActivityIndicator size="small" color={palette.primary} />
                 <Text style={styles.pickerStatusText}>
                   {strings.profile.wilayaLoading}
                 </Text>
@@ -377,7 +376,7 @@ export function ProfileScreen() {
                         selected && styles.chipTextSelected,
                       ]}
                     >
-                      {w.number} — {w.nameAr}
+                      {w.number + " \u2014 " + w.nameAr}
                     </Text>
                   </Pressable>
                 );
@@ -391,22 +390,20 @@ export function ProfileScreen() {
             {!wilayaId && (
               <Text style={styles.pickerHint}>
                 {profile?.city
-                  ? `${profile.city} — ${strings.profile.citySelectPrompt}`
+                  ? `${profile.city} \u2014 ${strings.profile.citySelectPrompt}`
                   : strings.profile.citySelectPrompt}
               </Text>
             )}
             {wilayaId && citiesQuery.isLoading && (
               <View style={styles.pickerStatus}>
-                <ActivityIndicator size="small" color={colors.primary} />
+                <ActivityIndicator size="small" color={palette.primary} />
                 <Text style={styles.pickerStatusText}>
                   {strings.profile.cityLoading}
                 </Text>
               </View>
             )}
             {wilayaId && citiesQuery.data?.length === 0 && (
-              <Text style={styles.pickerHint}>
-                {strings.profile.cityEmpty}
-              </Text>
+              <Text style={styles.pickerHint}>{strings.profile.cityEmpty}</Text>
             )}
             <View style={styles.chipWrap}>
               {(citiesQuery.data ?? []).map((c) => {
@@ -507,6 +504,7 @@ export function ProfileScreen() {
           </View>
 
           <ReadOnlyRow
+            styles={styles}
             label={strings.profile.rideClassLabel}
             value={vehicle?.rideClass ?? strings.profile.rideClassPending}
             hint={strings.profile.rideClassLocked}
@@ -516,6 +514,7 @@ export function ProfileScreen() {
               silent dead end. Both values are read-only server output. */}
           {vehicle?.verificationStatus ? (
             <ReadOnlyRow
+              styles={styles}
               label={p1.profile.vehicleStatusLabel}
               value={
                 VEHICLE_STATUS_LABELS[vehicle.verificationStatus] ??
@@ -534,8 +533,7 @@ export function ProfileScreen() {
 
         {/* PHASE 1: optional password. It has its own submit button on purpose:
             it targets POST /auth/password/change, NOT PATCH /driver/me, and a
-            failed vehicle save must never lose a typed password (or the other
-            way round). */}
+            failed vehicle save must never lose a typed password. */}
         <PasswordSetupCard />
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -555,7 +553,15 @@ export function ProfileScreen() {
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({
+  styles,
+  label,
+  value,
+}: {
+  styles: Styles;
+  label: string;
+  value: string;
+}) {
   return (
     <View style={styles.stat}>
       <Text style={styles.statValue}>{value}</Text>
@@ -565,11 +571,13 @@ function Stat({ label, value }: { label: string; value: string }) {
 }
 
 function ReadOnlyRow({
+  styles,
   label,
   value,
   hint,
   ltr = false,
 }: {
+  styles: Styles;
   label: string;
   value: string;
   hint: string;
@@ -588,160 +596,159 @@ function ReadOnlyRow({
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.ink },
-  content: { paddingHorizontal: spacing.xl, gap: spacing.lg },
-  heading: {
-    ...typography.title,
-    color: colors.textOnDark,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  statsRow: { flexDirection: "row-reverse", gap: spacing.md },
-  // المرحلة 11: منطقة الصورة والمستوى.
-  levelHero: { alignItems: "center", gap: spacing.sm },
-  levelText: {
-    ...typography.caption,
-    color: colors.gold,
-    textAlign: "center",
-  },
-  stat: {
-    flex: 1,
-    backgroundColor: colors.surfaceDark,
-    borderRadius: radius.card,
-    borderWidth: 1,
-    borderColor: colors.divider,
-    paddingVertical: spacing.lg,
-    alignItems: "center",
-  },
-  statValue: { ...typography.numeric, color: colors.gold },
-  statLabel: {
-    ...typography.caption,
-    color: colors.textOnDarkSecondary,
-    marginTop: spacing.xs,
-    writingDirection: "rtl",
-  },
-  section: { marginTop: spacing.xs },
-  // — Phase 8: wilaya / city pickers —
-  pickerBlock: { gap: spacing.xs },
-  pickerLabel: {
-    ...typography.caption,
-    color: colors.textOnDarkSecondary,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  pickerHint: {
-    ...typography.caption,
-    color: colors.textOnDarkSecondary,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  pickerError: {
-    ...typography.caption,
-    color: colors.danger,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  pickerStatus: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: spacing.xs,
-  },
-  pickerStatusText: {
-    ...typography.caption,
-    color: colors.textOnDarkSecondary,
-    writingDirection: "rtl",
-  },
-  chipWrap: {
-    flexDirection: "row-reverse",
-    flexWrap: "wrap",
-    gap: spacing.xs,
-    marginTop: spacing.xs,
-  },
-  chip: {
-    // أرضية لمس السائق (56pt) وليس حجم رقاقة عادية: اختيار الولاية يحدث
-    // غالبًا في السيارة، وخطأ في اللمس يعني مدينة خاطئة في الملف الشخصي.
-    minHeight: touchTarget.normal,
-    justifyContent: "center",
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.divider,
-    backgroundColor: withAlpha(colors.offWhite, 0.06),
-  },
-  chipSelected: {
-    borderColor: colors.gold,
-    backgroundColor: withAlpha(colors.gold, 0.16),
-  },
-  chipText: {
-    ...typography.caption,
-    color: colors.textOnDarkSecondary,
-    writingDirection: "rtl",
-  },
-  chipTextSelected: { color: colors.gold },
-  fieldLabel: {
-    ...typography.caption,
-    color: colors.textOnDarkSecondary,
-    marginBottom: spacing.xs,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  readOnly: {
-    minHeight: touchTarget.normal,
-    justifyContent: "center",
-    borderRadius: radius.md,
-    backgroundColor: withAlpha(colors.offWhite, 0.06),
-    borderWidth: 1,
-    borderColor: colors.divider,
-    paddingHorizontal: spacing.lg,
-  },
-  readOnlyValue: {
-    ...typography.body,
-    color: colors.textOnDarkSecondary,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  ltr: { textAlign: "left", writingDirection: "ltr" },
-  hint: {
-    ...typography.caption,
-    color: colors.textOnDarkSecondary,
-    marginTop: spacing.xs,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  noteBox: {
-    padding: spacing.md,
-    borderRadius: radius.sm,
-    backgroundColor: withAlpha(colors.danger, 0.12),
-    borderWidth: 1,
-    borderColor: withAlpha(colors.danger, 0.4),
-  },
-  noteTitle: {
-    ...typography.caption,
-    color: colors.danger,
-    fontWeight: "600",
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  noteText: {
-    ...typography.body,
-    color: colors.textOnDark,
-    textAlign: "right",
-    writingDirection: "rtl",
-    marginTop: 2,
-  },
-  error: {
-    ...typography.body,
-    color: colors.danger,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  success: {
-    ...typography.body,
-    color: colors.online,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  save: { marginTop: spacing.sm },
-});
+const makeStyles = (palette: Palette) =>
+  StyleSheet.create({
+    root: { flex: 1, backgroundColor: palette.background },
+    content: { paddingHorizontal: spacing.xl, gap: spacing.lg },
+    heading: {
+      ...typography.title,
+      color: palette.textPrimary,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+    statsRow: { flexDirection: "row-reverse", gap: spacing.md },
+    levelHero: { alignItems: "center", gap: spacing.sm },
+    levelText: {
+      ...typography.caption,
+      color: palette.primaryText,
+      textAlign: "center",
+    },
+    stat: {
+      flex: 1,
+      backgroundColor: palette.surface,
+      borderRadius: radius.card,
+      borderWidth: 1,
+      borderColor: palette.border,
+      paddingVertical: spacing.lg,
+      alignItems: "center",
+    },
+    statValue: { ...typography.numeric, color: palette.primaryText },
+    statLabel: {
+      ...typography.caption,
+      color: palette.textSecondary,
+      marginTop: spacing.xs,
+      writingDirection: "rtl",
+    },
+    section: { marginTop: spacing.xs },
+    pickerBlock: { gap: spacing.xs },
+    pickerLabel: {
+      ...typography.caption,
+      color: palette.textSecondary,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+    pickerHint: {
+      ...typography.caption,
+      color: palette.textSecondary,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+    pickerError: {
+      ...typography.caption,
+      color: palette.danger,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+    pickerStatus: {
+      flexDirection: "row-reverse",
+      alignItems: "center",
+      gap: spacing.xs,
+    },
+    pickerStatusText: {
+      ...typography.caption,
+      color: palette.textSecondary,
+      writingDirection: "rtl",
+    },
+    chipWrap: {
+      flexDirection: "row-reverse",
+      flexWrap: "wrap",
+      gap: spacing.xs,
+      marginTop: spacing.xs,
+    },
+    chip: {
+      // Driver touch floor (56pt), not a normal chip size: picking a wilaya
+      // usually happens in the car, and a mis-tap means the wrong city.
+      minHeight: touchTarget.normal,
+      justifyContent: "center",
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.xs,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: palette.border,
+      backgroundColor: palette.surfaceSunken,
+    },
+    chipSelected: {
+      borderColor: palette.primary,
+      backgroundColor: palette.primaryWash,
+    },
+    chipText: {
+      ...typography.caption,
+      color: palette.textSecondary,
+      writingDirection: "rtl",
+    },
+    chipTextSelected: { color: palette.primaryText },
+    fieldLabel: {
+      ...typography.caption,
+      color: palette.textSecondary,
+      marginBottom: spacing.xs,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+    readOnly: {
+      minHeight: touchTarget.normal,
+      justifyContent: "center",
+      borderRadius: radius.md,
+      backgroundColor: palette.surfaceSunken,
+      borderWidth: 1,
+      borderColor: palette.border,
+      paddingHorizontal: spacing.lg,
+    },
+    readOnlyValue: {
+      ...typography.body,
+      color: palette.textSecondary,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+    ltr: { textAlign: "left", writingDirection: "ltr" },
+    hint: {
+      ...typography.caption,
+      color: palette.textSecondary,
+      marginTop: spacing.xs,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+    noteBox: {
+      padding: spacing.md,
+      borderRadius: radius.sm,
+      backgroundColor: withAlpha(palette.danger, 0.12),
+      borderWidth: 1,
+      borderColor: withAlpha(palette.danger, 0.4),
+    },
+    noteTitle: {
+      ...typography.caption,
+      color: palette.danger,
+      fontWeight: "600",
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+    noteText: {
+      ...typography.body,
+      color: palette.textPrimary,
+      textAlign: "right",
+      writingDirection: "rtl",
+      marginTop: 2,
+    },
+    error: {
+      ...typography.body,
+      color: palette.danger,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+    success: {
+      ...typography.body,
+      color: palette.online,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+    save: { marginTop: spacing.sm },
+  });
