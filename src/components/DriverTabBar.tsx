@@ -1,25 +1,44 @@
-import React from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import { colors, radius, shadows, spacing, typography, withAlpha } from "../theme";
+import React, { useEffect, useRef } from "react";
+import { Animated, Pressable, StyleSheet, Text, View } from "react-native";
+import { Icon, type IconName } from "./Icon";
+import {
+  radius,
+  shadows,
+  spacing,
+  typography,
+  usePalette,
+  motion,
+} from "../theme";
 
 /**
- * PHASE 7 - the bottom navigation: requests | map | menu, with the map in the
- * middle because the map is the driver's home.
+ * PHASE 7.5 - the floating bottom navigation.
  *
- * Why this is a component and NOT a React Navigation tab navigator:
- * the map screen must stay mounted for the whole shift. It owns the GPS
- * subscription, the socket handlers and the trip lifecycle; a tab navigator
- * would unmount or freeze it when the driver looks at the requests list, which
- * is exactly when a ride offer arrives. So the bar renders on top of the map
- * and pushes the other screens over it, keeping the stack behaviour that
- * PHASES 3-6 were built on. Nothing about the existing routes changed.
+ * It was a full-width bar glued to the bottom edge with glyph characters for
+ * icons. Now it is a floating rounded container inset from all three edges,
+ * with real stroke icons, labels that are actually readable, and a pink pill
+ * behind the active item.
  *
- * The centre item is intentionally not a link to itself: on the map it is a
- * state indicator, and pressing it recentres the camera instead of navigating.
+ * Why it is still a plain component instead of a React Navigation tab
+ * navigator: the map screen owns the GPS subscription, the socket listeners and
+ * the trip lifecycle and must stay mounted for the entire shift. A tab
+ * navigator would unmount or freeze it the moment the driver opens the requests
+ * list - which is exactly when an offer arrives. So the bar floats above the
+ * map and pushes the other routes over it.
+ *
+ * The centre item is not a link to itself: on the map it recentres the camera.
  */
 
-/** Height of the bar without the safe-area inset. Cards add it to their inset. */
-export const TAB_BAR_HEIGHT = 64;
+/** Visual height of the floating pill (without the safe-area inset). */
+export const TAB_BAR_HEIGHT = 66;
+/** Gap between the pill and the screen edges. */
+export const TAB_BAR_MARGIN = 14;
+
+/**
+ * Space a floating card must leave free at the bottom so it never sits under
+ * the navigation. Every sheet on the home screen uses this.
+ */
+export const navSpace = (bottomInset: number): number =>
+  TAB_BAR_HEIGHT + TAB_BAR_MARGIN + bottomInset;
 
 export type DriverTab = "requests" | "map" | "menu";
 
@@ -33,136 +52,170 @@ export function DriverTabBar({
   active: DriverTab;
   bottomInset: number;
   labels: { requests: string; map: string; menu: string };
-  /** Unread notifications, shown on the menu entry that leads to them. */
+  /** Unread notifications, shown on the item that leads to them. */
   badge?: number;
   onSelect: (tab: DriverTab) => void;
 }) {
+  const palette = usePalette();
+
   return (
     <View
       style={[
-        styles.bar,
-        { height: TAB_BAR_HEIGHT + bottomInset, paddingBottom: bottomInset },
+        styles.wrap,
+        { bottom: bottomInset + TAB_BAR_MARGIN },
       ]}
+      pointerEvents="box-none"
     >
-      <Item
-        glyph={"\u25CE"}
-        label={labels.requests}
-        active={active === "requests"}
-        onPress={() => onSelect("requests")}
-      />
-      <Item
-        glyph={"\u25C8"}
-        label={labels.map}
-        active={active === "map"}
-        onPress={() => onSelect("map")}
-      />
-      <Item
-        glyph={"\u2261"}
-        label={labels.menu}
-        active={active === "menu"}
-        badge={badge}
-        onPress={() => onSelect("menu")}
-      />
+      <View
+        style={[
+          styles.bar,
+          {
+            height: TAB_BAR_HEIGHT,
+            backgroundColor: palette.surface,
+            borderColor: palette.border,
+          },
+        ]}
+      >
+        {/*
+          row-reverse: the first item reads on the right, so "requests" sits on
+          the right, the map stays centred and the menu is on the left - the
+          mirror of the latin layout, which is what RTL actually means.
+        */}
+        <Item
+          icon="requests"
+          label={labels.requests}
+          active={active === "requests"}
+          onPress={() => onSelect("requests")}
+        />
+        <Item
+          icon="map"
+          label={labels.map}
+          active={active === "map"}
+          onPress={() => onSelect("map")}
+        />
+        <Item
+          icon="menu"
+          label={labels.menu}
+          active={active === "menu"}
+          badge={badge}
+          onPress={() => onSelect("menu")}
+        />
+      </View>
     </View>
   );
 }
 
 function Item({
-  glyph,
+  icon,
   label,
   active,
   badge = 0,
   onPress,
 }: {
-  glyph: string;
+  icon: IconName;
   label: string;
   active: boolean;
   badge?: number;
   onPress: () => void;
 }) {
+  const palette = usePalette();
+
+  // One tiny spring on selection. Nothing animates while driving except this.
+  const lift = useRef(new Animated.Value(active ? 1 : 0)).current;
+  useEffect(() => {
+    Animated.spring(lift, {
+      toValue: active ? 1 : 0,
+      useNativeDriver: true,
+      damping: motion.spring.damping,
+      stiffness: motion.spring.stiffness,
+      mass: motion.spring.mass,
+    }).start();
+  }, [active, lift]);
+
+  const scale = lift.interpolate({ inputRange: [0, 1], outputRange: [1, 1.06] });
+  const tint = active ? palette.primaryText : palette.textSecondary;
+
   return (
     <Pressable
       accessibilityRole="tab"
       accessibilityState={{ selected: active }}
       accessibilityLabel={label}
       onPress={onPress}
-      style={({ pressed }) => [
-        styles.item,
-        pressed ? styles.itemPressed : null,
-      ]}
+      style={styles.item}
     >
-      <View style={styles.glyphWrap}>
-        <Text style={[styles.glyph, active ? styles.glyphActive : null]}>
-          {glyph}
+      <Animated.View style={[styles.itemInner, { transform: [{ scale }] }]}>
+        <View
+          style={[
+            styles.iconWrap,
+            active
+              ? { backgroundColor: palette.primaryWash }
+              : null,
+          ]}
+        >
+          <Icon name={icon} size={22} color={tint} />
+          {badge > 0 ? (
+            <View
+              style={[
+                styles.badge,
+                {
+                  backgroundColor: palette.primary,
+                  borderColor: palette.surface,
+                },
+              ]}
+            >
+              <Text style={[styles.badgeText, { color: palette.onPrimary }]}>
+                {badge > 99 ? "99+" : String(badge)}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+        <Text style={[styles.label, { color: tint }]} numberOfLines={1}>
+          {label}
         </Text>
-        {badge > 0 ? (
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>
-              {badge > 99 ? "99+" : String(badge)}
-            </Text>
-          </View>
-        ) : null}
-      </View>
-      <Text style={[styles.label, active ? styles.labelActive : null]} numberOfLines={1}>
-        {label}
-      </Text>
+      </Animated.View>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  bar: {
+  wrap: {
     position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    // row-reverse: the first item reads on the right in an RTL layout.
+    left: TAB_BAR_MARGIN,
+    right: TAB_BAR_MARGIN,
+  },
+  bar: {
     flexDirection: "row-reverse",
     alignItems: "center",
-    backgroundColor: colors.ink,
-    borderTopWidth: 1,
-    borderColor: colors.divider,
-    ...shadows.sheet,
+    borderRadius: 26,
+    borderWidth: 1,
+    paddingHorizontal: spacing.xs,
+    ...shadows.floating,
   },
-  item: {
-    flex: 1,
+  item: { flex: 1, alignItems: "center", justifyContent: "center" },
+  itemInner: { alignItems: "center", gap: 2 },
+  iconWrap: {
+    width: 46,
+    height: 30,
+    borderRadius: radius.pill,
     alignItems: "center",
     justifyContent: "center",
-    gap: 2,
-    paddingVertical: spacing.sm,
   },
-  itemPressed: { backgroundColor: colors.pressed },
-  glyphWrap: { alignItems: "center", justifyContent: "center" },
-  glyph: {
-    ...typography.title,
-    color: colors.textOnDarkSecondary,
-    lineHeight: 24,
-  },
-  glyphActive: { color: colors.gold },
   label: {
     ...typography.caption,
-    color: colors.textOnDarkSecondary,
+    fontWeight: "600",
     writingDirection: "rtl",
   },
-  labelActive: { color: colors.gold },
   badge: {
     position: "absolute",
-    top: -6,
-    left: -12,
+    top: -4,
+    left: 2,
     minWidth: 18,
     height: 18,
     borderRadius: radius.pill,
     paddingHorizontal: 4,
-    backgroundColor: colors.gold,
-    borderWidth: 1,
-    borderColor: withAlpha(colors.white, 0.2),
+    borderWidth: 2,
     alignItems: "center",
     justifyContent: "center",
   },
-  badgeText: {
-    ...typography.caption,
-    fontSize: 11,
-    lineHeight: 14,
-    color: colors.ink,
-  },
+  badgeText: { ...typography.caption, fontSize: 10, lineHeight: 13 },
 });

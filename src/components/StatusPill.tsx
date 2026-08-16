@@ -1,33 +1,64 @@
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { colors, radius, spacing, typography, withAlpha } from "../theme";
+import { radius, spacing, typography, usePalette, withAlpha } from "../theme";
 
 export type PillTone =
   | "pending"
   | "approved"
   | "rejected"
   | "expired"
-  | "neutral";
+  | "neutral"
+  | "brand"
+  | "busy";
 
 /**
- * Small status chip used for document and account states.
+ * Compact status chip: documents, account state, socket link, availability.
  *
- * Colour is never the only carrier of meaning - the label is always spelled out
- * - because a driver may be colour-blind and the phone may be in bright sun.
+ * Colour is never the only carrier of meaning - the label is always spelled
+ * out - because a driver may be colour-blind and the screen is often read in
+ * direct sunlight.
  *
- * PHASE 1 added the `expired` tone. It is red like `rejected`, because both
- * mean the same thing to a driver on the road: this document does not let you
- * work right now. The label is what separates them.
+ * PHASE 7.5: theme-aware (it is used on the dark map overlay and on light menu
+ * surfaces), an optional leading dot for connection-style states, and two new
+ * tones: `brand` (pink, for an active brand state) and `busy` (on a trip).
+ * The `expired` tone stays red like `rejected` because both mean the same thing
+ * to a driver on the road: you cannot work with this. The label separates them.
  */
-export function StatusPill({ label, tone }: { label: string; tone: PillTone }) {
-  const color = TONE_COLORS[tone];
+export function StatusPill({
+  label,
+  tone,
+  dot = false,
+}: {
+  label: string;
+  tone: PillTone;
+  dot?: boolean;
+}) {
+  const palette = usePalette();
+
+  const color =
+    tone === "pending"
+      ? palette.warning
+      : tone === "approved"
+        ? palette.online
+        : tone === "rejected" || tone === "expired"
+          ? palette.danger
+          : tone === "brand"
+            ? palette.primaryText
+            : tone === "busy"
+              ? palette.busy
+              : palette.offline;
+
   return (
     <View
       style={[
         styles.pill,
-        { backgroundColor: withAlpha(color, 0.16), borderColor: withAlpha(color, 0.5) },
+        {
+          backgroundColor: withAlpha(hexOf(color), 0.14),
+          borderColor: withAlpha(hexOf(color), 0.45),
+        },
       ]}
     >
+      {dot ? <View style={[styles.dot, { backgroundColor: color }]} /> : null}
       <Text style={[styles.label, { color }]} numberOfLines={1}>
         {label}
       </Text>
@@ -35,21 +66,26 @@ export function StatusPill({ label, tone }: { label: string; tone: PillTone }) {
   );
 }
 
-const TONE_COLORS: Record<PillTone, string> = {
-  pending: colors.warning,
-  approved: colors.online,
-  rejected: colors.danger,
-  expired: colors.danger,
-  neutral: colors.offline,
-};
+/**
+ * Every palette colour used above is a #RRGGBB literal, but this keeps
+ * withAlpha() safe if a future palette entry ever arrives as rgba(): in that
+ * case the flat colour is used with no transparency instead of throwing.
+ */
+function hexOf(color: string): string {
+  return /^#[0-9a-fA-F]{6}$/.test(color) ? color : "#6B7078";
+}
 
 const styles = StyleSheet.create({
   pill: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: spacing.xs,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
     borderRadius: radius.pill,
     borderWidth: 1,
     alignSelf: "flex-start",
   },
+  dot: { width: 8, height: 8, borderRadius: 4 },
   label: { ...typography.caption, fontWeight: "600", writingDirection: "rtl" },
 });
