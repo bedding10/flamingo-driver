@@ -1,28 +1,37 @@
 import React from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
-import { colors, radius, spacing, touchTarget, typography, withAlpha } from "../theme";
+import {
+  radius,
+  spacing,
+  touchTarget,
+  typography,
+  usePalette,
+} from "../theme";
 import type { DriverAvailability } from "../types/driver";
 
 /**
  * The single most important control in the app: go online, go offline.
  *
- * It is `touchTarget.critical` tall and full width because it is pressed with
- * one hand, often with the car already moving. Colour alone never carries the
- * state - the label always spells it out - and ON_TRIP is a third visual state
- * rather than "online", because the server refuses to change availability
- * during a trip and a control that looks tappable but always fails is worse
- * than one that is visibly locked.
+ * PHASE 7.5 changed two things and nothing else about its behaviour:
+ *  - it is theme-aware, and the "go online" state is FLAMINGO PINK, because
+ *    going online is the primary action of the whole product;
+ *  - it has a `compact` size, used by the floating home status card. The full
+ *    size is `touchTarget.critical` tall for one-handed use; compact is still 44
+ *    tall, which is above the platform minimum, and it exists so the status card
+ *    stops eating a third of the map.
  *
- * Labels arrive as props so this component holds no copy and the i18n file
- * stays the only place text lives.
+ * ON_TRIP stays a third, visibly locked state: the server refuses to change
+ * availability during a trip, and a control that looks tappable but always
+ * fails is worse than one that is clearly disabled. Colour never carries the
+ * state alone - the label always spells it out.
  */
-
 type Props = {
   availability: DriverAvailability;
   labels: { goOnline: string; goOffline: string; onTrip: string };
   pending?: boolean;
   /** Not APPROVED yet: the server would answer 403. */
   blocked?: boolean;
+  compact?: boolean;
   onToggle: () => void;
 };
 
@@ -31,8 +40,10 @@ export function OnlineToggle({
   labels,
   pending = false,
   blocked = false,
+  compact = false,
   onToggle,
 }: Props) {
+  const palette = usePalette();
   const onTrip = availability === "ON_TRIP";
   const online = availability === "ONLINE";
   const disabled = pending || blocked || onTrip;
@@ -43,7 +54,10 @@ export function OnlineToggle({
       ? labels.goOffline
       : labels.goOnline;
 
-  const tint = onTrip ? colors.info : online ? colors.danger : colors.online;
+  // Offline -> the pink call to action. Online -> a quiet outline, because
+  // stopping work should never be the loudest thing on the screen.
+  const filled = !online && !onTrip;
+  const outlineTint = onTrip ? palette.busy : palette.textSecondary;
 
   return (
     <Pressable
@@ -53,23 +67,30 @@ export function OnlineToggle({
       onPress={onToggle}
       style={({ pressed }) => [
         styles.base,
-        {
-          backgroundColor: online || onTrip ? withAlpha(tint, 0.16) : tint,
-          borderColor: withAlpha(tint, online || onTrip ? 0.6 : 1),
-        },
+        compact ? styles.compact : styles.full,
+        filled
+          ? { backgroundColor: palette.primary, borderColor: palette.primary }
+          : {
+              backgroundColor: "transparent",
+              borderColor: palette.borderStrong,
+            },
         pressed && !disabled ? styles.pressed : null,
         disabled ? styles.disabled : null,
       ]}
     >
       {pending ? (
-        <ActivityIndicator color={online || onTrip ? tint : colors.white} />
+        <ActivityIndicator
+          color={filled ? palette.onPrimary : palette.primaryText}
+        />
       ) : (
         <View style={styles.content}>
-          <View style={[styles.dot, { backgroundColor: online || onTrip ? tint : colors.white }]} />
+          {!filled ? (
+            <View style={[styles.dot, { backgroundColor: outlineTint }]} />
+          ) : null}
           <Text
             style={[
-              styles.label,
-              { color: online || onTrip ? tint : colors.white },
+              compact ? styles.labelCompact : styles.label,
+              { color: filled ? palette.onPrimary : outlineTint },
             ]}
             numberOfLines={1}
           >
@@ -83,20 +104,31 @@ export function OnlineToggle({
 
 const styles = StyleSheet.create({
   base: {
-    minHeight: touchTarget.critical,
     borderRadius: radius.pill,
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
+  },
+  full: {
+    minHeight: touchTarget.critical,
     paddingHorizontal: spacing.xl,
+  },
+  compact: {
+    minHeight: 44,
+    paddingHorizontal: spacing.lg,
   },
   pressed: { opacity: 0.85 },
   disabled: { opacity: 0.55 },
   content: {
     flexDirection: "row-reverse",
     alignItems: "center",
-    gap: spacing.md,
+    gap: spacing.sm,
   },
-  dot: { width: 10, height: 10, borderRadius: 5 },
+  dot: { width: 8, height: 8, borderRadius: 4 },
   label: { ...typography.subtitle, writingDirection: "rtl" },
+  labelCompact: {
+    ...typography.label,
+    fontWeight: "700",
+    writingDirection: "rtl",
+  },
 });

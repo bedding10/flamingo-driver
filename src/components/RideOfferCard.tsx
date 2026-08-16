@@ -1,15 +1,17 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { ProfileAvatar } from "./ProfileAvatar";
+import { Icon } from "./Icon";
 import type { RideOffer } from "../types/trip";
 import { strings } from "../i18n/strings";
+import { offer75Strings, rideClassLabels } from "../i18n/strings.phase75";
 import {
-  colors,
   radius,
+  shadows,
   spacing,
   touchTarget,
   typography,
-  withAlpha,
-  shadows,
+  usePalette,
 } from "../theme";
 
 type Props = {
@@ -31,10 +33,27 @@ function money(amount: number, currency?: string | null): string {
 /**
  * The ride offer card.
  *
- * The countdown is driven by `offer.expiresInMs` sent with every offer, never
- * by a constant in the app: OFFER_TIMEOUT_MS lives in MatchingService and can
- * be retuned server side. A hardcoded 15s would silently start lying the day
- * that value changes, and a driver who trusts a wrong timer loses rides.
+ * PHASE 7.5 rebuilt the presentation: the passenger now has a face - avatar with
+ * the level frame the backend awarded, name, rating and completed-trip count -
+ * the fare leads the card, and accept is the only filled (pink) action while
+ * skip stays a quiet outline. It is a floating card inset from the edges rather
+ * than a full-bleed sheet, so the map and the pickup pin stay visible: a driver
+ * decides on an offer by looking at WHERE it is.
+ *
+ * Three deliberate omissions, all for the same reason - the server does not send
+ * them and inventing them would mislead the person deciding:
+ *  - rating COUNT: `passenger.rating` arrives without a sample size.
+ *  - distance to the passenger and ETA: `ride:offer` carries the trip distance
+ *    (`distanceKm`) only, so that is what is labelled. No haversine is computed
+ *    from the last GPS fix and passed off as a routed distance.
+ *  - "suggest a fare": the gateway accepts ride:accept and ride:decline only.
+ *    Fare bidding is the open-requests flow, so the card says where it lives
+ *    instead of showing a button that can send nothing.
+ *
+ * The countdown is driven by `offer.expiresInMs` sent with every offer, never by
+ * a constant: OFFER_TIMEOUT_MS lives in MatchingService and can be retuned
+ * server side, and a driver who trusts a wrong timer loses rides. It is
+ * wall-clock based, so a frozen JS thread cannot make the bar lie.
  */
 function RideOfferCardComponent({
   offer,
@@ -44,6 +63,8 @@ function RideOfferCardComponent({
   onAccept,
   onDecline,
 }: Props) {
+  const palette = usePalette();
+
   const total = offer.expiresInMs > 0 ? offer.expiresInMs : 1;
   const deadlineRef = useRef(Date.now() + total);
   const [remaining, setRemaining] = useState(total);
@@ -61,108 +82,192 @@ function RideOfferCardComponent({
 
   const seconds = Math.ceil(remaining / 1000);
   const ratio = Math.max(0, Math.min(1, remaining / total));
-  // Wall-clock based, so a frozen JS thread cannot make the bar lie.
   const urgent = remaining <= 5000;
 
-  // Phase 7: the net is authoritative from the backend (`driverNet`), which
-  // uses the same settlement math as the wallet. We never recompute pricing
-  // on the client. If an older backend omits it, we simply hide the net line
-  // rather than showing a number that could contradict the actual payout.
+  // The net is authoritative from the backend (`driverNet`), computed with the
+  // same settlement math as the wallet. The app must NOT recompute it: a local
+  // fare - fare*pct/100 diverges the moment a coupon is involved.
   const commissionPct = offer.commissionPct ?? 0;
   const net = offer.driverNet ?? null;
 
+  const passenger = offer.passenger ?? null;
+  const rideClassLabel = offer.rideClass
+    ? (rideClassLabels[offer.rideClass] ?? offer.rideClass)
+    : null;
+
   return (
-    <View style={[styles.sheet, { paddingBottom: bottomInset + spacing.xl }]}>
-      <View style={styles.timerTrack}>
+    <View
+      style={[
+        styles.card,
+        {
+          bottom: bottomInset,
+          backgroundColor: palette.surface,
+          borderColor: palette.border,
+        },
+      ]}
+    >
+      <View style={[styles.timerTrack, { backgroundColor: palette.surfaceSunken }]}>
         <View
           style={[
             styles.timerFill,
             {
-              width: (ratio * 100) + "%",
-              backgroundColor: urgent ? colors.coral : colors.gold,
+              width: ratio * 100 + "%",
+              backgroundColor: urgent ? palette.danger : palette.primary,
             },
           ]}
         />
       </View>
 
       <View style={styles.headRow}>
-        <Text style={styles.title}>{strings.offer.title}</Text>
-        <Text style={[styles.countdown, urgent ? styles.countdownUrgent : null]}>
+        <Text style={[styles.kicker, { color: palette.primaryText }]}>
+          {offer75Strings.newRequest}
+        </Text>
+        <Text
+          style={[
+            styles.countdown,
+            { color: urgent ? palette.danger : palette.textSecondary },
+          ]}
+        >
           {seconds + strings.offer.secondsSuffix}
         </Text>
       </View>
 
-      <View style={styles.fareRow}>
-        <Text style={styles.fare}>{money(offer.fare, offer.currency)}</Text>
-        <View style={styles.fareMeta}>
-          {offer.distanceKm != null ? (
-            <Text style={styles.meta}>
-              {offer.distanceKm.toFixed(1) + " " + strings.offer.kmSuffix}
-            </Text>
-          ) : null}
+      {/* Passenger identity. */}
+      <View style={styles.passengerRow}>
+        <ProfileAvatar
+          avatarUrl={passenger?.avatarUrl}
+          frameUrl={passenger?.profileFrameUrl}
+          size={48}
+          fallback={passenger?.name ?? offer75Strings.passengerFallback}
+          accessibilityLabel={passenger?.name ?? offer75Strings.passengerFallback}
+        />
+        <View style={styles.passengerText}>
+          <Text
+            style={[styles.passengerName, { color: palette.textPrimary }]}
+            numberOfLines={1}
+          >
+            {passenger?.name || offer75Strings.passengerFallback}
+          </Text>
+          <View style={styles.passengerMeta}>
+            {passenger?.rating != null ? (
+              <View style={styles.metaChip}>
+                <Icon name="star" size={13} color={palette.primaryText} />
+                <Text style={[styles.meta, { color: palette.textSecondary }]}>
+                  {passenger.rating.toFixed(1)}
+                </Text>
+              </View>
+            ) : null}
+            {passenger?.completedTripsCount != null ? (
+              <Text style={[styles.meta, { color: palette.textSecondary }]}>
+                {passenger.completedTripsCount +
+                  " " +
+                  offer75Strings.completedShort}
+              </Text>
+            ) : null}
+          </View>
+        </View>
+
+        <View style={styles.fareCol}>
+          <Text style={[styles.fare, { color: palette.textPrimary }]}>
+            {money(offer.fare, offer.currency)}
+          </Text>
           {net != null && commissionPct > 0 ? (
-            <Text style={styles.meta}>
-              {strings.offer.netApprox + " " + money(net, offer.currency) +
-                " \u00b7 " + strings.offer.commissionLabel + " " +
-                commissionPct + "%"}
+            <Text style={[styles.meta, { color: palette.textSecondary }]}>
+              {offer75Strings.netLabel +
+                " " +
+                money(net, offer.currency) +
+                " \u00b7 " +
+                offer75Strings.commissionLabel +
+                " " +
+                commissionPct +
+                "%"}
             </Text>
           ) : null}
         </View>
       </View>
 
-      <View style={styles.leg}>
-        <View style={[styles.dot, styles.dotPickup]} />
-        <View style={styles.legText}>
-          <Text style={styles.legLabel}>{strings.offer.pickup}</Text>
-          <Text style={styles.legValue} numberOfLines={2}>
-            {offer.pickupAddress || strings.offer.unknownAddress}
-          </Text>
+      {/* Trip facts the server actually sent. */}
+      {offer.distanceKm != null || rideClassLabel ? (
+        <View style={styles.factsRow}>
+          {offer.distanceKm != null ? (
+            <Text style={[styles.meta, { color: palette.textSecondary }]}>
+              {offer75Strings.tripDistance +
+                " " +
+                offer.distanceKm.toFixed(1) +
+                " " +
+                strings.offer.kmSuffix}
+            </Text>
+          ) : null}
+          {rideClassLabel ? (
+            <Text style={[styles.meta, { color: palette.textSecondary }]}>
+              {rideClassLabel}
+            </Text>
+          ) : null}
         </View>
-      </View>
+      ) : null}
 
       <View style={styles.leg}>
-        <View style={[styles.dot, styles.dotDrop]} />
-        <View style={styles.legText}>
-          <Text style={styles.legLabel}>{strings.offer.dropoff}</Text>
-          <Text style={styles.legValue} numberOfLines={2}>
-            {offer.destAddress || strings.offer.unknownAddress}
-          </Text>
-        </View>
+        <View style={[styles.dot, { backgroundColor: palette.online }]} />
+        <Text
+          style={[styles.legValue, { color: palette.textPrimary }]}
+          numberOfLines={1}
+        >
+          {offer.pickupAddress || strings.offer.unknownAddress}
+        </Text>
+      </View>
+      <View style={styles.leg}>
+        <View style={[styles.dot, { backgroundColor: palette.primary }]} />
+        <Text
+          style={[styles.legValue, { color: palette.textSecondary }]}
+          numberOfLines={1}
+        >
+          {offer.destAddress || strings.offer.unknownAddress}
+        </Text>
       </View>
 
-      {notice ? <Text style={styles.notice}>{notice}</Text> : null}
+      {notice ? (
+        <Text style={[styles.notice, { color: palette.warning }]}>{notice}</Text>
+      ) : null}
 
       <View style={styles.actions}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={strings.offer.decline}
+          accessibilityLabel={offer75Strings.skip}
           disabled={awaiting}
           onPress={() => onDecline(offer.tripId)}
           style={({ pressed }) => [
-            styles.declineButton,
+            styles.skipButton,
+            { borderColor: palette.borderStrong },
             pressed ? styles.pressed : null,
             awaiting ? styles.disabled : null,
           ]}
         >
-          <Text style={styles.declineLabel}>{strings.offer.decline}</Text>
+          <Text style={[styles.skipLabel, { color: palette.textSecondary }]}>
+            {offer75Strings.skip}
+          </Text>
         </Pressable>
 
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={strings.offer.accept}
+          accessibilityLabel={offer75Strings.accept}
           disabled={awaiting}
           onPress={() => onAccept(offer.tripId)}
           style={({ pressed }) => [
             styles.acceptButton,
+            { backgroundColor: palette.primary },
             pressed ? styles.pressed : null,
             awaiting ? styles.disabled : null,
           ]}
         >
-          <Text style={styles.acceptLabel}>
-            {awaiting ? strings.offer.awaiting : strings.offer.accept}
+          <Text style={[styles.acceptLabel, { color: palette.onPrimary }]}>
+            {awaiting ? offer75Strings.awaiting : offer75Strings.accept}
           </Text>
         </Pressable>
       </View>
+
+      <Text style={[styles.footnote, { color: palette.textMuted }]}>
+        {offer75Strings.bidElsewhere}
+      </Text>
     </View>
   );
 }
@@ -170,28 +275,20 @@ function RideOfferCardComponent({
 export const RideOfferCard = React.memo(RideOfferCardComponent);
 
 const styles = StyleSheet.create({
-  sheet: {
+  card: {
     position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: colors.surfaceDark,
-    borderTopLeftRadius: radius.sheet,
-    borderTopRightRadius: radius.sheet,
-    borderTopWidth: 1,
-    borderColor: colors.divider,
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.lg,
-    gap: spacing.md,
+    left: 14,
+    right: 14,
+    borderRadius: radius.sheet,
+    borderWidth: 1,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.lg,
+    gap: spacing.sm,
     ...shadows.floating,
   },
 
-  timerTrack: {
-    height: 4,
-    borderRadius: radius.pill,
-    backgroundColor: withAlpha(colors.white, 0.12),
-    overflow: "hidden",
-  },
+  timerTrack: { height: 4, borderRadius: radius.pill, overflow: "hidden" },
   timerFill: { height: 4, borderRadius: radius.pill },
 
   headRow: {
@@ -199,75 +296,82 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  title: {
-    ...typography.subtitle,
-    color: colors.textOnDark,
-    textAlign: "right",
+  kicker: {
+    ...typography.label,
+    fontWeight: "700",
     writingDirection: "rtl",
   },
-  countdown: { ...typography.subtitle, color: colors.gold },
-  countdownUrgent: { color: colors.coral },
+  countdown: { ...typography.label, fontWeight: "700" },
 
-  fareRow: {
+  passengerRow: {
     flexDirection: "row-reverse",
-    alignItems: "flex-end",
-    justifyContent: "space-between",
+    alignItems: "center",
     gap: spacing.md,
   },
-  fare: { ...typography.numeric, color: colors.gold },
-  fareMeta: { alignItems: "flex-start", gap: 2, flexShrink: 1 },
-  meta: {
-    ...typography.caption,
-    color: colors.textOnDarkSecondary,
-    textAlign: "left",
-  },
-
-  leg: { flexDirection: "row-reverse", alignItems: "flex-start", gap: spacing.md },
-  dot: { width: 10, height: 10, borderRadius: radius.pill, marginTop: 6 },
-  dotPickup: { backgroundColor: colors.online },
-  dotDrop: { backgroundColor: colors.coral },
-  legText: { flex: 1, gap: 2 },
-  legLabel: {
-    ...typography.caption,
-    color: colors.textOnDarkSecondary,
+  passengerText: { flex: 1, gap: 2 },
+  passengerName: {
+    ...typography.subtitle,
     textAlign: "right",
     writingDirection: "rtl",
   },
+  passengerMeta: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: spacing.md,
+  },
+  metaChip: { flexDirection: "row-reverse", alignItems: "center", gap: 3 },
+  meta: { ...typography.caption, writingDirection: "rtl" },
+  fareCol: { alignItems: "flex-start", gap: 2, maxWidth: "38%" },
+  fare: { ...typography.numeric, fontSize: 22 },
+
+  factsRow: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: spacing.lg,
+  },
+
+  leg: { flexDirection: "row-reverse", alignItems: "center", gap: spacing.sm },
+  dot: { width: 8, height: 8, borderRadius: 4 },
   legValue: {
     ...typography.body,
-    color: colors.textOnDark,
+    flex: 1,
     textAlign: "right",
     writingDirection: "rtl",
   },
 
   notice: {
     ...typography.caption,
-    color: colors.warning,
     textAlign: "right",
     writingDirection: "rtl",
   },
 
-  actions: { flexDirection: "row-reverse", gap: spacing.md },
+  actions: {
+    flexDirection: "row-reverse",
+    gap: spacing.md,
+    marginTop: spacing.xs,
+  },
   acceptButton: {
     flex: 2,
     height: touchTarget.critical,
     borderRadius: radius.pill,
-    backgroundColor: colors.gold,
     alignItems: "center",
     justifyContent: "center",
   },
-  acceptLabel: { ...typography.subtitle, color: colors.ink },
-  declineButton: {
+  acceptLabel: { ...typography.subtitle, fontWeight: "700" },
+  skipButton: {
     flex: 1,
     height: touchTarget.critical,
     borderRadius: radius.pill,
     borderWidth: 1,
-    borderColor: colors.divider,
-    backgroundColor: withAlpha(colors.white, 0.06),
     alignItems: "center",
     justifyContent: "center",
   },
-  declineLabel: { ...typography.subtitle, color: colors.textOnDarkSecondary },
+  skipLabel: { ...typography.subtitle },
+  footnote: {
+    ...typography.caption,
+    textAlign: "right",
+    writingDirection: "rtl",
+  },
   pressed: { opacity: 0.85 },
   disabled: { opacity: 0.5 },
 });

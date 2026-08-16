@@ -10,22 +10,23 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { PrimaryButton } from "../../components/PrimaryButton";
 import { ProfileAvatar } from "../../components/ProfileAvatar";
 import { BrandMark } from "../../components/BrandMark";
+import { Icon, type IconName } from "../../components/Icon";
 import { useDriverProfile } from "../../hooks/useDriverProfile";
 import { useUnreadNotificationCount } from "../../hooks/useNotifications";
 import { useAuthStore } from "../../auth/auth.store";
 import { menuStrings } from "../../i18n/strings.menu";
+import { menu75Strings } from "../../i18n/strings.phase75";
 import { strings } from "../../i18n/strings";
 import type { DriverStackParamList } from "../../navigation/types";
 import {
-  colors,
   radius,
+  shadows,
   spacing,
-  touchTarget,
   typography,
-  withAlpha,
+  useTheme,
+  usePalette,
 } from "../../theme";
 
 /** Display labels only. Levels themselves are decided by the backend. */
@@ -38,24 +39,33 @@ const LEVEL_LABELS: Record<string, string> = {
 };
 
 /**
- * PHASE 5 - the driver's menu. PHASE 7 - rebuilt around a profile card.
+ * PHASE 7.5 - the menu, rebuilt from scratch.
  *
- * It is still a router and owns no server state of its own; what changed is
- * that the driver now sees WHO they are before the list of destinations: the
- * avatar with the level frame the backend awarded, the level, the rating and
- * the completed-trip count that produced it.
+ * What it was: every destination rendered as a full-width card with a title and
+ * a two-line description, one after another, each the same weight as the one
+ * above it. Twelve equal boxes is not a hierarchy - it reads like an admin
+ * dashboard, and that is exactly what this replaces.
  *
- * Two honest omissions:
- *  - rating COUNT: GET /driver/me returns `rating` and `totalTrips` but no
- *    number of ratings. Printing totalTrips next to the stars would imply every
- *    trip was rated, which is false, so the count is not shown and the note
- *    says why. Adding it is a backend change, not a UI one.
- *  - VEHICLE is not a separate screen: /vehicles is staff-only on the server
- *    and the driver edits their car inside the profile form, so this row leads
- *    there rather than to a screen that could not save anything.
+ * What it is now: one profile hero at the top, then quiet section titles over
+ * compact 56pt list rows grouped in rounded cards - the consumer-app pattern.
+ * Each row is an icon, a title, a one-line subtitle and a chevron that points
+ * LEFT because the layout is RTL. Sign-out is a row too, in red, not a button
+ * bolted to the bottom.
+ *
+ * Honest omissions, unchanged from PHASE 7 because they are backend facts, not
+ * design choices:
+ *  - rating COUNT: GET /driver/me returns `rating` and `totalTrips` with no
+ *    number of ratings. Printing totalTrips next to the stars would claim every
+ *    trip was rated, which is false. The stat is simply absent until the
+ *    backend sends it (registered as a PHASE 8 backend requirement).
+ *  - VEHICLE: /vehicles is staff-only on the server and the driver edits the
+ *    car inside the profile form, so "my vehicle" leads there rather than to a
+ *    screen that could not save anything.
  */
 export function MenuScreen() {
   const insets = useSafeAreaInsets();
+  const palette = usePalette();
+  const { mode, toggleMode } = useTheme();
   const navigation =
     useNavigation<NativeStackNavigationProp<DriverStackParamList>>();
   const { data: profile } = useDriverProfile();
@@ -67,7 +77,7 @@ export function MenuScreen() {
     ? [vehicle.make, vehicle.model].filter(Boolean).join(" ") +
       " \u00b7 " +
       vehicle.plate
-    : menuStrings.vehicleMissing;
+    : menu75Strings.vehicleMissing;
 
   const confirmSignOut = useCallback(() => {
     Alert.alert(menuStrings.signOutTitle, menuStrings.signOutBody, [
@@ -82,297 +92,390 @@ export function MenuScreen() {
 
   return (
     <ScrollView
-      style={styles.root}
+      style={{ flex: 1, backgroundColor: palette.background }}
       contentContainerStyle={[
         styles.content,
-        { paddingBottom: insets.bottom + spacing["3xl"] },
+        {
+          paddingTop: insets.top + spacing.lg,
+          paddingBottom: insets.bottom + spacing["3xl"],
+        },
       ]}
     >
-      {/* Profile card. */}
-      <View style={styles.header}>
-        <View style={styles.identity}>
-          <ProfileAvatar
-            avatarUrl={profile?.photoUrl}
-            frameUrl={profile?.profileFrameUrl}
-            size={88}
-            fallback={profile?.name}
-            accessibilityLabel={profile?.name ?? strings.profile.title}
-          />
-          <View style={styles.identityText}>
-            <Text style={styles.name} numberOfLines={1}>
-              {profile?.name || strings.profile.title}
-            </Text>
-            {profile?.profileLevel ? (
-              <View style={styles.levelPill}>
-                <Text style={styles.levelText}>
-                  {LEVEL_LABELS[profile.profileLevel] ?? profile.profileLevel}
-                </Text>
-              </View>
-            ) : null}
-            <Text style={styles.phone} numberOfLines={1}>
-              {profile?.phone ?? "\u2014"}
-            </Text>
-            <Text style={styles.vehicle} numberOfLines={1}>
-              {vehicleLine}
+      {/* ---- profile hero -------------------------------------------------- */}
+      <View
+        style={[
+          styles.hero,
+          { backgroundColor: palette.surface, borderColor: palette.border },
+        ]}
+      >
+        <ProfileAvatar
+          avatarUrl={profile?.photoUrl}
+          frameUrl={profile?.profileFrameUrl}
+          size={92}
+          fallback={profile?.name}
+          accessibilityLabel={profile?.name ?? strings.profile.title}
+        />
+
+        <Text
+          style={[styles.name, { color: palette.textPrimary }]}
+          numberOfLines={1}
+        >
+          {profile?.name || strings.profile.title}
+        </Text>
+
+        {profile?.profileLevel ? (
+          <View
+            style={[
+              styles.levelPill,
+              {
+                backgroundColor: palette.primaryWash,
+                borderColor: palette.primary,
+              },
+            ]}
+          >
+            <Text style={[styles.levelText, { color: palette.primaryText }]}>
+              {LEVEL_LABELS[profile.profileLevel] ?? profile.profileLevel}
             </Text>
           </View>
+        ) : null}
+
+        <View style={styles.heroStats}>
+          <View style={styles.heroStat}>
+            <Icon name="star" size={15} color={palette.primaryText} />
+            <Text style={[styles.heroStatValue, { color: palette.textPrimary }]}>
+              {profile ? profile.rating.toFixed(1) : "\u2014"}
+            </Text>
+          </View>
+          <View
+            style={[styles.heroDivider, { backgroundColor: palette.border }]}
+          />
+          <Text style={[styles.heroStatText, { color: palette.textSecondary }]}>
+            {(profile
+              ? String(profile.completedTripsCount ?? profile.totalTrips)
+              : "\u2014") +
+              " " +
+              menu75Strings.completedLabel}
+          </Text>
+          <View
+            style={[styles.heroDivider, { backgroundColor: palette.border }]}
+          />
+          <Text style={[styles.heroStatText, { color: palette.textSecondary }]}>
+            {(profile ? String(profile.totalTrips) : "\u2014") +
+              " " +
+              menu75Strings.totalLabel}
+          </Text>
         </View>
 
-        <View style={styles.statsRow}>
-          <Stat
-            label={menuStrings.ratingLabel}
-            value={profile ? profile.rating.toFixed(1) : "\u2014"}
-          />
-          <Stat
-            label={menuStrings.tripsLabel}
-            value={
-              profile
-                ? String(profile.completedTripsCount ?? profile.totalTrips)
-                : "\u2014"
-            }
-          />
-          <Stat
-            label={menuStrings.totalTripsLabel}
-            value={profile ? String(profile.totalTrips) : "\u2014"}
-          />
-        </View>
-        <Text style={styles.note}>{menuStrings.ratingCountNote}</Text>
+        <Text
+          style={[styles.heroVehicle, { color: palette.textSecondary }]}
+          numberOfLines={1}
+        >
+          {vehicleLine}
+        </Text>
       </View>
 
-      <SectionLabel text={menuStrings.sectionAccount} />
-      <MenuRow
-        label={menuStrings.account}
-        hint={menuStrings.accountHint}
-        onPress={() => navigation.navigate("Profile")}
-      />
-      <MenuRow
-        label={menuStrings.documents}
-        hint={menuStrings.documentsHint}
-        onPress={() => navigation.navigate("Documents")}
-      />
+      {/* ---- account ------------------------------------------------------- */}
+      <Section title={menu75Strings.sectionAccount}>
+        <Row
+          icon="user"
+          label={menu75Strings.profile}
+          hint={menu75Strings.profileHint}
+          onPress={() => navigation.navigate("Profile")}
+        />
+        <Row
+          icon="document"
+          label={menu75Strings.documents}
+          hint={menu75Strings.documentsHint}
+          last
+          onPress={() => navigation.navigate("Documents")}
+        />
+      </Section>
 
-      <SectionLabel text={menuStrings.sectionMoney} />
-      <MenuRow
-        label={menuStrings.wallet}
-        hint={menuStrings.walletHint}
-        onPress={() => navigation.navigate("Wallet")}
-      />
+      {/* ---- money --------------------------------------------------------- */}
+      <Section title={menu75Strings.sectionMoney}>
+        <Row
+          icon="wallet"
+          label={menu75Strings.wallet}
+          hint={menu75Strings.walletHint}
+          last
+          onPress={() => navigation.navigate("Wallet")}
+        />
+      </Section>
 
-      <SectionLabel text={menuStrings.sectionWork} />
-      <MenuRow
-        label={menuStrings.requests}
-        hint={menuStrings.requestsHint}
-        onPress={() => navigation.navigate("Requests")}
-      />
+      {/* ---- work ---------------------------------------------------------- */}
+      <Section title={menu75Strings.sectionWork}>
+        <Row
+          icon="requests"
+          label={menu75Strings.requests}
+          hint={menu75Strings.requestsHint}
+          last
+          onPress={() => navigation.navigate("Requests")}
+        />
+      </Section>
 
-      <SectionLabel text={menuStrings.sectionVehicle} />
-      <MenuRow
-        label={menuStrings.vehicle}
-        hint={menuStrings.vehicleHint}
-        onPress={() => navigation.navigate("Profile")}
-      />
+      {/* ---- vehicle ------------------------------------------------------- */}
+      <Section title={menu75Strings.sectionVehicle}>
+        <Row
+          icon="car"
+          label={menu75Strings.vehicle}
+          hint={menu75Strings.vehicleHint}
+          last
+          onPress={() => navigation.navigate("Profile")}
+        />
+      </Section>
 
-      <SectionLabel text={menuStrings.sectionSupport} />
-      <MenuRow
-        label={menuStrings.notifications}
-        hint={menuStrings.notificationsHint}
-        badge={unread}
-        onPress={() => navigation.navigate("Notifications")}
-      />
-      <MenuRow
-        label={menuStrings.support}
-        hint={menuStrings.supportHint}
-        onPress={() => navigation.navigate("Support")}
-      />
-      <MenuRow
-        label={menuStrings.safety}
-        hint={menuStrings.safetyHint}
-        onPress={() => navigation.navigate("Safety")}
-      />
+      {/* ---- support and safety -------------------------------------------- */}
+      <Section title={menu75Strings.sectionSupport}>
+        <Row
+          icon="bell"
+          label={menu75Strings.notifications}
+          hint={menu75Strings.notificationsHint}
+          badge={unread}
+          onPress={() => navigation.navigate("Notifications")}
+        />
+        <Row
+          icon="support"
+          label={menu75Strings.support}
+          hint={menu75Strings.supportHint}
+          onPress={() => navigation.navigate("Support")}
+        />
+        <Row
+          icon="shield"
+          label={menu75Strings.safety}
+          hint={menu75Strings.safetyHint}
+          last
+          onPress={() => navigation.navigate("Safety")}
+        />
+      </Section>
 
-      <SectionLabel text={menuStrings.sectionLegal} />
-      <MenuRow
-        label={menuStrings.legal}
-        hint={menuStrings.legalHint}
-        onPress={() => navigation.navigate("Legal")}
-      />
+      {/* ---- other --------------------------------------------------------- */}
+      <Section title={menu75Strings.sectionOther}>
+        <Row
+          icon="legal"
+          label={menu75Strings.legal}
+          hint={menu75Strings.legalHint}
+          onPress={() => navigation.navigate("Legal")}
+        />
+        <Row
+          icon={mode === "dark" ? "moon" : "sun"}
+          label={menu75Strings.appearance}
+          hint={
+            mode === "dark"
+              ? menu75Strings.appearanceDark
+              : menu75Strings.appearanceLight
+          }
+          last
+          onPress={toggleMode}
+        />
+      </Section>
 
-      <PrimaryButton
-        label={menuStrings.signOut}
-        variant="outline"
-        onPress={confirmSignOut}
-        style={styles.signOut}
-      />
+      <Section>
+        <Row
+          icon="logout"
+          label={menu75Strings.signOut}
+          hint={menu75Strings.signOutHint}
+          tone="danger"
+          last
+          onPress={confirmSignOut}
+        />
+      </Section>
 
       <BrandMark compact style={styles.brand} />
     </ScrollView>
   );
 }
 
-function SectionLabel({ text }: { text: string }) {
-  return <Text style={styles.section}>{text}</Text>;
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
+/**
+ * A titled group of rows inside one rounded card. Grouping is what creates the
+ * hierarchy: the card is the object, the rows are its contents.
+ */
+function Section({
+  title,
+  children,
+}: {
+  title?: string;
+  children: React.ReactNode;
+}) {
+  const palette = usePalette();
   return (
-    <View style={styles.stat}>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
+    <View style={styles.section}>
+      {title ? (
+        <Text style={[styles.sectionTitle, { color: palette.textSecondary }]}>
+          {title}
+        </Text>
+      ) : null}
+      <View
+        style={[
+          styles.group,
+          { backgroundColor: palette.surface, borderColor: palette.border },
+        ]}
+      >
+        {children}
+      </View>
     </View>
   );
 }
 
-function MenuRow({
+function Row({
+  icon,
   label,
   hint,
   badge = 0,
+  tone = "default",
+  last = false,
   onPress,
 }: {
+  icon: IconName;
   label: string;
   hint: string;
   badge?: number;
+  tone?: "default" | "danger";
+  /** Suppresses the hairline under the last row of a group. */
+  last?: boolean;
   onPress: () => void;
 }) {
+  const palette = usePalette();
+  const danger = tone === "danger";
+  const iconColor = danger ? palette.danger : palette.primaryText;
+
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
       onPress={onPress}
-      style={({ pressed }) => [styles.row, pressed ? styles.rowPressed : null]}
+      style={({ pressed }) => [
+        styles.row,
+        !last ? { borderBottomWidth: StyleSheet.hairlineWidth } : null,
+        { borderBottomColor: palette.border },
+        pressed ? { backgroundColor: palette.pressed } : null,
+      ]}
     >
-      <View style={styles.rowHead}>
-        <Text style={styles.rowLabel}>{label}</Text>
-        {badge > 0 ? (
-          <View style={styles.rowBadge}>
-            <Text style={styles.rowBadgeText}>
-              {badge > 99 ? "99+" : String(badge)}
-            </Text>
-          </View>
-        ) : null}
+      <View
+        style={[
+          styles.iconWrap,
+          {
+            backgroundColor: danger
+              ? palette.surfaceSunken
+              : palette.primaryWash,
+          },
+        ]}
+      >
+        <Icon name={icon} size={20} color={iconColor} />
       </View>
-      <Text style={styles.rowHint}>{hint}</Text>
+
+      <View style={styles.rowText}>
+        <Text
+          style={[
+            styles.rowLabel,
+            { color: danger ? palette.danger : palette.textPrimary },
+          ]}
+          numberOfLines={1}
+        >
+          {label}
+        </Text>
+        <Text
+          style={[styles.rowHint, { color: palette.textSecondary }]}
+          numberOfLines={1}
+        >
+          {hint}
+        </Text>
+      </View>
+
+      {badge > 0 ? (
+        <View style={[styles.badge, { backgroundColor: palette.primary }]}>
+          <Text style={[styles.badgeText, { color: palette.onPrimary }]}>
+            {badge > 99 ? "99+" : String(badge)}
+          </Text>
+        </View>
+      ) : null}
+
+      {/* Chevron points left: "forward" in an RTL layout. */}
+      <Icon name="chevron" size={18} color={palette.textMuted} />
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.ink },
-  content: { padding: spacing.xl, gap: spacing.sm },
-  header: {
-    backgroundColor: colors.surfaceDark,
+  content: { paddingHorizontal: spacing.lg, gap: spacing.lg },
+
+  hero: {
     borderRadius: radius.card,
     borderWidth: 1,
-    borderColor: colors.divider,
-    padding: spacing.lg,
-    gap: spacing.md,
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.lg,
+    alignItems: "center",
+    gap: spacing.sm,
+    ...shadows.soft,
   },
-  identity: {
+  name: { ...typography.title, textAlign: "center", writingDirection: "rtl" },
+  levelPill: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: 3,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+  },
+  levelText: { ...typography.caption, fontWeight: "700" },
+  heroStats: {
     flexDirection: "row-reverse",
     alignItems: "center",
-    gap: spacing.lg,
-  },
-  identityText: { flex: 1, gap: 2 },
-  name: {
-    ...typography.title,
-    color: colors.textOnDark,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  levelPill: {
-    alignSelf: "flex-end",
-    paddingHorizontal: spacing.md,
-    paddingVertical: 2,
-    borderRadius: radius.pill,
-    backgroundColor: withAlpha(colors.gold, 0.14),
-    borderWidth: 1,
-    borderColor: withAlpha(colors.gold, 0.4),
-  },
-  levelText: { ...typography.caption, color: colors.gold },
-  phone: {
-    ...typography.caption,
-    color: colors.textOnDarkSecondary,
-    textAlign: "left",
-    writingDirection: "ltr",
-  },
-  vehicle: {
-    ...typography.caption,
-    color: colors.textOnDarkSecondary,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  statsRow: { flexDirection: "row-reverse", gap: spacing.sm },
-  stat: {
-    flex: 1,
-    backgroundColor: withAlpha(colors.offWhite, 0.06),
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.divider,
-    paddingVertical: spacing.md,
-    alignItems: "center",
-  },
-  statValue: { ...typography.numeric, fontSize: 22, color: colors.gold },
-  statLabel: {
-    ...typography.caption,
-    color: colors.textOnDarkSecondary,
+    gap: spacing.md,
     marginTop: spacing.xs,
+  },
+  heroStat: { flexDirection: "row-reverse", alignItems: "center", gap: 4 },
+  heroStatValue: { ...typography.label, fontWeight: "700" },
+  heroStatText: { ...typography.caption, writingDirection: "rtl" },
+  heroDivider: { width: 1, height: 12 },
+  heroVehicle: {
+    ...typography.caption,
     textAlign: "center",
     writingDirection: "rtl",
   },
-  note: {
+
+  section: { gap: spacing.sm },
+  sectionTitle: {
     ...typography.caption,
-    color: colors.textOnDarkSecondary,
+    fontWeight: "700",
     textAlign: "right",
     writingDirection: "rtl",
+    paddingHorizontal: spacing.xs,
   },
-  section: {
-    ...typography.label,
-    color: colors.gold,
-    textAlign: "right",
-    writingDirection: "rtl",
-    marginTop: spacing.lg,
-    marginBottom: spacing.xs,
-  },
-  row: {
-    minHeight: touchTarget.normal,
-    justifyContent: "center",
-    backgroundColor: colors.surfaceDark,
+  group: {
     borderRadius: radius.card,
     borderWidth: 1,
-    borderColor: colors.divider,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    gap: 2,
+    overflow: "hidden",
   },
-  rowPressed: { backgroundColor: colors.pressed },
-  rowHead: {
+
+  row: {
+    minHeight: 60,
     flexDirection: "row-reverse",
     alignItems: "center",
-    justifyContent: "space-between",
-    gap: spacing.sm,
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
   },
+  iconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.md,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  rowText: { flex: 1, gap: 1 },
   rowLabel: {
     ...typography.subtitle,
-    color: colors.textOnDark,
-    flex: 1,
     textAlign: "right",
     writingDirection: "rtl",
   },
-  rowBadge: {
+  rowHint: { ...typography.caption, textAlign: "right", writingDirection: "rtl" },
+  badge: {
     minWidth: 22,
     height: 22,
     borderRadius: radius.pill,
     paddingHorizontal: 6,
-    backgroundColor: colors.gold,
     alignItems: "center",
     justifyContent: "center",
   },
-  rowBadgeText: { ...typography.caption, color: colors.ink },
-  rowHint: {
-    ...typography.caption,
-    color: colors.textOnDarkSecondary,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  signOut: { marginTop: spacing.xl },
-  brand: { alignSelf: "center", marginTop: spacing.lg },
+  badgeText: { ...typography.caption, fontWeight: "700" },
+
+  brand: { alignSelf: "center", marginTop: spacing.md },
 });
