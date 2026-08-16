@@ -16,6 +16,12 @@ import type { DocumentType, DriverDocument } from "../types/driver";
  * upload, which is already proven in production.
  */
 
+/** Dates printed on the paper document. Both optional, both ISO-8601. */
+export type DocumentDatesInput = {
+  issuedAt?: string;
+  expiresAt?: string;
+};
+
 /** The server only stores images for documents; it defaults to image/jpeg. */
 function contentTypeFor(uri: string): string {
   const clean = uri.split("?")[0].toLowerCase();
@@ -48,12 +54,16 @@ export function isLocalUri(uri: string | null | undefined): boolean {
  * `readUrl` from the ticket is still useful, but only for showing the image
  * immediately after the upload without waiting for a profile refetch.
  *
+ * PHASE 1: the issue / expiry dates travel in step 3, with the registration,
+ * not in step 1. The upload ticket is only about storage.
+ *
  * Throws on failure so the caller keeps the driver on the screen instead of
  * pretending a document was submitted.
  */
 export async function uploadDriverDocument(
   type: DocumentType,
   localUri: string,
+  dates?: DocumentDatesInput,
 ): Promise<DriverDocument> {
   const contentType = contentTypeFor(localUri);
 
@@ -71,5 +81,17 @@ export async function uploadDriverDocument(
     throw new Error("DOCUMENT_UPLOAD_FAILED_" + uploaded.status);
   }
 
-  return driverApi.addDocument({ type, url: ticket.objectPath });
+  // Keys are added only when they hold a value: AddDocumentDto validates
+  // @IsDateString on presence, so an explicit undefined-turned-null would be a
+  // 400 for every document that has no dates.
+  const payload: {
+    type: DocumentType;
+    url: string;
+    issuedAt?: string;
+    expiresAt?: string;
+  } = { type, url: ticket.objectPath };
+  if (dates?.issuedAt) payload.issuedAt = dates.issuedAt;
+  if (dates?.expiresAt) payload.expiresAt = dates.expiresAt;
+
+  return driverApi.addDocument(payload);
 }

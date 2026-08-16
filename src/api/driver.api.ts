@@ -83,10 +83,17 @@ export async function createUploadUrl(input: {
  * `url` must be the `objectPath` from the upload ticket. The server normalizes
  * whatever it receives down to the object key, so a signed URL never lands in
  * the database, but sending the key is the correct contract.
+ *
+ * PHASE 1: `issuedAt` / `expiresAt` are accepted as optional ISO-8601 strings
+ * (@IsDateString on AddDocumentDto). They are omitted entirely for document
+ * types that carry no dates - sending null would fail validation, since the DTO
+ * validates the value when the key is present.
  */
 export async function addDocument(input: {
   type: DocumentType;
   url: string;
+  issuedAt?: string;
+  expiresAt?: string;
 }): Promise<DriverDocument> {
   const { data } = await api.post("/driver/me/documents", input);
   return data as DriverDocument;

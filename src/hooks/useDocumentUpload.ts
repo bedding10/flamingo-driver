@@ -1,7 +1,10 @@
 import { useCallback, useState } from "react";
 import * as ImagePicker from "expo-image-picker";
 import { useQueryClient } from "@tanstack/react-query";
-import { uploadDriverDocument } from "../services/upload.service";
+import {
+  uploadDriverDocument,
+  type DocumentDatesInput,
+} from "../services/upload.service";
 import { strings } from "../i18n/strings";
 import { toApiError } from "../api/client";
 import type { DocumentType } from "../types/driver";
@@ -13,11 +16,16 @@ export type PickSource = "camera" | "library";
  * Picks an image and pushes it through the server's three-step upload.
  *
  * `pending` is the document type currently uploading, not a boolean: the screen
- * lists five document rows and only the row being uploaded may show a spinner.
+ * lists several document rows and only the row being uploaded may show a
+ * spinner.
  *
  * Images are compressed to 0.7 quality before upload. A modern phone camera
  * produces 4-8 MB per shot, which a driver on 3G at the roadside cannot send;
  * a licence photo stays perfectly legible at this quality.
+ *
+ * PHASE 1: the caller passes the dates it already collected. They are only
+ * forwarded - this hook never invents or defaults a date, because a wrong
+ * expiry silently blocks the driver later.
  */
 export function useDocumentUpload() {
   const queryClient = useQueryClient();
@@ -25,7 +33,11 @@ export function useDocumentUpload() {
   const [error, setError] = useState<string | null>(null);
 
   const submit = useCallback(
-    async (type: DocumentType, source: PickSource) => {
+    async (
+      type: DocumentType,
+      source: PickSource,
+      dates?: DocumentDatesInput,
+    ) => {
       setError(null);
 
       const permission =
@@ -61,7 +73,7 @@ export function useDocumentUpload() {
 
       setPending(type);
       try {
-        await uploadDriverDocument(type, asset.uri);
+        await uploadDriverDocument(type, asset.uri, dates);
         // The profile carries the document list and the approval status, so it is
         // the single thing to invalidate.
         await queryClient.invalidateQueries({ queryKey: DRIVER_PROFILE_KEY });
