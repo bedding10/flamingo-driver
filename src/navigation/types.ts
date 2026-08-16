@@ -19,6 +19,14 @@ export type OnboardingStackParamList = {
 
 export type DriverStackParamList = {
   Home: undefined;
+  /**
+   * PHASE 5 - the driver menu. It replaces the old behaviour where the map's
+   * hamburger jumped straight into the profile form, which left the wallet and
+   * the requests list with no entry point.
+   */
+  Menu: undefined;
+  /** PHASE 5 - ledger balance, earnings aggregates and withdrawal request. */
+  Wallet: undefined;
   Profile: undefined;
   Documents: undefined;
   /**

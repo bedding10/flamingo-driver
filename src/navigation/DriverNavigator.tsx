@@ -1,6 +1,8 @@
 import React from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { DriverHomeScreen } from "../screens/home/DriverHomeScreen";
+import { MenuScreen } from "../screens/menu/MenuScreen";
+import { WalletScreen } from "../screens/wallet/WalletScreen";
 import { ProfileScreen } from "../screens/onboarding/ProfileScreen";
 import { DocumentsScreen } from "../screens/onboarding/DocumentsScreen";
 import { RequestsScreen } from "../screens/requests/RequestsScreen";
@@ -8,6 +10,7 @@ import { TripChatScreen } from "../screens/trip/TripChatScreen";
 import { ApprovalGate } from "./ApprovalGate";
 import { strings } from "../i18n/strings";
 import { requestStrings } from "../i18n/strings.requests";
+import { menuStrings, walletStrings } from "../i18n/strings.menu";
 import { colors } from "../theme";
 import type { DriverStackParamList } from "./types";
 
@@ -38,6 +41,20 @@ export function DriverNavigator() {
         }}
       >
         <Stack.Screen name="Home" component={DriverHomeScreen} />
+        {/*
+          PHASE 5: the menu and the wallet. Both are pushed screens for the same
+          reason as Requests - the map stays the driver's default view.
+        */}
+        <Stack.Screen
+          name="Menu"
+          component={MenuScreen}
+          options={{ headerShown: true, title: menuStrings.title }}
+        />
+        <Stack.Screen
+          name="Wallet"
+          component={WalletScreen}
+          options={{ headerShown: true, title: walletStrings.title }}
+        />
         <Stack.Screen
           name="Profile"
           component={ProfileScreen}
