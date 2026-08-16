@@ -31,6 +31,10 @@ const socketUrl = (
   process.env.EXPO_PUBLIC_SOCKET_URL ?? apiUrl.replace(/\/api$/, "")
 ).replace(/\/+$/, "");
 
+const environment: Environment =
+  (process.env.EXPO_PUBLIC_ENV as Environment | undefined) ??
+  (__DEV__ ? "development" : "production");
+
 /**
  * PHASE 2 - public media host (Cloudflare R2).
  *

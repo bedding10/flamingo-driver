@@ -234,6 +234,10 @@ export function DriverHomeScreen() {
         follow={follow}
         onPanByUser={onPanByUser}
         route={activeRoute}
+        // PHASE 2: picks the marker artwork. The class is the one staff approved
+        // on the vehicle, so an unapproved or missing vehicle simply falls back
+        // to the car marker rather than blocking the map.
+        rideClass={vehicle?.rideClass ?? null}
       />
 
       <View style={[styles.topBar, { paddingTop: insets.top + spacing.sm }]}>
