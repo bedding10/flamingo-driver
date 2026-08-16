@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -16,6 +16,12 @@ import { SectionCard } from "../../components/SectionCard";
 import { VehicleCard } from "../../components/VehicleCard";
 import { ProfileAvatar } from "../../components/ProfileAvatar";
 import { strings } from "../../i18n/strings";
+import {
+  VEHICLE_FEATURE_KEYS,
+  VEHICLE_FEATURE_LABELS,
+  VEHICLE_STATUS_LABELS,
+  p1,
+} from "../../i18n/strings.phase1";
 import {
   colors,
   radius,
@@ -50,6 +56,14 @@ const LEVEL_LABELS: Record<string, string> = {
   LEGENDARY: strings.level.legendary,
 };
 
+/** Order-insensitive comparison, since the server deduplicates and may reorder. */
+function sameFeatures(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  const left = [...a].sort();
+  const right = [...b].sort();
+  return left.every((value, index) => value === right[index]);
+}
+
 /**
  * Driver identity + active vehicle, saved in a single PATCH /driver/me.
  *
@@ -58,6 +72,9 @@ const LEVEL_LABELS: Record<string, string> = {
  * 1. Only CHANGED fields are sent. The server resets the vehicle verification to
  *    PENDING whenever an identity field (make / model / plate / year) differs, so
  *    re-sending untouched values would invalidate an approved vehicle.
+ *    PHASE 1 note: carFeatures is NOT an identity field on the server, on
+ *    purpose, so a driver can correct the comfort list of an approved vehicle
+ *    without losing the approval.
  * 2. The phone number is read-only. It is the identity Firebase authenticates,
  *    and PATCH would change it without re-verifying, locking the driver out of
  *    the next login.
@@ -89,6 +106,9 @@ export function ProfileScreen() {
   const [color, setColor] = useState(vehicle?.color ?? "");
   const [plate, setPlate] = useState(vehicle?.plate ?? "");
   const [year, setYear] = useState(vehicle?.year ? String(vehicle.year) : "");
+  // PHASE 1: Vehicle.features String[]. Free-form on the server, so the keys in
+  // VEHICLE_FEATURE_KEYS are this app's vocabulary and travel as-is.
+  const [features, setFeatures] = useState<string[]>(vehicle?.features ?? []);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
@@ -99,13 +119,30 @@ export function ProfileScreen() {
   const citiesQuery = useCities(wilayaId);
 
   /**
-   * The profile carries cityId but not wilayaId, so on first load we locate the
-   * driver's existing city inside the fetched wilayas to preselect the parent.
-   * Doing it here rather than server-side keeps the profile payload unchanged.
+   * One-shot hydration.
+   *
+   * Every field above is initialised from `profile`, which is undefined on the
+   * first render whenever the query has no cached data - a cold start, or a
+   * driver who opens this screen before GET /driver/me returns. The state then
+   * kept the empty initial value forever and the driver saw a blank form over
+   * a vehicle that exists.
+   *
+   * It runs once per profile id and never again, so it cannot overwrite text
+   * the driver is typing while a background refetch resolves.
    */
+  const hydratedFor = useRef<string | null>(null);
   useEffect(() => {
-    if (profile?.cityId && cityId === null) setCityId(profile.cityId);
-  }, [profile?.cityId, cityId]);
+    if (!profile || hydratedFor.current === profile.id) return;
+    hydratedFor.current = profile.id;
+    setName(profile.name ?? "");
+    setMake(profile.vehicle?.make ?? "");
+    setModel(profile.vehicle?.model ?? "");
+    setColor(profile.vehicle?.color ?? "");
+    setPlate(profile.vehicle?.plate ?? "");
+    setYear(profile.vehicle?.year ? String(profile.vehicle.year) : "");
+    setFeatures(profile.vehicle?.features ?? []);
+    setCityId(profile.cityId ?? null);
+  }, [profile]);
 
   /** Only what actually differs from the loaded profile. */
   const changes = useMemo<UpdateDriverProfileInput>(() => {
@@ -132,6 +169,12 @@ export function ProfileScreen() {
       next.carYear = parsedYear;
     }
 
+    // PHASE 1: the whole list is sent, because the server replaces the array
+    // rather than merging it. Sending only the delta would delete the rest.
+    if (!sameFeatures(features, vehicle?.features ?? [])) {
+      next.carFeatures = features;
+    }
+
     // Phase 8: only cityId travels. wilayaId is deliberately NOT sent — the
     // server derives it from the city, which keeps one source of truth and
     // stops a client from claiming a wilaya it does not belong to.
@@ -140,9 +183,17 @@ export function ProfileScreen() {
     }
 
     return next;
-  }, [name, make, model, color, plate, year, cityId, profile, vehicle]);
+  }, [name, make, model, color, plate, year, features, cityId, profile, vehicle]);
 
   const dirty = Object.keys(changes).length > 0;
+
+  const toggleFeature = (key: string) => {
+    setFeatures((current) =>
+      current.includes(key)
+        ? current.filter((value) => value !== key)
+        : [...current, key],
+    );
+  };
 
   const onSave = async () => {
     setError(null);
@@ -155,12 +206,15 @@ export function ProfileScreen() {
 
     // Mirror of the server rule: it throws when the resulting vehicle would have
     // no model or no plate. Checking here keeps the driver out of a round trip.
+    // carFeatures counts as touching the vehicle on the server too, so a driver
+    // cannot create a vehicle out of a feature list alone.
     const touchesVehicle =
       changes.carMake !== undefined ||
       changes.carModel !== undefined ||
       changes.carColor !== undefined ||
       changes.carPlate !== undefined ||
-      changes.carYear !== undefined;
+      changes.carYear !== undefined ||
+      changes.carFeatures !== undefined;
     if (touchesVehicle && (!model.trim() || !plate.trim())) {
       setError(strings.profile.modelAndPlateRequired);
       return;
@@ -413,11 +467,59 @@ export function ProfileScreen() {
             maxLength={4}
           />
 
+          {/* PHASE 1: vehicle features. The keys travel, the labels never do. */}
+          <View style={styles.pickerBlock}>
+            <Text style={styles.pickerLabel}>{p1.profile.featuresLabel}</Text>
+            <Text style={styles.pickerHint}>{p1.profile.featuresHint}</Text>
+            <View style={styles.chipWrap}>
+              {VEHICLE_FEATURE_KEYS.map((key) => {
+                const selected = features.includes(key);
+                return (
+                  <Pressable
+                    key={key}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: selected }}
+                    onPress={() => toggleFeature(key)}
+                    style={[styles.chip, selected && styles.chipSelected]}
+                  >
+                    <Text
+                      style={[
+                        styles.chipText,
+                        selected && styles.chipTextSelected,
+                      ]}
+                    >
+                      {VEHICLE_FEATURE_LABELS[key] ?? key}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+
           <ReadOnlyRow
             label={strings.profile.rideClassLabel}
             value={vehicle?.rideClass ?? strings.profile.rideClassPending}
             hint={strings.profile.rideClassLocked}
           />
+
+          {/* PHASE 1: the review verdict, so a rejected vehicle stops being a
+              silent dead end. Both values are read-only server output. */}
+          {vehicle?.verificationStatus ? (
+            <ReadOnlyRow
+              label={p1.profile.vehicleStatusLabel}
+              value={
+                VEHICLE_STATUS_LABELS[vehicle.verificationStatus] ??
+                vehicle.verificationStatus
+              }
+              hint={strings.profile.vehicleHint}
+            />
+          ) : null}
+          {vehicle?.verificationNote ? (
+            <View style={styles.noteBox}>
+              <Text style={styles.noteTitle}>{p1.profile.vehicleNoteLabel}</Text>
+              <Text style={styles.noteText}>{vehicle.verificationNote}</Text>
+            </View>
+          ) : null}
         </SectionCard>
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -591,6 +693,27 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
     textAlign: "right",
     writingDirection: "rtl",
+  },
+  noteBox: {
+    padding: spacing.md,
+    borderRadius: radius.sm,
+    backgroundColor: withAlpha(colors.danger, 0.12),
+    borderWidth: 1,
+    borderColor: withAlpha(colors.danger, 0.4),
+  },
+  noteTitle: {
+    ...typography.caption,
+    color: colors.danger,
+    fontWeight: "600",
+    textAlign: "right",
+    writingDirection: "rtl",
+  },
+  noteText: {
+    ...typography.body,
+    color: colors.textOnDark,
+    textAlign: "right",
+    writingDirection: "rtl",
+    marginTop: 2,
   },
   error: {
     ...typography.body,

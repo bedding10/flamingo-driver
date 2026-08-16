@@ -11,8 +11,7 @@ import { useAuthStore } from "../../auth/auth.store";
 import { useDriverProfile } from "../../hooks/useDriverProfile";
 import { useDriverStore } from "../../stores/driver.store";
 import {
-  DOCUMENT_TYPES,
-  latestDocument,
+  missingRequiredDocuments,
   type DriverProfile,
   type DriverStatus,
 } from "../../types/driver";
@@ -108,11 +107,16 @@ export function PendingApprovalScreen() {
 /**
  * What the driver still owes the review, derived only from server data.
  *
- * A document counts as submitted in any state except missing: a REJECTED one is
- * reported by the documents screen itself, and repeating it here would read as
- * two separate problems.
+ * PHASE 1 narrowed this from "every document type exists" to the four the
+ * server actually requires (REQUIRED_DRIVER_DOC_TYPES). The old check counted
+ * optional slots too, so a complete file could still be reported as incomplete
+ * and the driver had no way to clear the warning.
+ *
+ * A document counts as missing when it was never sent, was rejected, or has
+ * expired. A PENDING one is not missing: it is waiting for an operator, and
+ * asking for it again would only create duplicates.
  */
-function missingItems(profile: DriverProfile | null) {
+function missingItems(profile: DriverProfile | null | undefined) {
   if (!profile) return [];
   const items: Array<{ key: string; label: string }> = [];
 
@@ -121,10 +125,7 @@ function missingItems(profile: DriverProfile | null) {
     items.push({ key: "vehicle", label: strings.approval.checklistProfile });
   }
 
-  const missingDocuments = DOCUMENT_TYPES.filter(
-    (type) => !latestDocument(profile.documents, type),
-  );
-  if (missingDocuments.length) {
+  if (missingRequiredDocuments(profile.documents).length) {
     items.push({ key: "documents", label: strings.approval.checklistDocuments });
   }
 
