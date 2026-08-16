@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -19,12 +19,12 @@ import { formatDateTime } from "../../utils/datetime";
 import { SUPPORT_TICKETS_KEY } from "./SupportScreen";
 import type { DriverStackParamList } from "../../navigation/types";
 import {
-  colors,
   radius,
   spacing,
   touchTarget,
   typography,
-  withAlpha,
+  usePalette,
+  type Palette,
 } from "../../theme";
 
 /**
@@ -40,12 +40,17 @@ import {
  */
 export function TicketScreen() {
   const insets = useSafeAreaInsets();
+  const palette = usePalette();
+  const styles = useMemo(() => makeStyles(palette), [palette]);
   const route = useRoute<RouteProp<DriverStackParamList, "Ticket">>();
   const ticketId = route.params.ticketId;
   const queryClient = useQueryClient();
   const [body, setBody] = useState("");
 
-  const ticketKey = ["support", "ticket", ticketId] as const;
+  const ticketKey = useMemo(
+    () => ["support", "ticket", ticketId] as const,
+    [ticketId],
+  );
 
   const ticket = useQuery({
     queryKey: ticketKey,
@@ -71,7 +76,7 @@ export function TicketScreen() {
   if (ticket.isPending) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator color={colors.gold} />
+        <ActivityIndicator color={palette.primary} />
       </View>
     );
   }
@@ -141,68 +146,73 @@ export function TicketScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.ink },
-  content: { padding: spacing.xl, gap: spacing.md },
-  center: {
-    flex: 1,
-    backgroundColor: colors.ink,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: spacing.xl,
-  },
-  subject: {
-    ...typography.subtitle,
-    color: colors.textOnDark,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  bubble: {
-    borderRadius: radius.card,
-    borderWidth: 1,
-    borderColor: colors.divider,
-    padding: spacing.md,
-    gap: 2,
-    maxWidth: "92%",
-  },
-  bubbleMine: {
-    alignSelf: "flex-end",
-    backgroundColor: withAlpha(colors.gold, 0.12),
-  },
-  bubbleStaff: {
-    alignSelf: "flex-start",
-    backgroundColor: colors.surfaceDark,
-  },
-  author: { ...typography.caption, color: colors.gold, writingDirection: "rtl" },
-  body: {
-    ...typography.body,
-    color: colors.textOnDark,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  when: {
-    ...typography.caption,
-    color: colors.textOnDarkSecondary,
-    textAlign: "left",
-    writingDirection: "ltr",
-  },
-  replyBox: { gap: spacing.md, marginTop: spacing.md },
-  multiline: {
-    minHeight: touchTarget.critical,
-    paddingTop: spacing.md,
-    textAlignVertical: "top",
-  },
-  closed: {
-    ...typography.caption,
-    color: colors.warning,
-    textAlign: "right",
-    writingDirection: "rtl",
-    marginTop: spacing.md,
-  },
-  empty: {
-    ...typography.body,
-    color: colors.textOnDarkSecondary,
-    textAlign: "center",
-    writingDirection: "rtl",
-  },
-});
+const makeStyles = (palette: Palette) =>
+  StyleSheet.create({
+    root: { flex: 1, backgroundColor: palette.background },
+    content: { padding: spacing.xl, gap: spacing.md },
+    center: {
+      flex: 1,
+      backgroundColor: palette.background,
+      alignItems: "center",
+      justifyContent: "center",
+      padding: spacing.xl,
+    },
+    subject: {
+      ...typography.subtitle,
+      color: palette.textPrimary,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+    bubble: {
+      borderRadius: radius.card,
+      borderWidth: 1,
+      borderColor: palette.border,
+      padding: spacing.md,
+      gap: 2,
+      maxWidth: "92%",
+    },
+    bubbleMine: {
+      alignSelf: "flex-end",
+      backgroundColor: palette.primaryWash,
+    },
+    bubbleStaff: {
+      alignSelf: "flex-start",
+      backgroundColor: palette.surface,
+    },
+    author: {
+      ...typography.caption,
+      color: palette.primaryText,
+      writingDirection: "rtl",
+    },
+    body: {
+      ...typography.body,
+      color: palette.textPrimary,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+    when: {
+      ...typography.caption,
+      color: palette.textMuted,
+      textAlign: "left",
+      writingDirection: "ltr",
+    },
+    replyBox: { gap: spacing.md, marginTop: spacing.md },
+    multiline: {
+      minHeight: touchTarget.critical,
+      paddingTop: spacing.md,
+      textAlignVertical: "top",
+    },
+    closed: {
+      ...typography.caption,
+      color: palette.warning,
+      textAlign: "right",
+      writingDirection: "rtl",
+      marginTop: spacing.md,
+    },
+    empty: {
+      ...typography.body,
+      color: palette.textSecondary,
+      textAlign: "center",
+      writingDirection: "rtl",
+    },
+  });

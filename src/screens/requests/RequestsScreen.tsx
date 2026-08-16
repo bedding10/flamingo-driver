@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo } from "react";
 import {
   FlatList,
   Pressable,
@@ -13,7 +13,13 @@ import { FareOpportunityCard } from "../../components/FareOpportunityCard";
 import { useFareOpportunities } from "../../hooks/useFareOpportunities";
 import { requestStrings } from "../../i18n/strings.requests";
 import type { DriverStackParamList } from "../../navigation/types";
-import { colors, radius, spacing, typography, withAlpha } from "../../theme";
+import {
+  radius,
+  spacing,
+  typography,
+  usePalette,
+  type Palette,
+} from "../../theme";
 
 /**
  * The requests page: open FareQuotes the driver may bid on.
@@ -24,6 +30,8 @@ import { colors, radius, spacing, typography, withAlpha } from "../../theme";
  * belongs in a list the driver can read at a red light.
  */
 export function RequestsScreen() {
+  const palette = usePalette();
+  const styles = useMemo(() => makeStyles(palette), [palette]);
   const navigation =
     useNavigation<NativeStackNavigationProp<DriverStackParamList>>();
   const {
@@ -57,7 +65,7 @@ export function RequestsScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={refresh}
-            tintColor={colors.gold}
+            tintColor={palette.primary}
           />
         }
         ListHeaderComponent={
@@ -107,54 +115,58 @@ export function RequestsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.ink },
-  list: { padding: spacing.lg, gap: spacing.md, flexGrow: 1 },
-  header: { gap: spacing.xs },
-  subtitle: {
-    ...typography.caption,
-    color: colors.textOnDarkSecondary,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  notice: {
-    ...typography.caption,
-    color: colors.info,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  error: {
-    ...typography.caption,
-    color: colors.danger,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  empty: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: spacing.sm,
-    paddingVertical: spacing.xl,
-  },
-  emptyTitle: {
-    ...typography.subtitle,
-    color: colors.textOnDark,
-    textAlign: "center",
-  },
-  emptyHint: {
-    ...typography.caption,
-    color: colors.textOnDarkSecondary,
-    textAlign: "center",
-    writingDirection: "rtl",
-  },
-  emptyAction: {
-    marginTop: spacing.md,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.divider,
-    backgroundColor: withAlpha(colors.white, 0.06),
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
-  },
-  emptyActionLabel: { ...typography.subtitle, color: colors.gold },
-});
+const makeStyles = (palette: Palette) =>
+  StyleSheet.create({
+    root: { flex: 1, backgroundColor: palette.background },
+    list: { padding: spacing.lg, gap: spacing.md, flexGrow: 1 },
+    header: { gap: spacing.xs },
+    subtitle: {
+      ...typography.caption,
+      color: palette.textSecondary,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+    notice: {
+      ...typography.caption,
+      color: palette.info,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+    error: {
+      ...typography.caption,
+      color: palette.danger,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+    empty: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      gap: spacing.sm,
+      paddingVertical: spacing.xl,
+    },
+    emptyTitle: {
+      ...typography.subtitle,
+      color: palette.textPrimary,
+      textAlign: "center",
+    },
+    emptyHint: {
+      ...typography.caption,
+      color: palette.textSecondary,
+      textAlign: "center",
+      writingDirection: "rtl",
+    },
+    emptyAction: {
+      marginTop: spacing.md,
+      borderRadius: radius.pill,
+      borderWidth: 1,
+      borderColor: palette.border,
+      backgroundColor: palette.surfaceSunken,
+      paddingHorizontal: spacing.xl,
+      paddingVertical: spacing.md,
+    },
+    emptyActionLabel: {
+      ...typography.subtitle,
+      color: palette.primaryText,
+    },
+  });

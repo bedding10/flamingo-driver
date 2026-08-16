@@ -1,4 +1,4 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useMemo } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -13,13 +13,15 @@ import { useNotifications } from "../../hooks/useNotifications";
 import type { AppNotification } from "../../api/notifications.api";
 import { notificationStrings } from "../../i18n/strings.support";
 import { formatDateTime } from "../../utils/datetime";
+import { Icon } from "../../components/Icon";
 import {
-  colors,
   radius,
   spacing,
   touchTarget,
   typography,
+  usePalette,
   withAlpha,
+  type Palette,
 } from "../../theme";
 
 /**
@@ -28,9 +30,14 @@ import {
  * The server has always stored notifications; the phone only ever showed the
  * transient OS banner. Tapping a row marks it read on the server rather than
  * locally, so the same state is seen from every device the driver signs into.
+ *
+ * PHASE 7.5 CLOSURE: palette-driven, with an unread dot and a pink unread
+ * badge instead of the old gold one.
  */
 export function NotificationsScreen() {
   const insets = useSafeAreaInsets();
+  const palette = usePalette();
+  const styles = useMemo(() => makeStyles(palette), [palette]);
   const {
     items,
     unreadCount,
@@ -77,6 +84,13 @@ export function NotificationsScreen() {
         ]}
       >
         <View style={styles.cardHead}>
+          <View style={styles.iconWrap}>
+            <Icon
+              name="bell"
+              size={18}
+              color={item.isRead ? palette.textSecondary : palette.primaryText}
+            />
+          </View>
           <Text style={styles.cardTitle} numberOfLines={2}>
             {item.title}
           </Text>
@@ -88,13 +102,13 @@ export function NotificationsScreen() {
         <Text style={styles.when}>{formatDateTime(item.createdAt)}</Text>
       </Pressable>
     ),
-    [confirmRemove, markRead],
+    [confirmRemove, markRead, palette, styles],
   );
 
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator color={colors.gold} />
+        <ActivityIndicator color={palette.primary} />
       </View>
     );
   }
@@ -140,83 +154,91 @@ export function NotificationsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.ink },
-  center: {
-    flex: 1,
-    backgroundColor: colors.ink,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  list: { padding: spacing.xl, gap: spacing.md },
-  markAll: {
-    minHeight: touchTarget.normal,
-    marginHorizontal: spacing.xl,
-    marginTop: spacing.lg,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.divider,
-    backgroundColor: withAlpha(colors.gold, 0.12),
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  markAllLabel: { ...typography.subtitle, color: colors.gold },
-  card: {
-    backgroundColor: colors.surfaceDark,
-    borderRadius: radius.card,
-    borderWidth: 1,
-    borderColor: colors.divider,
-    padding: spacing.lg,
-    gap: spacing.xs,
-  },
-  cardUnread: { borderColor: withAlpha(colors.gold, 0.5) },
-  pressed: { opacity: 0.85 },
-  cardHead: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: spacing.sm,
-  },
-  cardTitle: {
-    ...typography.subtitle,
-    color: colors.textOnDark,
-    flex: 1,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  badge: {
-    ...typography.caption,
-    color: colors.ink,
-    backgroundColor: colors.gold,
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    overflow: "hidden",
-  },
-  cardBody: {
-    ...typography.body,
-    color: colors.textOnDarkSecondary,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  when: {
-    ...typography.caption,
-    color: colors.textOnDarkSecondary,
-    textAlign: "left",
-    writingDirection: "ltr",
-  },
-  empty: {
-    ...typography.body,
-    color: colors.textOnDarkSecondary,
-    textAlign: "center",
-    marginTop: spacing["3xl"],
-    writingDirection: "rtl",
-  },
-  footer: {
-    ...typography.caption,
-    color: colors.textOnDarkSecondary,
-    textAlign: "center",
-    marginTop: spacing.md,
-    writingDirection: "rtl",
-  },
-});
+const makeStyles = (palette: Palette) =>
+  StyleSheet.create({
+    root: { flex: 1, backgroundColor: palette.background },
+    center: {
+      flex: 1,
+      backgroundColor: palette.background,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    list: { padding: spacing.xl, gap: spacing.md },
+    markAll: {
+      minHeight: touchTarget.normal,
+      marginHorizontal: spacing.xl,
+      marginTop: spacing.lg,
+      borderRadius: radius.pill,
+      borderWidth: 1,
+      borderColor: withAlpha(palette.primary, 0.35),
+      backgroundColor: palette.primaryWash,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    markAllLabel: { ...typography.subtitle, color: palette.primaryText },
+    card: {
+      backgroundColor: palette.surface,
+      borderRadius: radius.card,
+      borderWidth: 1,
+      borderColor: palette.border,
+      padding: spacing.lg,
+      gap: spacing.xs,
+    },
+    cardUnread: { borderColor: withAlpha(palette.primary, 0.5) },
+    pressed: { opacity: 0.85 },
+    cardHead: {
+      flexDirection: "row-reverse",
+      alignItems: "center",
+      gap: spacing.sm,
+    },
+    iconWrap: {
+      width: 32,
+      height: 32,
+      borderRadius: radius.pill,
+      backgroundColor: palette.surfaceSunken,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    cardTitle: {
+      ...typography.subtitle,
+      color: palette.textPrimary,
+      flex: 1,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+    badge: {
+      ...typography.caption,
+      color: palette.onPrimary,
+      backgroundColor: palette.primary,
+      borderRadius: radius.pill,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 2,
+      overflow: "hidden",
+    },
+    cardBody: {
+      ...typography.body,
+      color: palette.textSecondary,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+    when: {
+      ...typography.caption,
+      color: palette.textMuted,
+      textAlign: "left",
+      writingDirection: "ltr",
+    },
+    empty: {
+      ...typography.body,
+      color: palette.textSecondary,
+      textAlign: "center",
+      marginTop: spacing["3xl"],
+      writingDirection: "rtl",
+    },
+    footer: {
+      ...typography.caption,
+      color: palette.textMuted,
+      textAlign: "center",
+      marginTop: spacing.md,
+      writingDirection: "rtl",
+    },
+  });

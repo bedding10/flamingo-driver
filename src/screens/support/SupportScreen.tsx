@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -24,12 +24,12 @@ import { supportStrings } from "../../i18n/strings.support";
 import { formatDateTime } from "../../utils/datetime";
 import type { DriverStackParamList } from "../../navigation/types";
 import {
-  colors,
   radius,
   spacing,
   touchTarget,
   typography,
-  withAlpha,
+  usePalette,
+  type Palette,
 } from "../../theme";
 
 export const SUPPORT_TICKETS_KEY = ["support", "tickets", "me"] as const;
@@ -51,6 +51,8 @@ const STATUS_LABELS: Record<TicketStatus, string> = {
  */
 export function SupportScreen() {
   const insets = useSafeAreaInsets();
+  const palette = usePalette();
+  const styles = useMemo(() => makeStyles(palette), [palette]);
   const navigation =
     useNavigation<NativeStackNavigationProp<DriverStackParamList>>();
   const queryClient = useQueryClient();
@@ -128,7 +130,7 @@ export function SupportScreen() {
 
       <SectionCard title={supportStrings.myTickets}>
         {tickets.isPending ? (
-          <ActivityIndicator color={colors.gold} />
+          <ActivityIndicator color={palette.primary} />
         ) : items.length === 0 ? (
           <Text style={styles.empty}>
             {tickets.isError ? supportStrings.loadFailed : supportStrings.empty}
@@ -164,47 +166,52 @@ export function SupportScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.ink },
-  content: { padding: spacing.xl, gap: spacing.md },
-  multiline: {
-    minHeight: touchTarget.critical + spacing.xl,
-    paddingTop: spacing.md,
-    textAlignVertical: "top",
-  },
-  row: {
-    backgroundColor: withAlpha(colors.offWhite, 0.06),
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.divider,
-    padding: spacing.md,
-    gap: 2,
-  },
-  pressed: { opacity: 0.85 },
-  rowHead: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: spacing.sm,
-  },
-  rowSubject: {
-    ...typography.subtitle,
-    color: colors.textOnDark,
-    flex: 1,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  status: { ...typography.caption, color: colors.gold, writingDirection: "rtl" },
-  when: {
-    ...typography.caption,
-    color: colors.textOnDarkSecondary,
-    textAlign: "left",
-    writingDirection: "ltr",
-  },
-  empty: {
-    ...typography.body,
-    color: colors.textOnDarkSecondary,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-});
+const makeStyles = (palette: Palette) =>
+  StyleSheet.create({
+    root: { flex: 1, backgroundColor: palette.background },
+    content: { padding: spacing.xl, gap: spacing.md },
+    multiline: {
+      minHeight: touchTarget.critical + spacing.xl,
+      paddingTop: spacing.md,
+      textAlignVertical: "top",
+    },
+    row: {
+      backgroundColor: palette.surfaceSunken,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: palette.border,
+      padding: spacing.md,
+      gap: 2,
+    },
+    pressed: { opacity: 0.85 },
+    rowHead: {
+      flexDirection: "row-reverse",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: spacing.sm,
+    },
+    rowSubject: {
+      ...typography.subtitle,
+      color: palette.textPrimary,
+      flex: 1,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+    status: {
+      ...typography.caption,
+      color: palette.primaryText,
+      writingDirection: "rtl",
+    },
+    when: {
+      ...typography.caption,
+      color: palette.textMuted,
+      textAlign: "left",
+      writingDirection: "ltr",
+    },
+    empty: {
+      ...typography.body,
+      color: palette.textSecondary,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+  });
