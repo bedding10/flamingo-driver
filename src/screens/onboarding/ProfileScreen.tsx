@@ -15,6 +15,7 @@ import { PrimaryButton } from "../../components/PrimaryButton";
 import { SectionCard } from "../../components/SectionCard";
 import { VehicleCard } from "../../components/VehicleCard";
 import { ProfileAvatar } from "../../components/ProfileAvatar";
+import { PasswordSetupCard } from "../../components/PasswordSetupCard";
 import { strings } from "../../i18n/strings";
 import {
   VEHICLE_FEATURE_KEYS,
@@ -77,7 +78,9 @@ function sameFeatures(a: string[], b: string[]): boolean {
  *    without losing the approval.
  * 2. The phone number is read-only. It is the identity Firebase authenticates,
  *    and PATCH would change it without re-verifying, locking the driver out of
- *    the next login.
+ *    the next login. PHASE 1 keeps this rule even though a password now exists:
+ *    the password is a second door to the SAME phone-owned account, never a way
+ *    to move the account to another number.
  * 3. Vehicle type is read-only. Its catalogue still lives behind a STAFF-only
  *    endpoint, so this app cannot list it and will not invent a picker over
  *    data it cannot read.
@@ -521,6 +524,12 @@ export function ProfileScreen() {
             </View>
           ) : null}
         </SectionCard>
+
+        {/* PHASE 1: optional password. It has its own submit button on purpose:
+            it targets POST /auth/password/change, NOT PATCH /driver/me, and a
+            failed vehicle save must never lose a typed password (or the other
+            way round). */}
+        <PasswordSetupCard />
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
         {saved && !error ? (
