@@ -45,7 +45,10 @@ function FareOpportunityCardComponent({
   onBid,
   onWithdraw,
 }: Props) {
-  const initial = item.myOffer?.amount ?? item.proposedFare ?? item.suggestedFare;
+  // Narrowed once into a local: this keeps the JSX free of non-null assertions,
+  // which `npm run lint` (--max-warnings=0) would flag.
+  const myOffer = item.myOffer;
+  const initial = myOffer?.amount ?? item.proposedFare ?? item.suggestedFare;
   const [amount, setAmount] = useState(String(Math.round(initial)));
 
   // A new bid accepted by the server (or a fresh poll) re-seeds the field, but
@@ -73,7 +76,7 @@ function FareOpportunityCardComponent({
     Number.isFinite(parsed) &&
     parsed >= item.minFare &&
     parsed <= item.maxFare;
-  const pending = item.myOffer?.status === "PENDING";
+  const pending = myOffer?.status === "PENDING";
 
   return (
     <View style={[styles.card, expired ? styles.cardExpired : null]}>
@@ -150,11 +153,11 @@ function FareOpportunityCardComponent({
         </Text>
       ) : null}
 
-      {pending && item.myOffer ? (
+      {myOffer && pending ? (
         <Text style={styles.mine}>
           {requestStrings.myOfferAmount +
             " " +
-            money(item.myOffer.amount, item.myOffer.currency) +
+            money(myOffer.amount, myOffer.currency) +
             " \u00b7 " +
             requestStrings.myOfferPending}
         </Text>
@@ -183,12 +186,12 @@ function FareOpportunityCardComponent({
       ) : null}
 
       <View style={styles.actions}>
-        {pending && item.myOffer ? (
+        {myOffer && pending ? (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={requestStrings.withdraw}
             disabled={busy}
-            onPress={() => onWithdraw(item.myOffer!.id)}
+            onPress={() => onWithdraw(myOffer.id)}
             style={({ pressed }) => [
               styles.secondaryButton,
               pressed ? styles.pressed : null,
