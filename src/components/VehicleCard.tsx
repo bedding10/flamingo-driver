@@ -1,6 +1,12 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { colors, radius, spacing, typography } from "../theme";
+import {
+  radius,
+  spacing,
+  typography,
+  usePalette,
+  type Palette,
+} from "../theme";
 import { strings } from "../i18n/strings";
 import type { DriverVehicle } from "../types/driver";
 
@@ -11,6 +17,9 @@ import type { DriverVehicle } from "../types/driver";
  * `vehicles: { where: { isActive: true }, take: 1 }`), so there is no list here.
  */
 export function VehicleCard({ vehicle }: { vehicle: DriverVehicle | null }) {
+  const palette = usePalette();
+  const styles = useMemo(() => makeStyles(palette), [palette]);
+
   if (!vehicle) {
     return (
       <View style={styles.card}>
@@ -33,12 +42,17 @@ export function VehicleCard({ vehicle }: { vehicle: DriverVehicle | null }) {
       </View>
 
       <View style={styles.plateWrapper}>
-        <Text style={styles.plate}>{vehicle.plate ?? "—"}</Text>
+        <Text style={styles.plate}>{vehicle.plate ?? "\u2014"}</Text>
       </View>
 
       <View style={styles.metaRow}>
-        <Meta label={strings.vehicle.color} value={vehicle.color} />
         <Meta
+          styles={styles}
+          label={strings.vehicle.color}
+          value={vehicle.color}
+        />
+        <Meta
+          styles={styles}
           label={strings.vehicle.year}
           value={vehicle.year ? String(vehicle.year) : null}
         />
@@ -47,63 +61,82 @@ export function VehicleCard({ vehicle }: { vehicle: DriverVehicle | null }) {
   );
 }
 
-function Meta({ label, value }: { label: string; value: string | null }) {
+function Meta({
+  styles,
+  label,
+  value,
+}: {
+  styles: ReturnType<typeof makeStyles>;
+  label: string;
+  value: string | null;
+}) {
   return (
     <View style={styles.meta}>
       <Text style={styles.metaLabel}>{label}</Text>
-      <Text style={styles.metaValue}>{value ?? "—"}</Text>
+      <Text style={styles.metaValue}>{value ?? "\u2014"}</Text>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: colors.surfaceDarkRaised,
-    borderRadius: radius.card,
-    padding: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.divider,
-  },
-  header: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: spacing.md,
-  },
-  title: {
-    ...typography.subtitle,
-    color: colors.textOnDark,
-    flexShrink: 1,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  rideClass: { ...typography.caption, color: colors.gold, letterSpacing: 1 },
-  plateWrapper: {
-    alignSelf: "flex-end",
-    marginTop: spacing.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.sm,
-    backgroundColor: colors.offWhite,
-  },
-  plate: {
-    ...typography.subtitle,
-    color: colors.textPrimary,
-    letterSpacing: 2,
-    writingDirection: "ltr",
-  },
-  metaRow: {
-    flexDirection: "row-reverse",
-    gap: spacing["3xl"],
-    marginTop: spacing.lg,
-  },
-  meta: { alignItems: "flex-end" },
-  metaLabel: { ...typography.caption, color: colors.textOnDarkSecondary },
-  metaValue: { ...typography.label, color: colors.textOnDark, marginTop: 2 },
-  empty: {
-    ...typography.body,
-    color: colors.textOnDarkSecondary,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-});
+const makeStyles = (palette: Palette) =>
+  StyleSheet.create({
+    card: {
+      backgroundColor: palette.surfaceRaised,
+      borderRadius: radius.card,
+      padding: spacing.lg,
+      borderWidth: 1,
+      borderColor: palette.border,
+    },
+    header: {
+      flexDirection: "row-reverse",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: spacing.md,
+    },
+    title: {
+      ...typography.subtitle,
+      color: palette.textPrimary,
+      flexShrink: 1,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+    rideClass: {
+      ...typography.caption,
+      color: palette.primaryText,
+      letterSpacing: 1,
+    },
+    plateWrapper: {
+      alignSelf: "flex-end",
+      marginTop: spacing.md,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.sm,
+      borderRadius: radius.sm,
+      borderWidth: 1,
+      borderColor: palette.borderStrong,
+      backgroundColor: palette.surfaceSunken,
+    },
+    plate: {
+      ...typography.subtitle,
+      color: palette.textPrimary,
+      letterSpacing: 2,
+      writingDirection: "ltr",
+    },
+    metaRow: {
+      flexDirection: "row-reverse",
+      gap: spacing["3xl"],
+      marginTop: spacing.lg,
+    },
+    meta: { alignItems: "flex-end" },
+    metaLabel: { ...typography.caption, color: palette.textSecondary },
+    metaValue: {
+      ...typography.label,
+      color: palette.textPrimary,
+      marginTop: 2,
+    },
+    empty: {
+      ...typography.body,
+      color: palette.textSecondary,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+  });

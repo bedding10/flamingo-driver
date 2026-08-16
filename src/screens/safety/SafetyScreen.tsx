@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -22,7 +22,14 @@ import type {
 } from "../../api/safety.api";
 import { safetyStrings } from "../../i18n/strings.support";
 import { formatDateTime } from "../../utils/datetime";
-import { colors, radius, spacing, typography, withAlpha } from "../../theme";
+import {
+  radius,
+  spacing,
+  typography,
+  usePalette,
+  withAlpha,
+  type Palette,
+} from "../../theme";
 
 const CONTACTS_KEY = ["emergency", "contacts", "me"] as const;
 const INCIDENTS_KEY = ["safety", "incidents", "me"] as const;
@@ -56,6 +63,8 @@ const STATUS_LABELS: Record<SafetyIncidentStatus, string> = {
  */
 export function SafetyScreen() {
   const insets = useSafeAreaInsets();
+  const palette = usePalette();
+  const styles = useMemo(() => makeStyles(palette), [palette]);
   const queryClient = useQueryClient();
 
   const [name, setName] = useState("");
@@ -144,7 +153,7 @@ export function SafetyScreen() {
         hint={safetyStrings.limitNote}
       >
         {contacts.isPending ? (
-          <ActivityIndicator color={colors.gold} />
+          <ActivityIndicator color={palette.primary} />
         ) : contactItems.length === 0 ? (
           <Text style={styles.warn}>
             {contacts.isError
@@ -207,7 +216,7 @@ export function SafetyScreen() {
 
       <SectionCard title={safetyStrings.incidentsTitle}>
         {incidents.isPending ? (
-          <ActivityIndicator color={colors.gold} />
+          <ActivityIndicator color={palette.primary} />
         ) : incidentItems.length === 0 ? (
           <Text style={styles.muted}>
             {incidents.isError
@@ -242,64 +251,65 @@ export function SafetyScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.ink },
-  content: { padding: spacing.xl, gap: spacing.md },
-  note: {
-    backgroundColor: withAlpha(colors.info, 0.12),
-    borderColor: withAlpha(colors.info, 0.4),
-    borderWidth: 1,
-    borderRadius: radius.md,
-    padding: spacing.md,
-  },
-  noteText: {
-    ...typography.caption,
-    color: colors.textOnDark,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  row: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: spacing.sm,
-    backgroundColor: withAlpha(colors.offWhite, 0.06),
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.divider,
-    padding: spacing.md,
-  },
-  rowText: { flex: 1, gap: 2 },
-  rowTitle: {
-    ...typography.subtitle,
-    color: colors.textOnDark,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  rowPhone: {
-    ...typography.caption,
-    color: colors.textOnDarkSecondary,
-    textAlign: "left",
-    writingDirection: "ltr",
-  },
-  removeButton: {
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: withAlpha(colors.danger, 0.6),
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-  },
-  removeLabel: { ...typography.caption, color: colors.danger },
-  warn: {
-    ...typography.caption,
-    color: colors.warning,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  muted: {
-    ...typography.caption,
-    color: colors.textOnDarkSecondary,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-});
+const makeStyles = (palette: Palette) =>
+  StyleSheet.create({
+    root: { flex: 1, backgroundColor: palette.background },
+    content: { padding: spacing.xl, gap: spacing.md },
+    note: {
+      backgroundColor: withAlpha(palette.info, 0.12),
+      borderColor: withAlpha(palette.info, 0.4),
+      borderWidth: 1,
+      borderRadius: radius.md,
+      padding: spacing.md,
+    },
+    noteText: {
+      ...typography.caption,
+      color: palette.textPrimary,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+    row: {
+      flexDirection: "row-reverse",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: spacing.sm,
+      backgroundColor: palette.surfaceSunken,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: palette.border,
+      padding: spacing.md,
+    },
+    rowText: { flex: 1, gap: 2 },
+    rowTitle: {
+      ...typography.subtitle,
+      color: palette.textPrimary,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+    rowPhone: {
+      ...typography.caption,
+      color: palette.textSecondary,
+      textAlign: "left",
+      writingDirection: "ltr",
+    },
+    removeButton: {
+      borderRadius: radius.pill,
+      borderWidth: 1,
+      borderColor: withAlpha(palette.danger, 0.6),
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+    },
+    removeLabel: { ...typography.caption, color: palette.danger },
+    warn: {
+      ...typography.caption,
+      color: palette.warning,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+    muted: {
+      ...typography.caption,
+      color: palette.textSecondary,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+  });

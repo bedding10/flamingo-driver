@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -7,7 +7,15 @@ import {
   Text,
   View,
 } from "react-native";
-import { colors, radius, spacing, touchTarget, typography, withAlpha } from "../theme";
+import {
+  radius,
+  spacing,
+  touchTarget,
+  typography,
+  usePalette,
+  withAlpha,
+  type Palette,
+} from "../theme";
 import { strings } from "../i18n/strings";
 import { p1 } from "../i18n/strings.phase1";
 import { StatusPill, type PillTone } from "./StatusPill";
@@ -45,10 +53,24 @@ export function DocumentRow({
   uploading,
   onPress,
 }: Props) {
+  const palette = usePalette();
+  const styles = useMemo(() => makeStyles(palette), [palette]);
+
   const issued = formatStoredDate(document?.issuedAt);
   const expires = formatStoredDate(document?.expiresAt);
   const remaining = daysUntil(document?.expiresAt);
   const showNote = status === "REJECTED" && !!document?.note;
+
+  const countdownStyle =
+    remaining === null
+      ? null
+      : remaining < 0
+        ? styles.countdownDanger
+        : // 30 days is the same warning window the dashboard uses, so an
+          // operator and a driver never disagree about what "soon" means.
+          remaining <= 30
+          ? styles.countdownWarning
+          : styles.countdownCalm;
 
   return (
     <View>
@@ -62,7 +84,7 @@ export function DocumentRow({
       >
         <View style={styles.thumb}>
           {uploading ? (
-            <ActivityIndicator color={colors.gold} />
+            <ActivityIndicator color={palette.primary} />
           ) : document?.url ? (
             <Image source={{ uri: document.url }} style={styles.image} />
           ) : (
@@ -87,16 +109,18 @@ export function DocumentRow({
         <View style={styles.dates}>
           {issued ? (
             <Text style={styles.dateLine}>
-              {p1.documents.issuedOn}: <Text style={styles.dateValue}>{issued}</Text>
+              {p1.documents.issuedOn}:{" "}
+              <Text style={styles.dateValue}>{issued}</Text>
             </Text>
           ) : null}
           {expires ? (
             <Text style={styles.dateLine}>
-              {p1.documents.expiresOn}: <Text style={styles.dateValue}>{expires}</Text>
+              {p1.documents.expiresOn}:{" "}
+              <Text style={styles.dateValue}>{expires}</Text>
             </Text>
           ) : null}
           {remaining !== null ? (
-            <Text style={[styles.countdown, countdownStyle(remaining)]}>
+            <Text style={[styles.countdown, countdownStyle]}>
               {countdownLabel(remaining)}
             </Text>
           ) : null}
@@ -123,14 +147,6 @@ function countdownLabel(days: number): string {
   return (
     p1.documents.expiresInPrefix + " " + days + " " + p1.documents.daysSuffix
   );
-}
-
-function countdownStyle(days: number) {
-  if (days < 0) return styles.countdownDanger;
-  // 30 days is the same warning window the dashboard uses, so an operator and a
-  // driver never disagree about what "soon" means.
-  if (days <= 30) return styles.countdownWarning;
-  return styles.countdownCalm;
 }
 
 function statusLabel(status: DocumentStatus | null): string {
@@ -163,85 +179,86 @@ function statusTone(status: DocumentStatus | null): PillTone {
   }
 }
 
-const styles = StyleSheet.create({
-  row: {
-    minHeight: touchTarget.critical,
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: spacing.lg,
-    paddingVertical: spacing.md,
-  },
-  pressed: { opacity: 0.75 },
-  thumb: {
-    width: 56,
-    height: 56,
-    borderRadius: radius.sm,
-    backgroundColor: colors.surfaceDarkRaised,
-    borderWidth: 1,
-    borderColor: colors.divider,
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
-  },
-  image: { width: "100%", height: "100%" },
-  thumbPlaceholder: { ...typography.title, color: colors.textOnDarkSecondary },
-  texts: { flex: 1, alignItems: "flex-end" },
-  title: {
-    ...typography.label,
-    color: colors.textOnDark,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  requiredMark: { color: colors.gold },
-  action: {
-    ...typography.caption,
-    color: colors.gold,
-    marginTop: 2,
-    writingDirection: "rtl",
-  },
-  dates: {
-    alignItems: "flex-end",
-    paddingBottom: spacing.sm,
-    gap: 2,
-  },
-  dateLine: {
-    ...typography.caption,
-    color: colors.textOnDarkSecondary,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  dateValue: { color: colors.textOnDark },
-  countdown: { ...typography.caption, writingDirection: "rtl" },
-  countdownCalm: { color: colors.textOnDarkSecondary },
-  countdownWarning: { color: colors.warning },
-  countdownDanger: { color: colors.danger },
-  noteBox: {
-    marginBottom: spacing.md,
-    padding: spacing.md,
-    borderRadius: radius.sm,
-    backgroundColor: withAlpha(colors.danger, 0.12),
-    borderWidth: 1,
-    borderColor: withAlpha(colors.danger, 0.4),
-  },
-  noteTitle: {
-    ...typography.caption,
-    color: colors.danger,
-    fontWeight: "600",
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  noteText: {
-    ...typography.body,
-    color: colors.textOnDark,
-    textAlign: "right",
-    writingDirection: "rtl",
-    marginTop: 2,
-  },
-  expiredHint: {
-    ...typography.caption,
-    color: colors.danger,
-    textAlign: "right",
-    writingDirection: "rtl",
-    marginBottom: spacing.md,
-  },
-});
+const makeStyles = (palette: Palette) =>
+  StyleSheet.create({
+    row: {
+      minHeight: touchTarget.critical,
+      flexDirection: "row-reverse",
+      alignItems: "center",
+      gap: spacing.lg,
+      paddingVertical: spacing.md,
+    },
+    pressed: { opacity: 0.75 },
+    thumb: {
+      width: 56,
+      height: 56,
+      borderRadius: radius.sm,
+      backgroundColor: palette.surfaceSunken,
+      borderWidth: 1,
+      borderColor: palette.border,
+      alignItems: "center",
+      justifyContent: "center",
+      overflow: "hidden",
+    },
+    image: { width: "100%", height: "100%" },
+    thumbPlaceholder: { ...typography.title, color: palette.textSecondary },
+    texts: { flex: 1, alignItems: "flex-end" },
+    title: {
+      ...typography.label,
+      color: palette.textPrimary,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+    requiredMark: { color: palette.primaryText },
+    action: {
+      ...typography.caption,
+      color: palette.primaryText,
+      marginTop: 2,
+      writingDirection: "rtl",
+    },
+    dates: {
+      alignItems: "flex-end",
+      paddingBottom: spacing.sm,
+      gap: 2,
+    },
+    dateLine: {
+      ...typography.caption,
+      color: palette.textSecondary,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+    dateValue: { color: palette.textPrimary },
+    countdown: { ...typography.caption, writingDirection: "rtl" },
+    countdownCalm: { color: palette.textSecondary },
+    countdownWarning: { color: palette.warning },
+    countdownDanger: { color: palette.danger },
+    noteBox: {
+      marginBottom: spacing.md,
+      padding: spacing.md,
+      borderRadius: radius.sm,
+      backgroundColor: withAlpha(palette.danger, 0.12),
+      borderWidth: 1,
+      borderColor: withAlpha(palette.danger, 0.4),
+    },
+    noteTitle: {
+      ...typography.caption,
+      color: palette.danger,
+      fontWeight: "600",
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+    noteText: {
+      ...typography.body,
+      color: palette.textPrimary,
+      textAlign: "right",
+      writingDirection: "rtl",
+      marginTop: 2,
+    },
+    expiredHint: {
+      ...typography.caption,
+      color: palette.danger,
+      textAlign: "right",
+      writingDirection: "rtl",
+      marginBottom: spacing.md,
+    },
+  });

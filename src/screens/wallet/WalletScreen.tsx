@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -17,11 +17,12 @@ import { useEarnings, useWallet, useWithdrawal } from "../../hooks/useWallet";
 import { walletStrings } from "../../i18n/strings.menu";
 import { strings } from "../../i18n/strings";
 import {
-  colors,
   radius,
   spacing,
   typography,
+  usePalette,
   withAlpha,
+  type Palette,
 } from "../../theme";
 
 /** Two decimals at most, no locale formatting: Hermes Intl is not guaranteed. */
@@ -53,9 +54,13 @@ function shortDate(value?: string): string {
  *    says so instead of showing an empty list that looks like a bug.
  * 3. The withdrawable ceiling shown is `balance`, never balance +
  *    lockedBalance: locked credit is exactly the part that cannot be taken out.
+ *
+ * PHASE 7.5 CLOSURE: colours only. No figure, endpoint or rule changed.
  */
 export function WalletScreen() {
   const insets = useSafeAreaInsets();
+  const palette = usePalette();
+  const styles = useMemo(() => makeStyles(palette), [palette]);
   const wallet = useWallet();
   const earnings = useEarnings();
   const withdrawal = useWithdrawal();
@@ -121,14 +126,14 @@ export function WalletScreen() {
         <RefreshControl
           refreshing={refreshing}
           onRefresh={refresh}
-          tintColor={colors.gold}
+          tintColor={palette.primary}
         />
       }
     >
       <View style={styles.balanceCard}>
         <Text style={styles.balanceLabel}>{walletStrings.balanceLabel}</Text>
         {wallet.isLoading ? (
-          <ActivityIndicator color={colors.gold} />
+          <ActivityIndicator color={palette.primary} />
         ) : (
           <Text style={styles.balanceValue}>{money(balance, currency)}</Text>
         )}
@@ -149,20 +154,24 @@ export function WalletScreen() {
       >
         <View style={styles.statsRow}>
           <Stat
+            styles={styles}
             label={walletStrings.today}
             value={totals ? money(totals.today, currency) : "\u2014"}
           />
           <Stat
+            styles={styles}
             label={walletStrings.week}
             value={totals ? money(totals.week, currency) : "\u2014"}
           />
         </View>
         <View style={styles.statsRow}>
           <Stat
+            styles={styles}
             label={walletStrings.all}
             value={totals ? money(totals.all, currency) : "\u2014"}
           />
           <Stat
+            styles={styles}
             label={walletStrings.trips}
             value={totals ? String(totals.trips) : "\u2014"}
           />
@@ -229,7 +238,15 @@ export function WalletScreen() {
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({
+  styles,
+  label,
+  value,
+}: {
+  styles: ReturnType<typeof makeStyles>;
+  label: string;
+  value: string;
+}) {
   return (
     <View style={styles.stat}>
       <Text style={styles.statValue} numberOfLines={1}>
@@ -240,72 +257,77 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.ink },
-  content: { padding: spacing.xl, gap: spacing.md },
-  balanceCard: {
-    backgroundColor: colors.surfaceDark,
-    borderRadius: radius.card,
-    borderWidth: 1,
-    borderColor: withAlpha(colors.gold, 0.35),
-    padding: spacing.lg,
-    gap: spacing.xs,
-  },
-  balanceLabel: {
-    ...typography.caption,
-    color: colors.textOnDarkSecondary,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  balanceValue: { ...typography.display, color: colors.gold, textAlign: "right" },
-  locked: {
-    ...typography.caption,
-    color: colors.warning,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  statsRow: { flexDirection: "row-reverse", gap: spacing.md },
-  stat: {
-    flex: 1,
-    backgroundColor: withAlpha(colors.offWhite, 0.06),
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.divider,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.sm,
-    alignItems: "center",
-  },
-  statValue: { ...typography.numeric, color: colors.gold },
-  statLabel: {
-    ...typography.caption,
-    color: colors.textOnDarkSecondary,
-    marginTop: spacing.xs,
-    writingDirection: "rtl",
-  },
-  entryRow: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: spacing.md,
-  },
-  entryAmount: { ...typography.numeric },
-  creditText: { color: colors.online },
-  debitText: { color: colors.danger },
-  entryMeta: {
-    ...typography.caption,
-    color: colors.textOnDarkSecondary,
-    writingDirection: "rtl",
-  },
-  hint: {
-    ...typography.caption,
-    color: colors.textOnDarkSecondary,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  error: {
-    ...typography.caption,
-    color: colors.danger,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-});
+const makeStyles = (palette: Palette) =>
+  StyleSheet.create({
+    root: { flex: 1, backgroundColor: palette.background },
+    content: { padding: spacing.xl, gap: spacing.md },
+    balanceCard: {
+      backgroundColor: palette.surface,
+      borderRadius: radius.card,
+      borderWidth: 1,
+      borderColor: withAlpha(palette.primary, 0.35),
+      padding: spacing.lg,
+      gap: spacing.xs,
+    },
+    balanceLabel: {
+      ...typography.caption,
+      color: palette.textSecondary,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+    balanceValue: {
+      ...typography.display,
+      color: palette.primaryText,
+      textAlign: "right",
+    },
+    locked: {
+      ...typography.caption,
+      color: palette.warning,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+    statsRow: { flexDirection: "row-reverse", gap: spacing.md },
+    stat: {
+      flex: 1,
+      backgroundColor: palette.surfaceSunken,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: palette.border,
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.sm,
+      alignItems: "center",
+    },
+    statValue: { ...typography.numeric, color: palette.primaryText },
+    statLabel: {
+      ...typography.caption,
+      color: palette.textSecondary,
+      marginTop: spacing.xs,
+      writingDirection: "rtl",
+    },
+    entryRow: {
+      flexDirection: "row-reverse",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: spacing.md,
+    },
+    entryAmount: { ...typography.numeric },
+    creditText: { color: palette.online },
+    debitText: { color: palette.danger },
+    entryMeta: {
+      ...typography.caption,
+      color: palette.textSecondary,
+      writingDirection: "rtl",
+    },
+    hint: {
+      ...typography.caption,
+      color: palette.textSecondary,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+    error: {
+      ...typography.caption,
+      color: palette.danger,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
+  });
