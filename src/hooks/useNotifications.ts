@@ -1,4 +1,5 @@
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
+import { AppState } from "react-native";
 import {
   useMutation,
   useQuery,
@@ -26,6 +27,33 @@ export type NotificationsState = {
 };
 
 /**
+ * PHASE 7 - one refresh rule for the inbox, in one place.
+ *
+ * There is NO socket event for a new notification: RealtimeGateway emits
+ * ride:*, trip:*, driver:moved, fare:* and profile:level, and
+ * NotificationsService never touches the gateway (verified by reading both).
+ * So the badge cannot be push-driven, and inventing an event would mean
+ * changing the backend contract for a counter.
+ *
+ * Instead the same cached query is refreshed on the three moments that matter:
+ * app foreground (below), pull-to-refresh and opening the inbox (the screen
+ * calls refetch). react-query's refetchOnWindowFocus does nothing in React
+ * Native without a focus manager, which is exactly why this AppState listener
+ * exists rather than a config flag.
+ */
+function useForegroundRefresh() {
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        void queryClient.invalidateQueries({ queryKey: NOTIFICATIONS_KEY });
+      }
+    });
+    return () => subscription.remove();
+  }, [queryClient]);
+}
+
+/**
  * The notification inbox.
  *
  * Read state is per-user on the server (UserNotificationState), so it is never
@@ -36,6 +64,7 @@ export type NotificationsState = {
  */
 export function useNotifications(): NotificationsState {
   const queryClient = useQueryClient();
+  useForegroundRefresh();
 
   const query = useQuery({
     queryKey: NOTIFICATIONS_KEY,
@@ -76,4 +105,26 @@ export function useNotifications(): NotificationsState {
     remove: (id: string) => removeOne.mutate(id),
     mutating: readOne.isPending || readAll.isPending || removeOne.isPending,
   };
+}
+
+/**
+ * PHASE 7 - the unread badge.
+ *
+ * It reads the SAME query key as the inbox, so the map and the menu render from
+ * the cache the inbox already filled: no second endpoint, and no extra request
+ * on every menu open (react-query serves the cached page while it is fresh and
+ * deduplicates concurrent observers). The count is derived from the server's
+ * `isRead`, never from a local counter, so it cannot drift from the inbox.
+ */
+export function useUnreadNotificationCount(): number {
+  useForegroundRefresh();
+
+  const query = useQuery({
+    queryKey: NOTIFICATIONS_KEY,
+    queryFn: () => notificationsApi.fetchMyNotifications(1, PAGE_LIMIT),
+    staleTime: 30_000,
+  });
+
+  const items = query.data?.items ?? [];
+  return items.reduce((sum, item) => (item.isRead ? sum : sum + 1), 0);
 }

@@ -9,3 +9,4 @@ export * as geographyApi from "./geography.api";
 export * as notificationsApi from "./notifications.api";
 export * as supportApi from "./support.api";
 export * as emergencyApi from "./emergency.api";
+export * as tripShareApi from "./tripShare.api";
