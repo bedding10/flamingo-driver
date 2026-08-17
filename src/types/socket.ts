@@ -6,8 +6,8 @@ import type { RideOffer, TripStatus } from "./trip";
  * Names are wire values and must not be renamed. The product brief listed
  * `trip_request`, `trip_update`, `driver_status`, `location_update`,
  * `notification` and `wallet_update`; none of those exist on this server. The
- * real names are below, and there is no driver-status or wallet channel at all
- * (wallet and availability are read over HTTP).
+ * real names are below, and there is no wallet channel at all (wallet is read
+ * over HTTP).
  */
 
 /** Events the app sends. */
@@ -16,6 +16,13 @@ export const DRIVER_EMIT = {
   accept: "ride:accept",
   decline: "ride:decline",
   joinTrip: "trip:join",
+  /**
+   * PHASE 1 - presence. Proves the driver is really reachable, which a row in
+   * the database cannot: `availability = ONLINE` survives a killed app forever.
+   * The server refreshes a short-lived presence key on every heartbeat and
+   * forces the driver OFFLINE when it expires.
+   */
+  heartbeat: "driver:heartbeat",
 } as const;
 
 /** Events the app listens to. */
@@ -41,6 +48,12 @@ export const DRIVER_LISTEN = {
   fareOfferAccepted: "fare:offer_accepted",
   fareOfferRejected: "fare:offer_rejected",
   fareOfferExpired: "fare:offer_expired",
+  /**
+   * PHASE 1 - presence. `online: true` acknowledges a heartbeat and carries the
+   * server's own timings; `online: false` means the server already wrote
+   * OFFLINE to the database and the toggle must follow, not argue.
+   */
+  presence: "driver:presence",
 } as const;
 
 export type DriverLocationPayload = {
@@ -132,6 +145,23 @@ export type FareOfferRejectedPayload = {
 /** The 30s cron closed a PENDING bid that outlived its expiresAt. */
 export type FareOfferExpiredPayload = { quoteId: string; offerId: string };
 
+/**
+ * PHASE 1 - presence state as the SERVER sees it.
+ *
+ * `reason` explains a forced OFFLINE: "socket_disconnected" (the link closed
+ * and no other socket of this driver remained) or "heartbeat_lost" (the
+ * presence key expired, i.e. a dead network or a killed app). `ttlSec` and
+ * `heartbeatSec` are informational: the client keeps its own interval and does
+ * not need to be reconfigured remotely.
+ */
+export type DriverPresencePayload = {
+  driverId: string;
+  online: boolean;
+  reason?: "socket_disconnected" | "heartbeat_lost";
+  ttlSec?: number;
+  heartbeatSec?: number;
+};
+
 /** Maps every inbound event name to its payload type. */
 export type DriverInboundEvents = {
   "ride:offer": RideOffer;
@@ -146,6 +176,7 @@ export type DriverInboundEvents = {
   "fare:offer_accepted": FareOfferAcceptedPayload;
   "fare:offer_rejected": FareOfferRejectedPayload;
   "fare:offer_expired": FareOfferExpiredPayload;
+  "driver:presence": DriverPresencePayload;
 };
 
 export type SocketStatus =

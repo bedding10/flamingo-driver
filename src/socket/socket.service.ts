@@ -31,10 +31,23 @@ type Listener<E extends keyof DriverInboundEvents> = (
 
 type StatusListener = (status: SocketStatus) => void;
 
+/**
+ * PHASE 1 - presence heartbeat interval.
+ *
+ * The server keeps a presence key alive for 45s and sweeps expired ones every
+ * few seconds, so 15s leaves room for two lost beats before the driver is
+ * forced OFFLINE. It lives here, in the service that owns the socket, and not
+ * in a screen: a heartbeat driven by a mounted component would stop the moment
+ * the driver navigates, and would keep "beating" while the link is actually
+ * dead - which is exactly the fake presence this phase removes.
+ */
+export const HEARTBEAT_INTERVAL_MS = 15_000;
+
 let socket: Socket | null = null;
 let status: SocketStatus = "idle";
 let detachAppState: (() => void) | null = null;
 let lastAppState: AppStateStatus = AppState.currentState;
+let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 
 const statusListeners = new Set<StatusListener>();
 
@@ -61,6 +74,31 @@ export function onSocketStatus(listener: StatusListener): () => void {
 }
 
 /**
+ * Emits one heartbeat, but only over a live link.
+ *
+ * There is no queue and no retry: a beat that cannot leave the device proves
+ * nothing, and the server is already treating the silence as a lost link.
+ */
+function sendHeartbeat() {
+  if (!socket || !socket.connected) return;
+  socket.emit(DRIVER_EMIT.heartbeat);
+}
+
+function stopHeartbeat() {
+  if (heartbeatTimer) {
+    clearInterval(heartbeatTimer);
+    heartbeatTimer = null;
+  }
+}
+
+/** Beats immediately, then on a fixed interval, until the link drops. */
+function startHeartbeat() {
+  stopHeartbeat();
+  sendHeartbeat();
+  heartbeatTimer = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);
+}
+
+/**
  * Reconnects if the link is down. Safe to call at any time.
  *
  * Does nothing when no session has opened a socket yet: connecting without a
@@ -84,6 +122,10 @@ export function ensureSocketConnection(): void {
  *
  * The socket is deliberately NOT closed when going to the background: the
  * driver must keep receiving offers with the screen off.
+ *
+ * Resuming also beats immediately: JS timers are throttled or frozen in the
+ * background, so the last beat can be much older than the interval suggests and
+ * the server may be seconds away from expiring this driver's presence.
  */
 function handleAppStateChange(next: AppStateStatus) {
   const previous = lastAppState;
@@ -93,6 +135,7 @@ function handleAppStateChange(next: AppStateStatus) {
   // banner); only a real return from background needs a check.
   if (previous === "active") return;
   ensureSocketConnection();
+  sendHeartbeat();
 }
 
 /** Opens the connection. Safe to call repeatedly; only one socket exists. */
@@ -123,10 +166,23 @@ export function connectSocket(): Socket {
     joinedTrips.forEach((tripId) => {
       socket?.emit(DRIVER_EMIT.joinTrip, { tripId });
     });
+    // The gateway also records presence on connect, but beating right away
+    // keeps the key alive through the first interval and re-arms the timer
+    // after every reconnect.
+    startHeartbeat();
   });
 
-  socket.on("disconnect", () => setStatus("disconnected"));
-  socket.on("connect_error", () => setStatus("disconnected"));
+  socket.on("disconnect", () => {
+    // No link, no proof of presence. The server is flipping this driver to
+    // OFFLINE, so a timer that keeps firing here would be exactly the fake
+    // heartbeat this phase forbids.
+    stopHeartbeat();
+    setStatus("disconnected");
+  });
+  socket.on("connect_error", () => {
+    stopHeartbeat();
+    setStatus("disconnected");
+  });
 
   lastAppState = AppState.currentState;
   const subscription = AppState.addEventListener(
@@ -142,6 +198,7 @@ export function connectSocket(): Socket {
 export function disconnectSocket() {
   detachAppState?.();
   detachAppState = null;
+  stopHeartbeat();
   joinedTrips.clear();
   if (socket) {
     socket.removeAllListeners();
@@ -192,6 +249,9 @@ export function declineRide(tripId: string) {
  * Sent only over a live socket: buffering positions while offline would flood
  * the server with stale fixes on reconnect. A dropped fix costs nothing because
  * a fresher one is seconds away.
+ *
+ * The gateway also refreshes presence from this event, so a moving driver is
+ * kept online by the location stream alone.
  */
 export function sendDriverLocation(payload: DriverLocationPayload): boolean {
   if (!socket || !socket.connected) return false;
