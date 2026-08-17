@@ -1,14 +1,30 @@
 /**
  * The design system, in one entry point.
  *
- * PHASE 7.5 restructured this module:
- *  - `colors` is the raw brand scale and the DARK neutral set. New code should
- *    prefer `usePalette()` so it renders correctly in both themes.
- *  - `palettes.ts` holds the two themes; `ThemeProvider` serves them.
- *  - spacing/radius/typography/shadows/motion are theme-independent and are
- *    shared with the passenger app's scale so both apps measure the same.
+ * PHASE 1 (Stitch) restructured the colour layer:
+ *  - `stitch.ts` holds the reference tokens, copied from the Stitch tailwind
+ *    config. It is the source of truth and has no imports.
+ *  - `palettes.ts` maps those tokens onto roles for dark and light.
+ *  - `colors` is the legacy flat bag, now fed by the same tokens, kept for the
+ *    files written before the theme existed. New code uses `usePalette()`.
+ *  - spacing/radius/typography are the Stitch metrics and type scale.
  */
-export { colors, flamingo, withAlpha, type Colors } from "./colors";
+export {
+  colors,
+  flamingo,
+  levelTints,
+  withAlpha,
+  type Colors,
+} from "./colors";
+export {
+  LEVEL_TINTS,
+  STITCH_DARK,
+  STITCH_GLOW,
+  STITCH_LIGHT,
+  STITCH_METRICS,
+  STITCH_RADIUS,
+  type LevelTint,
+} from "./stitch";
 export {
   DARK_PALETTE,
   LIGHT_PALETTE,
@@ -17,8 +33,8 @@ export {
   type ThemeMode,
 } from "./palettes";
 export { ThemeProvider, useTheme, usePalette } from "./ThemeProvider";
-export { spacing, radius, touchTarget, iconSize } from "./spacing";
-export { typography } from "./typography";
+export { spacing, layout, radius, touchTarget, iconSize } from "./spacing";
+export { typography, stitchType } from "./typography";
 
 /**
  * Motion. Short, calm durations: this app is used while driving, so nothing
@@ -34,8 +50,12 @@ export const motion = {
 } as const;
 
 /**
- * Elevation. The same four levels as the passenger app so a card in one app
- * casts the same shadow as a card in the other.
+ * Elevation.
+ *
+ * Stitch expresses depth with `shadow-2xl` on floating elements and a coloured
+ * `shadow-[0_0_24px_rgba(255,77,141,0.5)]` glow on the primary action. The four
+ * levels below are the neutral equivalents; the pink glow is `palette.glow` and
+ * belongs to the primary call to action only.
  */
 export const shadows = {
   soft: {

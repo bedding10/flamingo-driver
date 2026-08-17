@@ -1,35 +1,45 @@
+import { LEVEL_TINTS, STITCH_DARK } from "./stitch";
+
 /**
- * PHASE 7.5 - flaminGO brand colours.
+ * PHASE 1 - the flat colour bag, now fed by the Stitch tokens.
  *
- * The single brand accent is FLAMINGO PINK. Gold is gone from the interface.
+ * `usePalette()` is the correct way for a component to read colour. This module
+ * survives for two reasons only:
+ *  1. a handful of files written before the theme existed still import `colors`
+ *     directly (the navigator header, the approval gate, the boot and legal
+ *     screens). Re-pointing the keys at Stitch values means those files render
+ *     in the reference palette from this commit, before they are individually
+ *     rebuilt - instead of keeping the old charcoal #14161A alive on screen.
+ *  2. `withAlpha` lives here and is used everywhere.
  *
- * Why the four `gold*` keys still exist below: eleven screens built in PHASES
- * 1-7 import `colors.gold` directly. Deleting the keys would break the
- * TypeScript build in files this phase does not touch; leaving them pointing at
- * a gold hex would leave gold on screen. So they are kept as DEPRECATED ALIASES
- * that now resolve to the pink scale - every screen that was gold is pink from
- * this commit on, with zero risk of a broken import, and each converted screen
- * drops the alias as it is rewritten. No gold hex value exists in this file.
+ * Every neutral below is now a Stitch hex. The old brand charcoals (#14161A,
+ * #1D2025, #262A31) and the blue-grey greys are gone from the codebase.
  *
- * `colors` itself is the DARK palette, which is what every unconverted screen
- * still renders. Light mode lives in `palettes.ts` and is read through
- * `useTheme()`.
- *
- * withAlpha() parses #RRGGBB only, so every value here that a component may
- * pass to it is a plain hex - never an rgba() string.
+ * The `gold*` keys remain DEPRECATED PINK ALIASES: 20 call sites still import
+ * `colors.gold`, and the owner's rule is that gold may appear only in the level
+ * system. Pointing the alias at pink keeps gold off those screens with no risk
+ * of a broken import. Real gold lives in `LEVEL_TINTS` and is re-exported below
+ * under a name that says what it is for.
  */
 
-/** The flamingo scale. 500 is the primary brand pink. */
+/**
+ * The flamingo scale.
+ *
+ * 500 is #FF4D8D - the same hex as Stitch `primary-container`, which is why the
+ * brand pink needed no reconciliation. The lighter steps are Stitch's own
+ * primary tones; 400 and 600 are the interpolated steps the app needs for
+ * pressed states, which the dark-only Stitch config does not define.
+ */
 export const flamingo = {
   50: "#FFF2F6",
   100: "#FFE3EC",
-  200: "#FFC4D8",
-  300: "#FF9EBF",
+  200: STITCH_DARK.primaryFixed, // #FFD9E0
+  300: STITCH_DARK.primary, // #FFB1C4
   400: "#FF76A5",
-  500: "#FF4D8D",
+  500: STITCH_DARK.primaryContainer, // #FF4D8D
   600: "#E63C77",
-  700: "#C22860",
-  800: "#8E1B45",
+  700: STITCH_DARK.inversePrimary, // #B90A5A
+  800: STITCH_DARK.onPrimaryFixedVariant, // #8F0043
 } as const;
 
 export const colors = {
@@ -37,51 +47,53 @@ export const colors = {
   primary: flamingo[500],
   primarySoft: flamingo[300],
   primaryDeep: flamingo[700],
-  /** Pink that still reads as text on a white surface. */
   primaryOnLight: flamingo[700],
-  /** Text/icon colour placed on top of a filled pink surface. */
-  onPrimary: "#FFFFFF",
+  /** Text on a filled pink surface. Stitch pairs #FF4D8D with #5B0028. */
+  onPrimary: STITCH_DARK.onPrimaryContainer,
 
-  // ---- DEPRECATED gold aliases (now pink). Do not use in new code. --------
+  // ---- DEPRECATED gold aliases (resolve to pink). Never use in new code. --
   gold: flamingo[500],
   goldSoft: flamingo[300],
   goldDeep: flamingo[700],
   goldOnLight: flamingo[700],
 
-  // ---- neutrals (dark) ---------------------------------------------------
-  ink: "#14161A",
-  surfaceDark: "#1D2025",
-  surfaceDarkRaised: "#262A31",
+  // ---- neutrals, all Stitch ----------------------------------------------
+  ink: STITCH_DARK.background, // #101415
+  surfaceDark: STITCH_DARK.surfaceContainer, // #1D2022
+  surfaceDarkRaised: STITCH_DARK.surfaceContainerHigh, // #272A2C
   white: "#FFFFFF",
-  offWhite: "#F5F6F8",
+  offWhite: "#FBF8F9",
 
   // ---- text --------------------------------------------------------------
-  textPrimary: "#14161A",
-  textSecondary: "#5C6270",
-  textOnDark: "#FFFFFF",
-  textOnDarkSecondary: "#A5ACBA",
+  textPrimary: "#191C1E",
+  textSecondary: "#5B4A4E",
+  textOnDark: STITCH_DARK.onSurface, // #E0E3E5
+  textOnDarkSecondary: STITCH_DARK.onSurfaceVariant, // #E1BEC5
 
   // ---- lines and scrims --------------------------------------------------
-  divider: "rgba(255,255,255,0.10)",
-  dividerOnLight: "rgba(20,22,26,0.10)",
+  divider: STITCH_DARK.outlineVariant,
+  dividerOnLight: "#D8C2C7",
   scrim: "rgba(0,0,0,0.55)",
   pressed: "rgba(255,77,141,0.14)",
-  glow: "rgba(255,77,141,0.30)",
+  glow: "rgba(255,77,141,0.50)",
 
   // ---- semantic ----------------------------------------------------------
-  /** Secondary accent, kept for route/leg contrast against pink. */
-  coral: "#FF6F61",
-  coralDeep: "#D9534A",
-  routeActive: "#3FB6A8",
-  online: "#1DB954",
-  offline: "#6B7078",
-  busy: "#4C8DFF",
-  danger: "#E5484D",
+  /** Second route colour, so the two trip legs are distinguishable. */
+  coral: STITCH_DARK.tertiary,
+  coralDeep: STITCH_DARK.onTertiary,
+  routeActive: STITCH_DARK.tertiary,
+  online: STITCH_DARK.success, // #10B981
+  offline: STITCH_DARK.outline,
+  busy: STITCH_DARK.tertiary,
+  danger: STITCH_DARK.error,
   warning: "#E8A33D",
-  info: "#4C8DFF",
+  info: STITCH_DARK.secondary,
 } as const;
 
 export type Colors = typeof colors;
+
+/** Level tints. The ONLY sanctioned use of gold and bronze. */
+export const levelTints = LEVEL_TINTS;
 
 /**
  * Adds an alpha channel to a #RRGGBB value.
