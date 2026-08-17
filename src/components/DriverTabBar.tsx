@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from "react";
 import { Animated, Pressable, StyleSheet, Text, View } from "react-native";
 import { Icon, type IconName } from "./Icon";
 import {
+  layout,
   radius,
   shadows,
   spacing,
@@ -11,12 +12,18 @@ import {
 } from "../theme";
 
 /**
- * PHASE 7.5 - the floating bottom navigation.
+ * The floating bottom navigation: requests on the right, the map in the middle,
+ * the menu on the left.
  *
- * It was a full-width bar glued to the bottom edge with glyph characters for
- * icons. Now it is a floating rounded container inset from all three edges,
- * with real stroke icons, labels that are actually readable, and a pink pill
- * behind the active item.
+ * PHASE 1 (Stitch) restyled it onto the reference tokens. Stitch draws its
+ * navigation on `surface-container-high` and marks the selected item with a
+ * `bg-primary-container text-on-primary-container` pill - a solid pink pill, not
+ * the faint wash this bar used before, which is why the previous version read as
+ * an ordinary grey strip.
+ *
+ * It stays FLOATING and inset from all three edges rather than glued to the
+ * bottom edge like the reference HTML, which is a deliberate, previously agreed
+ * deviation: the owner rejected the attached bar on the real device.
  *
  * Why it is still a plain component instead of a React Navigation tab
  * navigator: the map screen owns the GPS subscription, the socket listeners and
@@ -30,8 +37,8 @@ import {
 
 /** Visual height of the floating pill (without the safe-area inset). */
 export const TAB_BAR_HEIGHT = 66;
-/** Gap between the pill and the screen edges. */
-export const TAB_BAR_MARGIN = 14;
+/** Gap between the pill and the screen edges - the Stitch sheet margin. */
+export const TAB_BAR_MARGIN = layout.sheetMargin;
 
 /**
  * Space a floating card must leave free at the bottom so it never sits under
@@ -60,10 +67,7 @@ export function DriverTabBar({
 
   return (
     <View
-      style={[
-        styles.wrap,
-        { bottom: bottomInset + TAB_BAR_MARGIN },
-      ]}
+      style={[styles.wrap, { bottom: bottomInset + TAB_BAR_MARGIN }]}
       pointerEvents="box-none"
     >
       <View
@@ -71,7 +75,7 @@ export function DriverTabBar({
           styles.bar,
           {
             height: TAB_BAR_HEIGHT,
-            backgroundColor: palette.surface,
+            backgroundColor: palette.surfaceRaised,
             borderColor: palette.border,
           },
         ]}
@@ -133,7 +137,10 @@ function Item({
   }, [active, lift]);
 
   const scale = lift.interpolate({ inputRange: [0, 1], outputRange: [1, 1.06] });
-  const tint = active ? palette.primaryText : palette.textSecondary;
+  // Stitch: the selected item is a solid primary-container pill with
+  // on-primary-container content. Everything else is on-surface-variant.
+  const tint = active ? palette.onPrimary : palette.textSecondary;
+  const labelTint = active ? palette.primaryText : palette.textSecondary;
 
   return (
     <Pressable
@@ -147,9 +154,7 @@ function Item({
         <View
           style={[
             styles.iconWrap,
-            active
-              ? { backgroundColor: palette.primaryWash }
-              : null,
+            active ? { backgroundColor: palette.primary } : null,
           ]}
         >
           <Icon name={icon} size={22} color={tint} />
@@ -159,7 +164,7 @@ function Item({
                 styles.badge,
                 {
                   backgroundColor: palette.primary,
-                  borderColor: palette.surface,
+                  borderColor: palette.surfaceRaised,
                 },
               ]}
             >
@@ -169,7 +174,7 @@ function Item({
             </View>
           ) : null}
         </View>
-        <Text style={[styles.label, { color: tint }]} numberOfLines={1}>
+        <Text style={[styles.label, { color: labelTint }]} numberOfLines={1}>
           {label}
         </Text>
       </Animated.View>
@@ -186,7 +191,7 @@ const styles = StyleSheet.create({
   bar: {
     flexDirection: "row-reverse",
     alignItems: "center",
-    borderRadius: 26,
+    borderRadius: radius.sheet,
     borderWidth: 1,
     paddingHorizontal: spacing.xs,
     ...shadows.floating,
@@ -194,8 +199,8 @@ const styles = StyleSheet.create({
   item: { flex: 1, alignItems: "center", justifyContent: "center" },
   itemInner: { alignItems: "center", gap: 2 },
   iconWrap: {
-    width: 46,
-    height: 30,
+    width: 48,
+    height: 32,
     borderRadius: radius.pill,
     alignItems: "center",
     justifyContent: "center",

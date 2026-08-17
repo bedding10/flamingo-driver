@@ -12,13 +12,13 @@ import type { DriverAvailability } from "../types/driver";
 /**
  * The single most important control in the app: go online, go offline.
  *
- * PHASE 7.5 changed two things and nothing else about its behaviour:
- *  - it is theme-aware, and the "go online" state is FLAMINGO PINK, because
- *    going online is the primary action of the whole product;
- *  - it has a `compact` size, used by the floating home status card. The full
- *    size is `touchTarget.critical` tall for one-handed use; compact is still 44
- *    tall, which is above the platform minimum, and it exists so the status card
- *    stops eating a third of the map.
+ * PHASE 1 (Stitch) restyled it and changed no behaviour:
+ *  - OFFLINE is the pink call to action, carrying the Stitch glow
+ *    (`shadow-[0_0_24px_rgba(255,77,141,0.5)]`), because going online is the
+ *    primary action of the whole product;
+ *  - ONLINE is the quiet outline with the Stitch presence dot - `#10B981` with
+ *    its own 8px glow, which is exactly how the reference draws "online".
+ *    Stopping work should never be the loudest thing on the screen.
  *
  * ON_TRIP stays a third, visibly locked state: the server refuses to change
  * availability during a trip, and a control that looks tappable but always
@@ -54,10 +54,10 @@ export function OnlineToggle({
       ? labels.goOffline
       : labels.goOnline;
 
-  // Offline -> the pink call to action. Online -> a quiet outline, because
-  // stopping work should never be the loudest thing on the screen.
   const filled = !online && !onTrip;
-  const outlineTint = onTrip ? palette.busy : palette.textSecondary;
+  // The dot carries presence: Stitch green while online, tertiary on a trip.
+  const dotColor = onTrip ? palette.busy : palette.online;
+  const outlineTint = onTrip ? palette.busy : palette.textPrimary;
 
   return (
     <Pressable
@@ -69,7 +69,16 @@ export function OnlineToggle({
         styles.base,
         compact ? styles.compact : styles.full,
         filled
-          ? { backgroundColor: palette.primary, borderColor: palette.primary }
+          ? {
+              backgroundColor: palette.primary,
+              borderColor: palette.primary,
+              // The Stitch pink glow, on the primary action only.
+              shadowColor: palette.primary,
+              shadowOpacity: 0.5,
+              shadowRadius: 16,
+              shadowOffset: { width: 0, height: 0 },
+              elevation: 8,
+            }
           : {
               backgroundColor: "transparent",
               borderColor: palette.borderStrong,
@@ -85,7 +94,16 @@ export function OnlineToggle({
       ) : (
         <View style={styles.content}>
           {!filled ? (
-            <View style={[styles.dot, { backgroundColor: outlineTint }]} />
+            <View
+              style={[
+                styles.dot,
+                {
+                  backgroundColor: dotColor,
+                  // Stitch: `shadow-[0_0_8px_#10B981]` under the presence dot.
+                  shadowColor: dotColor,
+                },
+              ]}
+            />
           ) : null}
           <Text
             style={[
@@ -124,7 +142,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.sm,
   },
-  dot: { width: 8, height: 8, borderRadius: 4 },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    shadowOpacity: 0.9,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 4,
+  },
   label: { ...typography.subtitle, writingDirection: "rtl" },
   labelCompact: {
     ...typography.label,

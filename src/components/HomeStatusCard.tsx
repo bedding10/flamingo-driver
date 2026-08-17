@@ -2,6 +2,7 @@ import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { OnlineToggle } from "./OnlineToggle";
 import {
+  layout,
   radius,
   shadows,
   spacing,
@@ -11,19 +12,20 @@ import {
 import type { DriverAvailability } from "../types/driver";
 
 /**
- * PHASE 7.5 - the compact home status card.
+ * The compact home status card.
  *
- * What it replaces: a full-width bottom sheet that stacked the status line, the
- * vehicle line, a hint paragraph and a 72pt-tall button, and swallowed roughly a
- * third of the map on a small phone. On a map-first screen that is the wrong
- * trade: the driver needs to see where they are, not read a paragraph.
- *
- * Now it is one floating rounded card, inset from the edges like the navigation,
+ * It is one floating rounded card, inset from the edges like the navigation,
  * with a single row: state on the right, action on the left. The vehicle line is
  * secondary and truncated, the hint is one line and only shown when it actually
  * adds something (offline, or on a trip), and warnings (permissions, approval,
  * errors) are still surfaced - a redesign must never hide the reason the driver
  * is not receiving requests.
+ *
+ * PHASE 1 (Stitch): it now uses the reference's floating-chrome recipe -
+ * `bg-surface-container/85` with a `surface-variant` border and the 12px
+ * bottom-sheet margin from the config. React Native has no backdrop blur on
+ * Android, so `palette.overlay` is the same surface at a higher alpha rather
+ * than a fake blur.
  */
 export function HomeStatusCard({
   availability,
@@ -63,15 +65,20 @@ export function HomeStatusCard({
         styles.card,
         {
           bottom,
-          backgroundColor: palette.surface,
-          borderColor: palette.border,
+          backgroundColor: palette.overlay,
+          borderColor: palette.surfaceVariant,
         },
       ]}
     >
       <View style={styles.row}>
         <View style={styles.textCol}>
           <View style={styles.statusRow}>
-            <View style={[styles.dot, { backgroundColor: statusColor }]} />
+            <View
+              style={[
+                styles.dot,
+                { backgroundColor: statusColor, shadowColor: statusColor },
+              ]}
+            />
             <Text
               style={[styles.status, { color: palette.textPrimary }]}
               numberOfLines={1}
@@ -142,8 +149,8 @@ export function HomeStatusCard({
 const styles = StyleSheet.create({
   card: {
     position: "absolute",
-    left: 14,
-    right: 14,
+    left: layout.sheetMargin,
+    right: layout.sheetMargin,
     borderRadius: radius.sheet,
     borderWidth: 1,
     paddingHorizontal: spacing.lg,
@@ -163,7 +170,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.sm,
   },
-  dot: { width: 10, height: 10, borderRadius: 5 },
+  // The Stitch presence dot: 8px with its own glow.
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    shadowOpacity: 0.9,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 4,
+  },
   status: {
     ...typography.subtitle,
     textAlign: "right",

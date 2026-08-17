@@ -1,8 +1,8 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { strings } from "../i18n/strings";
-import { colors, spacing, typography } from "../theme";
+import { spacing, typography, usePalette, type Palette } from "../theme";
 import { BootScreen } from "../screens/BootScreen";
 import { OnboardingNavigator } from "./OnboardingNavigator";
 import { useDriverProfile } from "../hooks/useDriverProfile";
@@ -11,16 +11,22 @@ import { useDriverStore } from "../stores/driver.store";
 /**
  * Stands between a valid session and the working app.
  *
- * A signed-in driver is not necessarily an active driver: POST /auth/firebase
- * creates the driver record on first login, so the very first session always
- * lands on PENDING. Everything behind this gate assumes APPROVED.
+ * A signed-in driver is not necessarily an active driver: the driver record is
+ * created on first login, so the very first session always lands on PENDING.
+ * Everything behind this gate assumes APPROVED.
  *
  * A load failure falls back to the cached profile when there is one, because a
  * driver already approved yesterday should not be locked out by a dropped
  * request.
+ *
+ * PHASE 1 (Stitch): this file was one of two still painting `colors.ink`
+ * directly, so its failure state stayed dark in light mode. It now reads the
+ * palette like every other screen.
  */
 export function ApprovalGate({ children }: { children: React.ReactNode }) {
   const query = useDriverProfile();
+  const palette = usePalette();
+  const styles = useMemo(() => makeStyles(palette), [palette]);
   const cachedProfile = useDriverStore((state) => state.profile);
   const profile = query.data ?? cachedProfile;
 
@@ -48,19 +54,20 @@ export function ApprovalGate({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: colors.ink,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: spacing.xl,
-  },
-  message: {
-    ...typography.body,
-    color: colors.textOnDarkSecondary,
-    textAlign: "center",
-    writingDirection: "rtl",
-  },
-  action: { marginTop: spacing.xl, alignSelf: "stretch" },
-});
+const makeStyles = (palette: Palette) =>
+  StyleSheet.create({
+    root: {
+      flex: 1,
+      backgroundColor: palette.background,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: spacing.xl,
+    },
+    message: {
+      ...typography.body,
+      color: palette.textSecondary,
+      textAlign: "center",
+      writingDirection: "rtl",
+    },
+    action: { marginTop: spacing.xl, alignSelf: "stretch" },
+  });

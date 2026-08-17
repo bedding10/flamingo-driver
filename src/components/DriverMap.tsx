@@ -1,7 +1,8 @@
 import React, { useEffect, useRef } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from "react-native-maps";
-import { colors } from "../theme";
+import { STITCH_DARK, STITCH_LIGHT, usePalette } from "../theme";
+import { Icon } from "./Icon";
 import { VehicleMarker } from "./VehicleMarker";
 import type { DriverFix } from "../stores/location.store";
 import type { ActiveRoute } from "../hooks/useTripRoute";
@@ -19,9 +20,12 @@ import type { ActiveRoute } from "../hooks/useTripRoute";
  * panning: every incoming fix would yank the view back mid-gesture. Here the
  * map stays uncontrolled and only follows while `follow` is true.
  *
- * PHASE 2: the driver's own position is drawn by VehicleMarker, which owns the
- * remote-image loading rules. This file deliberately keeps no marker artwork
- * logic so the expensive map component is not re-rendered by image state.
+ * PHASE 1 (Stitch): the map styling is no longer a hand-written set of charcoal
+ * hexes. Both styles below are built from the Stitch surface tokens, and the map
+ * follows the theme - the previous version rendered a night map even in light
+ * mode, which was the single most visible place light mode was not finished.
+ * Reading the palette here is cheap: the palette object only changes when the
+ * driver switches theme, so the memoised map is not re-rendered by a GPS fix.
  */
 
 type Props = {
@@ -48,6 +52,16 @@ const FALLBACK_REGION = {
   longitudeDelta: 0.05,
 };
 
+/**
+ * Leg colours.
+ *
+ * Pink is "go and fetch them", Stitch's success green is "they are on board".
+ * Both are reference tokens, and the two are far enough apart in hue that the
+ * switch at Start Trip is obvious at a glance on a moving map.
+ */
+const LEG_TO_PICKUP = STITCH_DARK.primaryContainer;
+const LEG_IN_PROGRESS = STITCH_DARK.success;
+
 function DriverMapComponent({
   fix,
   follow,
@@ -55,6 +69,7 @@ function DriverMapComponent({
   route,
   rideClass,
 }: Props) {
+  const palette = usePalette();
   const mapRef = useRef<MapView | null>(null);
   const fittedLegRef = useRef<string | null>(null);
 
@@ -92,15 +107,16 @@ function DriverMapComponent({
   }, [route]);
 
   const toPickup = route?.leg === "to_pickup";
+  const legColor = toPickup ? LEG_TO_PICKUP : LEG_IN_PROGRESS;
 
   return (
     <MapView
       ref={mapRef}
       style={StyleSheet.absoluteFill}
-      // Google on both platforms so the night styling below applies to iOS too;
+      // Google on both platforms so the styling below applies to iOS too;
       // Apple Maps ignores customMapStyle.
       provider={PROVIDER_GOOGLE}
-      customMapStyle={NIGHT_MAP_STYLE}
+      customMapStyle={palette.mode === "light" ? DAY_MAP_STYLE : NIGHT_MAP_STYLE}
       initialRegion={FALLBACK_REGION}
       // The blue OS dot is off: the driver's own vehicle marker is drawn below
       // and two dots for one car is confusing at a glance.
@@ -116,13 +132,11 @@ function DriverMapComponent({
       // programmatic recenter.
       onPanDrag={onPanByUser}
     >
-      {/* The route line. Gold to the passenger, teal once carrying them, so
-          the driver can tell the two legs apart without reading anything. */}
       {route && route.coords.length > 1 ? (
         <Polyline
           coordinates={route.coords}
           strokeWidth={5}
-          strokeColor={toPickup ? colors.gold : ROUTE_ACTIVE_COLOR}
+          strokeColor={legColor}
           lineCap="round"
           lineJoin="round"
         />
@@ -140,11 +154,12 @@ function DriverMapComponent({
             style={[
               styles.target,
               {
-                borderColor: toPickup ? colors.gold : ROUTE_ACTIVE_COLOR,
+                backgroundColor: palette.background,
+                borderColor: legColor,
               },
             ]}
           >
-            <Text style={styles.targetGlyph}>{toPickup ? "●" : "■"}</Text>
+            <Icon name={toPickup ? "place" : "flag"} size={14} color={legColor} />
           </View>
         </Marker>
       ) : null}
@@ -158,43 +173,39 @@ export const DriverMap = React.memo(DriverMapComponent);
 
 const styles = StyleSheet.create({
   target: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    borderWidth: 3,
-    backgroundColor: colors.ink,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 2,
     alignItems: "center",
     justifyContent: "center",
   },
-  targetGlyph: {
-    color: colors.gold,
-    fontSize: 10,
-    lineHeight: 12,
-  },
 });
 
-/** Teal for the in-progress leg: clearly not the gold "go fetch" colour. */
-const ROUTE_ACTIVE_COLOR = colors.routeActive;
-
 /**
- * Night styling matched to the app's charcoal surfaces.
+ * Dark map, built from the Stitch surfaces so the map reads as part of the same
+ * surface stack as the cards floating on it: the canvas is `background`, roads
+ * step up through `surface-container-high` / `-highest` / `surface-bright`, and
+ * labels use `on-surface-variant` over an `on-surface` inverse stroke.
  *
- * Road shields and business POIs are hidden: they add clutter that a driver
- * never uses while the only thing that matters is the road geometry.
+ * Road shields and business POIs stay hidden: they are clutter a driver never
+ * uses while the only thing that matters is the road geometry.
  */
 const NIGHT_MAP_STYLE = [
-  { elementType: "geometry", stylers: [{ color: "#1B1B1D" }] },
-  { elementType: "labels.text.fill", stylers: [{ color: "#A8ADB6" }] },
-  { elementType: "labels.text.stroke", stylers: [{ color: "#111111" }] },
+  { elementType: "geometry", stylers: [{ color: STITCH_DARK.background }] },
   {
-    featureType: "poi",
-    elementType: "labels",
-    stylers: [{ visibility: "off" }],
+    elementType: "labels.text.fill",
+    stylers: [{ color: STITCH_DARK.onSurfaceVariant }],
   },
+  {
+    elementType: "labels.text.stroke",
+    stylers: [{ color: STITCH_DARK.surfaceContainerLowest }],
+  },
+  { featureType: "poi", elementType: "labels", stylers: [{ visibility: "off" }] },
   {
     featureType: "road",
     elementType: "geometry",
-    stylers: [{ color: "#26262A" }],
+    stylers: [{ color: STITCH_DARK.surfaceContainerHigh }],
   },
   {
     featureType: "road",
@@ -204,12 +215,12 @@ const NIGHT_MAP_STYLE = [
   {
     featureType: "road.arterial",
     elementType: "geometry",
-    stylers: [{ color: "#2E2E33" }],
+    stylers: [{ color: STITCH_DARK.surfaceContainerHighest }],
   },
   {
     featureType: "road.highway",
     elementType: "geometry",
-    stylers: [{ color: "#3A3A40" }],
+    stylers: [{ color: STITCH_DARK.surfaceBright }],
   },
   {
     featureType: "transit",
@@ -219,6 +230,50 @@ const NIGHT_MAP_STYLE = [
   {
     featureType: "water",
     elementType: "geometry",
-    stylers: [{ color: "#0E1013" }],
+    stylers: [{ color: STITCH_DARK.surfaceContainerLowest }],
+  },
+];
+
+/** The same construction against the light scheme. */
+const DAY_MAP_STYLE = [
+  { elementType: "geometry", stylers: [{ color: STITCH_LIGHT.surfaceDim }] },
+  {
+    elementType: "labels.text.fill",
+    stylers: [{ color: STITCH_LIGHT.onSurfaceVariant }],
+  },
+  {
+    elementType: "labels.text.stroke",
+    stylers: [{ color: STITCH_LIGHT.surfaceContainerLowest }],
+  },
+  { featureType: "poi", elementType: "labels", stylers: [{ visibility: "off" }] },
+  {
+    featureType: "road",
+    elementType: "geometry",
+    stylers: [{ color: STITCH_LIGHT.surfaceContainerLowest }],
+  },
+  {
+    featureType: "road",
+    elementType: "labels.icon",
+    stylers: [{ visibility: "off" }],
+  },
+  {
+    featureType: "road.arterial",
+    elementType: "geometry",
+    stylers: [{ color: STITCH_LIGHT.surfaceContainerLowest }],
+  },
+  {
+    featureType: "road.highway",
+    elementType: "geometry",
+    stylers: [{ color: STITCH_LIGHT.surfaceVariant }],
+  },
+  {
+    featureType: "transit",
+    elementType: "labels",
+    stylers: [{ visibility: "off" }],
+  },
+  {
+    featureType: "water",
+    elementType: "geometry",
+    stylers: [{ color: STITCH_LIGHT.tertiaryContainer }],
   },
 ];

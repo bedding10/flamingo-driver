@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { StyleSheet, View } from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { DriverHomeScreen } from "../screens/home/DriverHomeScreen";
@@ -24,7 +24,7 @@ import {
   supportStrings,
 } from "../i18n/strings.support";
 import { legalStrings } from "../i18n/strings.phase7";
-import { colors, typography } from "../theme";
+import { typography, usePalette } from "../theme";
 import type { DriverStackParamList } from "./types";
 
 const Stack = createNativeStackNavigator<DriverStackParamList>();
@@ -36,37 +36,52 @@ const Stack = createNativeStackNavigator<DriverStackParamList>();
  * signed-in route can be reached by a driver who is not APPROVED - including
  * routes added in later phases.
  *
- * Profile and Documents are reachable here too: an approved driver still needs to
- * replace an expiring insurance paper or fix a plate, and the same two screens
- * serve both cases instead of being duplicated.
+ * Profile and Documents are reachable here too: an approved driver still needs
+ * to replace an expiring insurance paper or fix a plate, and the same two
+ * screens serve both cases instead of being duplicated.
  *
- * PHASE 7: one header style for every pushed screen (ink background, gold back
- * arrow, white centred-weight title), and the toast host is mounted ONCE here,
- * above the navigator, so a toast survives a navigation and never belongs to a
- * single screen.
+ * The toast host is mounted ONCE here, above the navigator, so a toast survives
+ * a navigation and never belongs to a single screen.
+ *
+ * PHASE 1 (Stitch): the header was hardcoded to the old charcoal with a gold
+ * tint, which meant every pushed screen kept a dark header in light mode and
+ * kept a banned gold accent. Header, tint and content background now come from
+ * the palette, and the tint is the brand pink.
  */
 export function DriverNavigator() {
+  const palette = usePalette();
+  const styles = useMemo(
+    () =>
+      StyleSheet.create({
+        root: { flex: 1, backgroundColor: palette.background },
+      }),
+    [palette],
+  );
+
+  const screenOptions = useMemo(
+    () => ({
+      headerShown: false,
+      headerStyle: { backgroundColor: palette.background },
+      headerTintColor: palette.primaryText,
+      headerTitleStyle: {
+        color: palette.textPrimary,
+        fontSize: typography.title.fontSize,
+        fontWeight: typography.title.fontWeight,
+      },
+      headerShadowVisible: false,
+      contentStyle: { backgroundColor: palette.background },
+    }),
+    [palette],
+  );
+
   return (
     <ApprovalGate>
       <View style={styles.root}>
-        <Stack.Navigator
-          screenOptions={{
-            headerShown: false,
-            headerStyle: { backgroundColor: colors.ink },
-            headerTintColor: colors.gold,
-            headerTitleStyle: {
-              color: colors.textOnDark,
-              fontSize: typography.title.fontSize,
-              fontWeight: typography.title.fontWeight,
-            },
-            headerShadowVisible: false,
-            contentStyle: { backgroundColor: colors.ink },
-          }}
-        >
+        <Stack.Navigator screenOptions={screenOptions}>
           <Stack.Screen name="Home" component={DriverHomeScreen} />
           {/*
-            PHASE 5: the menu and the wallet. Both are pushed screens for the same
-            reason as Requests - the map stays the driver's default view.
+            The menu and the wallet are pushed screens for the same reason as
+            Requests - the map stays the driver's default view.
           */}
           <Stack.Screen
             name="Menu"
@@ -78,10 +93,6 @@ export function DriverNavigator() {
             component={WalletScreen}
             options={{ headerShown: true, title: walletStrings.title }}
           />
-          {/*
-            PHASE 6: notifications, support and safety. All three read server
-            state that existed long before any screen could show it.
-          */}
           <Stack.Screen
             name="Notifications"
             component={NotificationsScreen}
@@ -102,7 +113,6 @@ export function DriverNavigator() {
             component={SafetyScreen}
             options={{ headerShown: true, title: safetyStrings.title }}
           />
-          {/* PHASE 7: terms, privacy and build identity. */}
           <Stack.Screen
             name="Legal"
             component={LegalScreen}
@@ -119,8 +129,8 @@ export function DriverNavigator() {
             options={{ headerShown: true, title: strings.documents.title }}
           />
           {/*
-            PHASE 3: the bidding requests list. It is a pushed screen rather than a
-            tab because the driver's default view must stay the map: a driver who
+            The bidding requests list is a pushed screen rather than a tab
+            because the driver's default view must stay the map: a driver who
             loses sight of the map loses the road.
           */}
           <Stack.Screen
@@ -129,8 +139,8 @@ export function DriverNavigator() {
             options={{ headerShown: true, title: requestStrings.title }}
           />
           {/*
-            Trip chat. It sits behind the same approval gate as everything else:
-            a driver who is not APPROVED has no trip, so has nobody to message.
+            Trip chat sits behind the same approval gate as everything else: a
+            driver who is not APPROVED has no trip, so has nobody to message.
           */}
           <Stack.Screen
             name="TripChat"
@@ -144,7 +154,3 @@ export function DriverNavigator() {
     </ApprovalGate>
   );
 }
-
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.ink },
-});
