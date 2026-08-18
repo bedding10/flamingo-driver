@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { FlatList, RefreshControl, StyleSheet, View } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { ConfirmAcceptSheet } from "../../components/ConfirmAcceptSheet";
 import { FareOpportunityCard } from "../../components/FareOpportunityCard";
 import {
   ReportRequestSheet,
@@ -17,11 +18,6 @@ import { spacing, usePalette, type Palette } from "../../theme";
 
 /**
  * The requests page: open FareQuotes the driver may bid on.
- *
- * This does NOT replace the push offer card on Home. A `ride:offer` is an
- * assignment that must be answered within seconds and therefore stays a
- * full-width sheet over the map; a bidding request has a longer window and
- * belongs in a list the driver can read at a red light.
  */
 export function RequestsScreen() {
   const palette = usePalette();
@@ -49,16 +45,55 @@ export function RequestsScreen() {
 
   const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
 
-  // A won bid means there is a running trip; the trip lives on Home, so staying
-  // on a list of requests the driver can no longer take would be a trap.
+  /**
+   * Direct accept is the one action here that cannot be undone, so the card's
+   * tap only records an intent; nothing is sent until the sheet is dragged.
+   */
+  const [pendingAccept, setPendingAccept] = useState<{
+    quoteId: string;
+    amount?: number;
+  } | null>(null);
+  const [vanished, setVanished] = useState(false);
+
+  // Read the live row out of the polled list rather than snapshotting it, so the
+  // sheet shows the current fare and countdown instead of a 15-second-old copy.
+  const confirmItem = useMemo(
+    () =>
+      pendingAccept
+        ? (items.find((row) => row.id === pendingAccept.quoteId) ?? null)
+        : null,
+    [items, pendingAccept],
+  );
+
+  // If the request is claimed by someone else or expires while the driver is
+  // still reading the sheet, close it and say why: a sheet that disappears on
+  // its own reads as a bug, and silence here would look like a lost trip.
+  useEffect(() => {
+    if (pendingAccept && !confirmItem) {
+      setPendingAccept(null);
+      setVanished(true);
+    }
+  }, [confirmItem, pendingAccept]);
+
   useEffect(() => {
     if (acceptedTripId) navigation.navigate("Home");
   }, [acceptedTripId, navigation]);
 
+  const askDirectAccept = useCallback((quoteId: string, amount?: number) => {
+    setVanished(false);
+    setPendingAccept({ quoteId, amount });
+  }, []);
+
+  const confirmDirectAccept = useCallback(
+    (quoteId: string, amount?: number) => {
+      setPendingAccept(null);
+      directAccept(quoteId, amount);
+    },
+    [directAccept],
+  );
+
   const openReport = useCallback((item: FareOpportunity) => {
     const againstUserId = item.passenger?.id;
-    // Second guard: the card already hides the action when the quote carries no
-    // passenger id, because the complaint endpoint cannot attribute it.
     if (!againstUserId) return;
     setReportTarget({
       fareQuoteId: item.id,
@@ -108,6 +143,15 @@ export function RequestsScreen() {
               />
             ) : null}
 
+            {vanished ? (
+              <AlertBanner
+                tone="warning"
+                message={requestStrings.confirmGone}
+                actionLabel={requestStrings.dismiss}
+                onAction={() => setVanished(false)}
+              />
+            ) : null}
+
             {error ? <AlertBanner tone="danger" message={error} /> : null}
 
             {blocked ? (
@@ -139,11 +183,19 @@ export function RequestsScreen() {
             busy={busyId === item.id || busyId === item.myOffer?.id}
             onBid={bid}
             onWithdraw={withdraw}
-            onDirectAccept={directAccept}
+            onDirectAccept={askDirectAccept}
             onHide={hide}
             onReport={openReport}
           />
         )}
+      />
+
+      <ConfirmAcceptSheet
+        item={confirmItem}
+        amount={pendingAccept?.amount}
+        busy={busyId === confirmItem?.id}
+        onClose={() => setPendingAccept(null)}
+        onConfirm={confirmDirectAccept}
       />
 
       <ReportRequestSheet
