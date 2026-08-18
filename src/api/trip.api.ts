@@ -75,35 +75,24 @@ export {
 } from "./trip-communication.api";
 
 // --------------------------------------------------------------------------
-// Fare bargaining (server feature, Phase 9). The driver proposes a fare on an
-// open opportunity instead of waiting to be matched.
+// Fare bargaining lives in ./fareOffers.api.ts - NOT here.
+//
+// This file used to carry a SECOND client for the same endpoints
+// (createFareOffer / fetchFareOffers / fetchFareOpportunities /
+// withdrawFareOffer, every one of them returning `unknown`). It was removed
+// rather than kept as a harmless duplicate, because it contradicted the
+// contract instead of merely repeating it:
+//
+//   - it POSTed { tripId, amount } to /driver/fare-offers, while a bid is keyed
+//     by the FARE QUOTE: submitFareOffer sends { fareQuoteId, amount, note?,
+//     etaMinutes? }. A bid carrying a trip id cannot be matched to a quote;
+//   - it exported a second `withdrawFareOffer`, so two functions with one name
+//     and different behaviour were reachable through `tripApi` and
+//     `fareOffersApi`;
+//   - `unknown` results meant the compiler could not warn a caller who picked
+//     the wrong one.
+//
+// Nothing imported it: checked across src/api, src/hooks, src/components,
+// src/screens/home and src/screens/requests. Use ./fareOffers.api.ts, which is
+// typed against src/types/fareOffer.ts and is what useFareOpportunities calls.
 // --------------------------------------------------------------------------
-
-/** POST /driver/fare-offers */
-export async function createFareOffer(input: {
-  tripId: string;
-  amount: number;
-}) {
-  const { data } = await api.post("/driver/fare-offers", input);
-  return data as unknown;
-}
-
-/** GET /driver/fare-offers */
-export async function fetchFareOffers() {
-  const { data } = await api.get("/driver/fare-offers");
-  return data as unknown;
-}
-
-/** GET /driver/fare-offers/opportunities */
-export async function fetchFareOpportunities() {
-  const { data } = await api.get("/driver/fare-offers/opportunities");
-  return data as unknown;
-}
-
-/** POST /driver/fare-offers/:id/withdraw */
-export async function withdrawFareOffer(offerId: string) {
-  const { data } = await api.post(
-    "/driver/fare-offers/" + offerId + "/withdraw",
-  );
-  return data as unknown;
-}
