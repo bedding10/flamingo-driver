@@ -8,13 +8,14 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "lint": "eslint . --ext .js,.ts,.tsx --max-warnings=0",
+    "design:check": "node scripts/check-design-system.mjs",
     "typecheck": "tsc --noEmit",
     "doctor": "expo-doctor",
     "expo:check": "expo install --check",
     "prebuild:ci": "expo prebuild --clean --no-install",
     "bundle:check": "expo export --platform android --output-dir .bundle-check",
     "config:validate": "expo config --type public",
-    "ci:validate": "npm run typecheck && npm run lint && npm run config:validate && npm run expo:check && npm run doctor"
+    "ci:validate": "npm run typecheck && npm run lint && npm run design:check && npm run config:validate && npm run expo:check && npm run doctor"
   },
   "dependencies": {
     "@react-native-firebase/app": "21.12.3",
