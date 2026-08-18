@@ -1,5 +1,5 @@
 /**
- * PHASE 3 copy - the requests (negotiation) page.
+ * Requests (negotiation) copy.
  *
  * Kept in its own module on purpose: src/i18n/strings.ts must not be rewritten
  * (it holds a byte-damaged string that a full re-emit would silently "fix" into
@@ -48,6 +48,49 @@ export const requestStrings = {
   rejectedOther: "اختار الراكب سائقًا آخر.",
   expired: "انتهت صلاحية عرضك قبل رد الراكب.",
 
+  // ---------------- PHASE 2 ----------------
+  /** القبول المباشر: الرحلة تصبح للسائق فورًا بلا موافقة إضافية من الراكب. */
+  directAccept: "قبول مباشر",
+  directAcceptDone: "أصبحت الرحلة لك. توجّه إلى نقطة الانطلاق.",
+  negotiate: "تفاوض",
+  skip: "تخطي",
+  tripsSuffix: "رحلة",
+  awayFromYou: "من موقعك",
+  nearYou: "قريب منك",
+
+  /** سحب البطاقة: إخفاء أو إبلاغ. */
+  hide: "إخفاء",
+  hidden: "تم إخفاء الطلب من قائمتك.",
+  report: "إبلاغ",
+  reportTitle: "الإبلاغ عن هذا الطلب",
+  reportHint: "اختر سببًا. يصل البلاغ إلى فريق الدعم في لوحة التحكم.",
+  reportSend: "إرسال البلاغ",
+  reportSent: "تم إرسال بلاغك إلى فريق الدعم.",
+  reportNoteLabel: "تفاصيل إضافية (اختياري)",
+
+  /** أسباب جاهزة — مطابقة لـ enum ComplaintReason في الخادم. */
+  reasons: {
+    UNSAFE_BEHAVIOR: "سلوك غير آمن",
+    SUSPECTED_FRAUD: "شبهة احتيال",
+    FAKE_REQUEST: "طلب وهمي",
+    WRONG_PICKUP_LOCATION: "موقع انطلاق خاطئ",
+    OFFENSIVE_LANGUAGE: "لغة مسيئة",
+    OTHER: "سبب آخر",
+  } as Record<string, string>,
+
+  /** منطقة العمل والفلترة. */
+  zoneTitle: "منطقة العمل",
+  zoneSearchTitle: "البحث عن مكان العمل",
+  zoneSearchPlaceholder: "ابحث عن مدينة أو منطقة (مثال: وهران)",
+  zonePickOnMap: "اختر المنطقة من الخريطة",
+  zoneRadius: "نطاق البحث",
+  zoneSave: "تثبيت المنطقة",
+  zoneClear: "إلغاء التحديد",
+  zoneSaved: "تم تثبيت منطقة عملك. ستصلك الطلبات داخلها فقط.",
+  zoneCleared: "تم إلغاء منطقة العمل.",
+  zoneNone: "بلا منطقة محددة",
+  filterAllClasses: "كل الفئات",
+
   errors: {
     DRIVER_NOT_APPROVED: "حسابك غير معتمد بعد.",
     FARE_OFFER_DRIVER_UNAVAILABLE:
@@ -61,6 +104,8 @@ export const requestStrings = {
     FARE_OFFER_OUT_OF_RANGE: "المبلغ خارج المجال الذي يقبله النظام.",
     FARE_OFFER_NOT_FOUND: "لم يتم العثور على العرض.",
     FARE_OFFER_INVALID_STATE: "لا يمكن تعديل هذا العرض الآن.",
+    FARE_OFFER_EXPIRED: "انتهت صلاحية العرض.",
+    ACTIVE_TRIP_EXISTS: "لهذا الراكب رحلة نشطة بالفعل.",
     NETWORK_ERROR: "لا يوجد اتصال بالإنترنت.",
     REQUEST_FAILED: "تعذر تنفيذ الطلب، حاول مرة أخرى.",
   } as Record<string, string>,

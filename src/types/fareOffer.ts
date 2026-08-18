@@ -8,10 +8,10 @@ import type { OfferPassenger } from "./trip";
  *  - `ride:offer` is a push assignment from MatchingService: the fare is fixed
  *    and the driver only accepts or declines, over the socket.
  *  - a FareQuote is a passenger request open for bidding. The driver pulls the
- *    open ones over HTTP and answers with an amount inside [minFare, maxFare].
+ *    open ones over HTTP and answers with an amount inside [minFare, maxFare],
+ *    or takes the request directly (PHASE 2 direct accept).
  *
- * Both exist on this server, so neither replaces the other and nothing here
- * touches the Phase 2 offer card.
+ * Both exist on this server, so neither replaces the other.
  */
 
 /** Prisma enum FareOfferStatus, verbatim. */
@@ -32,7 +32,11 @@ export type FareOffer = {
   note: string | null;
   etaMinutes: number | null;
   status: FareOfferStatus;
-  /** Server-side TTL (OFFER_TTL_MS = 120s), capped by the quote expiry. */
+  /**
+   * Server-side TTL, capped by the quote expiry.
+   * PHASE 2: OFFER_TTL_MS is 60s (was 120s) - the negotiation window the
+   * project owner asked for.
+   */
   expiresAt: string | null;
   respondedAt: string | null;
   createdAt: string;
@@ -69,6 +73,12 @@ export type FareOpportunity = {
   commissionPct: number | null;
   expiresAt: string;
   passenger: OfferPassenger | null;
+  /**
+   * PHASE 2: driver -> pickup distance in km, computed by the server. It is
+   * null when the server had no driver position and no saved work zone to
+   * measure from; the UI must show nothing rather than invent a number.
+   */
+  driverDistanceKm: number | null;
   /** The driver's own PENDING bid on this request, if any. */
   myOffer: FareOffer | null;
 };
