@@ -27,6 +27,12 @@ export type DriverStackParamList = {
   Menu: undefined;
   /** PHASE 5 - ledger balance, earnings aggregates and withdrawal request. */
   Wallet: undefined;
+  /**
+   * DESIGN PHASE - earnings analysis (reference `earnings_analysis.html`).
+   * Reads GET /driver/me/earnings: today / week / all, plus the last 100 rows.
+   * There is no month bucket on the server, so the screen never shows one.
+   */
+  Earnings: undefined;
   Profile: undefined;
   Documents: undefined;
   /**

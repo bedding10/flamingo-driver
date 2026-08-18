@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React from "react";
 import {
   StyleSheet,
   View,
@@ -63,7 +63,6 @@ export function Badge({
 }) {
   const palette = usePalette();
   const color = toneColor(palette, tone);
-  const styles = useMemo(() => makeStyles(palette), [palette]);
 
   return (
     <View
@@ -93,16 +92,15 @@ export function Badge({
   );
 }
 
-const makeStyles = (_palette: Palette) =>
-  StyleSheet.create({
-    pill: {
-      ...rtlRow,
-      alignItems: "center",
-      alignSelf: "flex-start",
-      gap: spacing.xs,
-      paddingHorizontal: spacing.sm,
-      paddingVertical: spacing.xs,
-      borderRadius: radius.pill,
-      borderWidth: 1,
-    },
-  });
+const styles = StyleSheet.create({
+  pill: {
+    ...rtlRow,
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+  },
+});

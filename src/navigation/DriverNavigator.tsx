@@ -4,6 +4,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { DriverHomeScreen } from "../screens/home/DriverHomeScreen";
 import { MenuScreen } from "../screens/menu/MenuScreen";
 import { WalletScreen } from "../screens/wallet/WalletScreen";
+import { EarningsScreen } from "../screens/wallet/EarningsScreen";
 import { NotificationsScreen } from "../screens/notifications/NotificationsScreen";
 import { SupportScreen } from "../screens/support/SupportScreen";
 import { TicketScreen } from "../screens/support/TicketScreen";
@@ -18,6 +19,7 @@ import { ToastHost } from "../components/Toast";
 import { strings } from "../i18n/strings";
 import { requestStrings } from "../i18n/strings.requests";
 import { menuStrings, walletStrings } from "../i18n/strings.menu";
+import { earningsStrings } from "../i18n/strings.earnings";
 import {
   notificationStrings,
   safetyStrings,
@@ -92,6 +94,17 @@ export function DriverNavigator() {
             name="Wallet"
             component={WalletScreen}
             options={{ headerShown: true, title: walletStrings.title }}
+          />
+          {/*
+            Earnings is separate from the wallet on purpose: the wallet is the
+            ledger the server owns, earnings is the driver's own performance
+            read. They come from two different endpoints and answer two
+            different questions.
+          */}
+          <Stack.Screen
+            name="Earnings"
+            component={EarningsScreen}
+            options={{ headerShown: true, title: earningsStrings.title }}
           />
           <Stack.Screen
             name="Notifications"
