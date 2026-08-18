@@ -1,20 +1,17 @@
-import React, { useMemo } from "react";
-import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import React from "react";
+import { Alert, StyleSheet, View } from "react-native";
 import type { Trip, TripStatus } from "../types/trip";
 import { strings } from "../i18n/strings";
 import { ProfileAvatar } from "./ProfileAvatar";
-import { Icon } from "./Icon";
 import {
-  colors,
-  radius,
-  spacing,
-  touchTarget,
-  typography,
-  usePalette,
-  withAlpha,
-  shadows,
-  type Palette,
-} from "../theme";
+  AppText,
+  Badge,
+  Button,
+  Money,
+  rtlRow,
+  type BadgeTone,
+} from "../ui";
+import { colors, radius, shadows, spacing, usePalette } from "../theme";
 
 type Props = {
   trip: Trip;
@@ -55,6 +52,12 @@ function statusLabel(status: TripStatus): string {
   return status;
 }
 
+function statusTone(status: TripStatus): BadgeTone {
+  if (status === "IN_PROGRESS") return "success";
+  if (status === "ARRIVING") return "warning";
+  return "info";
+}
+
 function actionLabel(next: TripStatus | null): string | null {
   if (next === "ARRIVING") return strings.trip.actionArrived;
   if (next === "IN_PROGRESS") return strings.trip.actionStart;
@@ -69,8 +72,10 @@ function actionLabel(next: TripStatus | null): string | null {
  * is where the passenger waits, after pickup it is where they are going. Two
  * addresses at once is how a driver reads the wrong one at a junction.
  *
- * PHASE 7.5 CLOSURE: colours only. The state machine, the confirmations and
- * the position of the SOS button are exactly as PHASE 6 left them.
+ * DESIGN PHASE: rebuilt on the design system - Button, Money, Badge and AppText
+ * instead of five bespoke Pressables and a private stylesheet. The state
+ * machine, the confirmations and the position of the SOS button are exactly as
+ * PHASE 6 left them, because those are safety decisions, not styling.
  */
 function ActiveTripCardComponent({
   trip,
@@ -86,15 +91,21 @@ function ActiveTripCardComponent({
   unreadCount = 0,
 }: Props) {
   const palette = usePalette();
-  const styles = useMemo(() => makeStyles(palette), [palette]);
 
   const status = trip.status;
-  const heading = statusLabel(status);
   const primary = actionLabel(nextStatus);
   const enRoute = status === "IN_PROGRESS";
   const address = enRoute
     ? trip.destAddress || strings.offer.unknownAddress
     : trip.pickupAddress || strings.offer.unknownAddress;
+
+  const passengerLevel = trip.passenger?.profileLevel;
+  const levelLine = passengerLevel
+    ? (LEVEL_LABELS[passengerLevel] ?? passengerLevel) +
+      (trip.passenger?.completedTripsCount != null
+        ? ` \u00b7 ${trip.passenger.completedTripsCount} ${strings.level.tripsShort}`
+        : "")
+    : null;
 
   // Completing pays the driver and closes the ride; cancelling counts against
   // them. Both are irreversible (COMPLETED and CANCELLED have no exit in the
@@ -137,34 +148,48 @@ function ActiveTripCardComponent({
   };
 
   return (
-    <View style={[styles.sheet, { paddingBottom: bottomInset + spacing.xl }]}>
+    <View
+      style={[
+        styles.sheet,
+        {
+          paddingBottom: bottomInset + spacing.xl,
+          backgroundColor: palette.surface,
+          borderColor: palette.border,
+        },
+      ]}
+    >
       <View style={styles.headRow}>
-        <Text style={styles.heading}>{heading}</Text>
+        <Badge label={statusLabel(status)} tone={statusTone(status)} solid />
         {trip.fare != null ? (
-          <Text style={styles.fare}>
-            {Math.round(trip.fare) + (trip.currency ? " " + trip.currency : "")}
-          </Text>
+          <Money
+            amount={trip.fare}
+            currency={trip.currency ?? undefined}
+            decimals={0}
+            tone="primary"
+          />
         ) : null}
       </View>
 
+      {/* One leg only: the one the driver is heading to right now. */}
       <View style={styles.leg}>
         <View
-          style={[styles.dot, enRoute ? styles.dotDrop : styles.dotPickup]}
+          style={[
+            styles.dot,
+            { backgroundColor: enRoute ? colors.coral : palette.online },
+          ]}
         />
         <View style={styles.legText}>
-          <Text style={styles.legLabel}>
+          <AppText variant="caption" tone="secondary">
             {enRoute ? strings.offer.dropoff : strings.offer.pickup}
-          </Text>
-          <Text style={styles.legValue} numberOfLines={2}>
-            {address}
-          </Text>
+          </AppText>
+          <AppText numberOfLines={2}>{address}</AppText>
         </View>
       </View>
 
       {/*
-        Passenger identity line and the two ways to reach them, on one row.
+        Passenger identity.
 
-        PHASE 4: the call button appears here only when `onCall` was passed,
+        PHASE 4: the call button appears below only when `onCall` was passed,
         which the screen does only after GET /trip-communication/:tripId returned
         canCall AND a number. The card still holds no phone number of its own -
         /driver/me/trips keeps returning the passenger phone masked through
@@ -172,9 +197,6 @@ function ActiveTripCardComponent({
         to reveal it (phoneMode HIDDEN, or a trip that is no longer callable).
       */}
       <View style={styles.contactRow}>
-        {/* Phase 11 - passenger photo inside the level frame, then name and
-            "LEVEL \u00b7 N trips". Both values ride along with the trip payload,
-            so drawing this costs no extra request. */}
         <ProfileAvatar
           avatarUrl={trip.passenger?.avatarUrl}
           frameUrl={trip.passenger?.profileFrameUrl}
@@ -182,260 +204,127 @@ function ActiveTripCardComponent({
           fallback={trip.passenger?.name ?? null}
         />
         <View style={styles.passengerBlock}>
-          <Text style={styles.passenger} numberOfLines={1}>
-            {(trip.passenger?.name || strings.offer.passengerFallback) +
-              (onCall ? "" : " \u00b7 " + strings.trip.phoneHidden)}
-          </Text>
-          {trip.passenger?.profileLevel ? (
-            <Text style={styles.passengerLevel} numberOfLines={1}>
-              {(LEVEL_LABELS[trip.passenger.profileLevel] ??
-                trip.passenger.profileLevel) +
-                (trip.passenger.completedTripsCount != null
-                  ? ` \u00b7 ${trip.passenger.completedTripsCount} ${strings.level.tripsShort}`
-                  : "")}
-            </Text>
+          <AppText variant="subtitle" numberOfLines={1}>
+            {trip.passenger?.name || strings.offer.passengerFallback}
+          </AppText>
+          {levelLine ? (
+            <AppText variant="caption" tone="brand" numberOfLines={1}>
+              {levelLine}
+            </AppText>
+          ) : null}
+          {!onCall ? (
+            <AppText variant="caption" tone="muted" numberOfLines={1}>
+              {strings.trip.phoneHidden}
+            </AppText>
           ) : null}
         </View>
-
-        {onCall ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={strings.chat.call}
-            onPress={onCall}
-            style={({ pressed }) => [
-              styles.callButton,
-              pressed ? styles.pressed : null,
-            ]}
-          >
-            <Icon name="support" size={20} color={palette.primaryText} />
-          </Pressable>
+        {unreadCount > 0 ? (
+          <Badge
+            label={unreadCount > 9 ? "9+" : String(unreadCount)}
+            tone="brand"
+            solid
+          />
         ) : null}
-
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={strings.chat.openChat}
-          onPress={onChat}
-          style={({ pressed }) => [
-            styles.chatButton,
-            pressed ? styles.pressed : null,
-          ]}
-        >
-          <Text style={styles.chatLabel}>{strings.chat.openChat}</Text>
-          {unreadCount > 0 ? (
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>
-                {unreadCount > 9 ? "9+" : String(unreadCount)}
-              </Text>
-            </View>
-          ) : null}
-        </Pressable>
       </View>
 
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      <View style={styles.contactActions}>
+        <Button
+          label={strings.chat.openChat}
+          icon="chat"
+          variant="secondary"
+          size="md"
+          onPress={onChat}
+          style={styles.flex1}
+        />
+        {onCall ? (
+          <Button
+            label={strings.chat.call}
+            icon="phone"
+            variant="secondary"
+            size="md"
+            onPress={onCall}
+            style={styles.flex1}
+          />
+        ) : null}
+      </View>
+
+      {error ? (
+        <AppText variant="caption" tone="danger">
+          {error}
+        </AppText>
+      ) : null}
 
       <View style={styles.actions}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={strings.trip.cancel}
+        <Button
+          label={strings.trip.cancel}
+          variant="danger"
+          size="lg"
           disabled={pending}
           onPress={confirmCancel}
-          style={({ pressed }) => [
-            styles.cancelButton,
-            pressed ? styles.pressed : null,
-            pending ? styles.disabled : null,
-          ]}
-        >
-          <Text style={styles.cancelLabel}>{strings.trip.cancel}</Text>
-        </Pressable>
-
+          style={styles.flex1}
+        />
         {primary ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={primary}
-            disabled={pending}
+          <Button
+            label={primary}
+            variant="primary"
+            size="lg"
+            loading={pending}
             onPress={confirmAdvance}
-            style={({ pressed }) => [
-              styles.primaryButton,
-              pressed ? styles.pressed : null,
-              pending ? styles.disabled : null,
-            ]}
-          >
-            <Text style={styles.primaryLabel}>{primary}</Text>
-          </Pressable>
+            style={styles.flex2}
+          />
         ) : null}
       </View>
 
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={strings.safety.sos}
+      {/*
+        Full width and on its own row: the driver must find it without aiming.
+        Outlined rather than filled so it never competes with the primary action
+        for an unaimed thumb.
+      */}
+      <Button
+        label={strings.safety.sos}
+        icon="sos"
+        variant="secondary"
+        size="md"
         onPress={confirmSos}
-        style={({ pressed }) => [
-          styles.sosButton,
-          pressed ? styles.pressed : null,
-        ]}
-      >
-        <Text style={styles.sosLabel}>{strings.safety.sos}</Text>
-      </Pressable>
+        style={[styles.sos, { borderColor: palette.danger }]}
+      />
     </View>
   );
 }
 
 export const ActiveTripCard = React.memo(ActiveTripCardComponent);
 
-const makeStyles = (palette: Palette) =>
-  StyleSheet.create({
-    sheet: {
-      position: "absolute",
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: palette.surface,
-      borderTopLeftRadius: radius.sheet,
-      borderTopRightRadius: radius.sheet,
-      borderTopWidth: 1,
-      borderColor: palette.border,
-      paddingHorizontal: spacing.xl,
-      paddingTop: spacing.xl,
-      gap: spacing.md,
-      ...shadows.floating,
-    },
-    headRow: {
-      flexDirection: "row-reverse",
-      alignItems: "center",
-      justifyContent: "space-between",
-    },
-    heading: {
-      ...typography.subtitle,
-      color: palette.textPrimary,
-      textAlign: "right",
-      writingDirection: "rtl",
-    },
-    fare: { ...typography.subtitle, color: palette.primaryText },
+const styles = StyleSheet.create({
+  sheet: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderTopLeftRadius: radius.sheet,
+    borderTopRightRadius: radius.sheet,
+    borderTopWidth: 1,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.xl,
+    gap: spacing.md,
+    ...shadows.floating,
+  },
+  headRow: {
+    ...rtlRow,
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing.sm,
+  },
 
-    leg: {
-      flexDirection: "row-reverse",
-      alignItems: "flex-start",
-      gap: spacing.md,
-    },
-    dot: { width: 10, height: 10, borderRadius: radius.pill, marginTop: 6 },
-    dotPickup: { backgroundColor: palette.online },
-    // Coral is a route token shared with the map polyline, not brand identity.
-    dotDrop: { backgroundColor: colors.coral },
-    legText: { flex: 1, gap: 2 },
-    legLabel: {
-      ...typography.caption,
-      color: palette.textSecondary,
-      textAlign: "right",
-      writingDirection: "rtl",
-    },
-    legValue: {
-      ...typography.body,
-      color: palette.textPrimary,
-      textAlign: "right",
-      writingDirection: "rtl",
-    },
+  leg: { ...rtlRow, alignItems: "flex-start", gap: spacing.md },
+  dot: { width: 10, height: 10, borderRadius: radius.pill, marginTop: 6 },
+  legText: { flex: 1, gap: 2 },
 
-    contactRow: {
-      flexDirection: "row-reverse",
-      alignItems: "center",
-      justifyContent: "space-between",
-      gap: spacing.md,
-    },
-    passengerBlock: { flex: 1, gap: 2 },
-    passengerLevel: {
-      ...typography.caption,
-      color: palette.primaryText,
-      textAlign: "right",
-      writingDirection: "rtl",
-    },
-    passenger: {
-      flex: 1,
-      ...typography.caption,
-      color: palette.textSecondary,
-      textAlign: "right",
-      writingDirection: "rtl",
-    },
-    // Calling is secondary to messaging, so it is a round icon button that
-    // never competes with the filled primary action.
-    callButton: {
-      width: touchTarget.normal - 8,
-      height: touchTarget.normal - 8,
-      borderRadius: radius.pill,
-      alignItems: "center",
-      justifyContent: "center",
-      borderWidth: 1,
-      borderColor: withAlpha(palette.primary, 0.5),
-      backgroundColor: palette.primaryWash,
-    },
-    chatButton: {
-      flexDirection: "row-reverse",
-      alignItems: "center",
-      gap: spacing.sm,
-      minHeight: touchTarget.normal - 12,
-      paddingHorizontal: spacing.lg,
-      borderRadius: radius.pill,
-      borderWidth: 1,
-      borderColor: withAlpha(palette.primary, 0.5),
-      backgroundColor: palette.primaryWash,
-    },
-    chatLabel: { ...typography.label, color: palette.primaryText },
-    badge: {
-      minWidth: 20,
-      height: 20,
-      paddingHorizontal: 5,
-      borderRadius: radius.pill,
-      backgroundColor: palette.primary,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    badgeText: {
-      ...typography.caption,
-      color: palette.onPrimary,
-      lineHeight: 16,
-    },
-    error: {
-      ...typography.caption,
-      color: palette.danger,
-      textAlign: "right",
-      writingDirection: "rtl",
-    },
+  contactRow: { ...rtlRow, alignItems: "center", gap: spacing.md },
+  passengerBlock: { flex: 1, gap: 2 },
+  contactActions: { ...rtlRow, gap: spacing.md },
 
-    actions: { flexDirection: "row-reverse", gap: spacing.md },
-    primaryButton: {
-      flex: 2,
-      height: touchTarget.critical,
-      borderRadius: radius.pill,
-      backgroundColor: palette.primary,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    primaryLabel: { ...typography.subtitle, color: palette.onPrimary },
-    cancelButton: {
-      flex: 1,
-      height: touchTarget.critical,
-      borderRadius: radius.pill,
-      borderWidth: 1,
-      borderColor: withAlpha(palette.danger, 0.5),
-      backgroundColor: withAlpha(palette.danger, 0.1),
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    cancelLabel: { ...typography.label, color: palette.danger },
-
-    // Full width and on its own row: the driver must find it without aiming,
-    // but outlined rather than filled so it never competes with the primary
-    // action for an unaimed thumb.
-    sosButton: {
-      height: touchTarget.normal,
-      borderRadius: radius.pill,
-      borderWidth: 1.5,
-      borderColor: palette.danger,
-      backgroundColor: withAlpha(palette.danger, 0.08),
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    sosLabel: { ...typography.label, color: palette.danger },
-
-    pressed: { opacity: 0.85 },
-    disabled: { opacity: 0.5 },
-  });
+  actions: { ...rtlRow, gap: spacing.md },
+  flex1: { flex: 1 },
+  flex2: { flex: 2 },
+  sos: { borderWidth: 1.5 },
+});
