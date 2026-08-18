@@ -5,6 +5,10 @@ import { DriverHomeScreen } from "../screens/home/DriverHomeScreen";
 import { MenuScreen } from "../screens/menu/MenuScreen";
 import { WalletScreen } from "../screens/wallet/WalletScreen";
 import { EarningsScreen } from "../screens/wallet/EarningsScreen";
+import { ProfileHubScreen } from "../screens/profile/ProfileHubScreen";
+import { VehicleScreen } from "../screens/profile/VehicleScreen";
+import { LevelsScreen } from "../screens/rewards/LevelsScreen";
+import { DailyGoalsScreen } from "../screens/rewards/DailyGoalsScreen";
 import { NotificationsScreen } from "../screens/notifications/NotificationsScreen";
 import { SupportScreen } from "../screens/support/SupportScreen";
 import { TicketScreen } from "../screens/support/TicketScreen";
@@ -20,6 +24,8 @@ import { strings } from "../i18n/strings";
 import { requestStrings } from "../i18n/strings.requests";
 import { menuStrings, walletStrings } from "../i18n/strings.menu";
 import { earningsStrings } from "../i18n/strings.earnings";
+import { hubStrings } from "../i18n/strings.profile.hub";
+import { rewardsStrings } from "../i18n/strings.rewards";
 import {
   notificationStrings,
   safetyStrings,
@@ -105,6 +111,31 @@ export function DriverNavigator() {
             name="Earnings"
             component={EarningsScreen}
             options={{ headerShown: true, title: earningsStrings.title }}
+          />
+          {/*
+            ProfileHub is the READ view of the account; Profile below is the
+            editable form. Keeping them apart is what lets the hub show the tier
+            frame and the counters without turning the form into a dashboard.
+          */}
+          <Stack.Screen
+            name="ProfileHub"
+            component={ProfileHubScreen}
+            options={{ headerShown: true, title: hubStrings.hubTitle }}
+          />
+          <Stack.Screen
+            name="Vehicle"
+            component={VehicleScreen}
+            options={{ headerShown: true, title: hubStrings.vehicleTitle }}
+          />
+          <Stack.Screen
+            name="Levels"
+            component={LevelsScreen}
+            options={{ headerShown: true, title: hubStrings.levelsTitle }}
+          />
+          <Stack.Screen
+            name="DailyGoals"
+            component={DailyGoalsScreen}
+            options={{ headerShown: true, title: rewardsStrings.goalsTitle }}
           />
           <Stack.Screen
             name="Notifications"

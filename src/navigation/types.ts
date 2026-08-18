@@ -33,6 +33,24 @@ export type DriverStackParamList = {
    * There is no month bucket on the server, so the screen never shows one.
    */
   Earnings: undefined;
+  /**
+   * DESIGN PHASE - the account hub (reference `driver_profile_hub.html`).
+   * Distinct from `Profile`, which is the editable form; this is the read view
+   * with the tier frame, the counters and the entries into the rest.
+   */
+  ProfileHub: undefined;
+  /** DESIGN PHASE - read-only vehicle card (reference `my_vehicle.html`). */
+  Vehicle: undefined;
+  /**
+   * DESIGN PHASE - tier progression (reference `status_levels_benefits.html`).
+   * Progression is real; per-tier benefits are a declared gap.
+   */
+  Levels: undefined;
+  /**
+   * DESIGN PHASE - today's progress (reference `daily_goals_progress.html`).
+   * The earnings half is real; targets and streaks are a declared gap.
+   */
+  DailyGoals: undefined;
   Profile: undefined;
   Documents: undefined;
   /**
