@@ -18,6 +18,9 @@ import { useUnreadNotificationCount } from "../../hooks/useNotifications";
 import { useAuthStore } from "../../auth/auth.store";
 import { menuStrings } from "../../i18n/strings.menu";
 import { menu75Strings } from "../../i18n/strings.phase75";
+import { earningsStrings } from "../../i18n/strings.earnings";
+import { hubStrings } from "../../i18n/strings.profile.hub";
+import { rewardsStrings } from "../../i18n/strings.rewards";
 import { strings } from "../../i18n/strings";
 import type { DriverStackParamList } from "../../navigation/types";
 import {
@@ -52,15 +55,20 @@ const LEVEL_LABELS: Record<string, string> = {
  * LEFT because the layout is RTL. Sign-out is a row too, in red, not a button
  * bolted to the bottom.
  *
- * Honest omissions, unchanged from PHASE 7 because they are backend facts, not
- * design choices:
+ * DESIGN PHASE - the hero is now pressable and opens the account hub, and five
+ * destinations from the reference pack were added: the hub, the tier
+ * progression, the earnings analysis, today's progress and the vehicle card.
+ *
+ * Honest omissions, unchanged because they are backend facts, not design
+ * choices:
  *  - rating COUNT: GET /driver/me returns `rating` and `totalTrips` with no
  *    number of ratings. Printing totalTrips next to the stars would claim every
  *    trip was rated, which is false. The stat is simply absent until the
  *    backend sends it (registered as a PHASE 8 backend requirement).
- *  - VEHICLE: /vehicles is staff-only on the server and the driver edits the
- *    car inside the profile form, so "my vehicle" leads there rather than to a
- *    screen that could not save anything.
+ *  - VEHICLE EDITING: /vehicles is staff-only and the driver edits the car
+ *    through PATCH /driver/me, so the vehicle row opens the read-only card and
+ *    that card delegates editing to the profile form. There is still no second
+ *    write path, because the server has none.
  */
 export function MenuScreen() {
   const insets = useSafeAreaInsets();
@@ -102,10 +110,14 @@ export function MenuScreen() {
       ]}
     >
       {/* ---- profile hero -------------------------------------------------- */}
-      <View
-        style={[
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={hubStrings.hubTitle}
+        onPress={() => navigation.navigate("ProfileHub")}
+        style={({ pressed }) => [
           styles.hero,
           { backgroundColor: palette.surface, borderColor: palette.border },
+          pressed ? { opacity: 0.9 } : null,
         ]}
       >
         <ProfileAvatar
@@ -172,12 +184,24 @@ export function MenuScreen() {
         >
           {vehicleLine}
         </Text>
-      </View>
+      </Pressable>
 
       {/* ---- account ------------------------------------------------------- */}
       <Section title={menu75Strings.sectionAccount}>
         <Row
           icon="user"
+          label={hubStrings.hubTitle}
+          hint={hubStrings.levelRowHint}
+          onPress={() => navigation.navigate("ProfileHub")}
+        />
+        <Row
+          icon="medal"
+          label={hubStrings.levelsTitle}
+          hint={hubStrings.levelRowHint}
+          onPress={() => navigation.navigate("Levels")}
+        />
+        <Row
+          icon="edit"
           label={menu75Strings.profile}
           hint={menu75Strings.profileHint}
           onPress={() => navigation.navigate("Profile")}
@@ -197,8 +221,14 @@ export function MenuScreen() {
           icon="wallet"
           label={menu75Strings.wallet}
           hint={menu75Strings.walletHint}
-          last
           onPress={() => navigation.navigate("Wallet")}
+        />
+        <Row
+          icon="trending"
+          label={earningsStrings.title}
+          hint={hubStrings.earningsRowHint}
+          last
+          onPress={() => navigation.navigate("Earnings")}
         />
       </Section>
 
@@ -208,8 +238,14 @@ export function MenuScreen() {
           icon="requests"
           label={menu75Strings.requests}
           hint={menu75Strings.requestsHint}
-          last
           onPress={() => navigation.navigate("Requests")}
+        />
+        <Row
+          icon="target"
+          label={rewardsStrings.goalsTitle}
+          hint={rewardsStrings.goalsSubtitle}
+          last
+          onPress={() => navigation.navigate("DailyGoals")}
         />
       </Section>
 
@@ -218,9 +254,9 @@ export function MenuScreen() {
         <Row
           icon="car"
           label={menu75Strings.vehicle}
-          hint={menu75Strings.vehicleHint}
+          hint={hubStrings.vehicleRowHint}
           last
-          onPress={() => navigation.navigate("Profile")}
+          onPress={() => navigation.navigate("Vehicle")}
         />
       </Section>
 
