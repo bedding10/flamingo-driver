@@ -1,50 +1,54 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import type { FareOpportunity } from "../types/fareOffer";
 import { requestStrings } from "../i18n/strings.requests";
 import {
-  radius,
-  spacing,
-  touchTarget,
-  typography,
-  usePalette,
-  withAlpha,
-  type Palette,
-} from "../theme";
+  AppText,
+  Badge,
+  Button,
+  Card,
+  Input,
+  Money,
+  formatAmount,
+  formatClock,
+  formatDistanceKm,
+  formatMinutes,
+  formatMoney,
+  rtlRow,
+} from "../ui";
+import { radius, spacing, usePalette, type Palette } from "../theme";
 
 type Props = {
   item: FareOpportunity;
-  /** True while this card's bid or withdrawal is in flight. */
+  /** True while this card's bid, withdrawal, claim or report is in flight. */
   busy: boolean;
   onBid: (quoteId: string, amount: number) => void;
   onWithdraw: (offerId: string) => void;
+  onDirectAccept: (quoteId: string, amount?: number) => void;
+  onHide: (quoteId: string) => void;
+  onReport: (item: FareOpportunity) => void;
 };
 
-function money(amount: number, currency?: string | null): string {
-  const rounded = Math.round(amount);
-  return currency ? rounded + " " + currency : String(rounded);
-}
-
-function clock(ms: number): string {
-  const total = Math.max(0, Math.floor(ms / 1000));
-  const m = Math.floor(total / 60);
-  const s = total % 60;
-  return m + ":" + String(s).padStart(2, "0");
-}
-
 /**
- * One open bidding request.
+ * One open bidding request, drawn with the design system.
  *
- * The amount field is validated against the server's own band
- * ([minFare, maxFare] returned with the request) so the driver is not sent into
- * a guaranteed FARE_OFFER_OUT_OF_RANGE. The suggested fare is only a starting
- * value - nothing is computed on the client.
+ * Three server capabilities that existed in the hook but had no UI are exposed
+ * here: direct accept, hide, and report.
+ *
+ * The amount is validated against the server's own band ([minFare, maxFare],
+ * returned with the request) so the driver is never sent into a guaranteed
+ * FARE_OFFER_OUT_OF_RANGE. Nothing else is computed locally - in particular the
+ * driver's net is NOT derived from commissionPct, because the settlement side
+ * subtracts coupon shares the quote does not carry.
  */
 function FareOpportunityCardComponent({
   item,
   busy,
   onBid,
   onWithdraw,
+  onDirectAccept,
+  onHide,
+  onReport,
 }: Props) {
   const palette = usePalette();
   const styles = useMemo(() => makeStyles(palette), [palette]);
@@ -52,7 +56,8 @@ function FareOpportunityCardComponent({
   // Narrowed once into a local: this keeps the JSX free of non-null assertions,
   // which `npm run lint` (--max-warnings=0) would flag.
   const myOffer = item.myOffer;
-  const initial = myOffer?.amount ?? item.proposedFare ?? item.suggestedFare;
+  const askedFare = item.proposedFare ?? item.suggestedFare;
+  const initial = myOffer?.amount ?? askedFare;
   const [amount, setAmount] = useState(String(Math.round(initial)));
 
   // A new bid accepted by the server (or a fresh poll) re-seeds the field, but
@@ -77,99 +82,107 @@ function FareOpportunityCardComponent({
   const expired = remaining <= 0;
   const parsed = Number(amount.replace(/[^0-9.]/g, ""));
   const valid =
-    Number.isFinite(parsed) &&
-    parsed >= item.minFare &&
-    parsed <= item.maxFare;
+    Number.isFinite(parsed) && parsed >= item.minFare && parsed <= item.maxFare;
+  const bidAmount = Math.round(parsed * 100) / 100;
   const pending = myOffer?.status === "PENDING";
+  // POST /support/complaints needs againstUserId; the passenger id is optional
+  // on the quote, so the action is hidden rather than failing on tap.
+  const canReport = Boolean(item.passenger?.id);
 
   return (
-    <View style={[styles.card, expired ? styles.cardExpired : null]}>
-      <View style={styles.headRow}>
-        <Text style={styles.passenger} numberOfLines={1}>
-          {item.passenger?.name ?? requestStrings.title}
-        </Text>
-        <Text style={[styles.timer, expired ? styles.timerOff : null]}>
-          {expired
-            ? requestStrings.closed
-            : requestStrings.closesIn + " " + clock(remaining)}
-        </Text>
-      </View>
+    <Card style={expired ? styles.expired : undefined}>
+      <View style={styles.body}>
+        <View style={styles.headRow}>
+          <AppText variant="subtitle" numberOfLines={1} style={styles.name}>
+            {item.passenger?.name ?? requestStrings.title}
+          </AppText>
+          <Badge
+            icon="timer"
+            tone={expired ? "neutral" : "brand"}
+            label={
+              expired
+                ? requestStrings.closed
+                : `${requestStrings.closesIn} ${formatClock(remaining)}`
+            }
+          />
+        </View>
 
-      <View style={styles.fareRow}>
-        <Text style={styles.fare}>
-          {money(item.proposedFare ?? item.suggestedFare, item.currency)}
-        </Text>
-        <View style={styles.metaCol}>
-          <Text style={styles.meta}>
-            {(item.proposedFare != null
+        <View style={styles.fareRow}>
+          <Money
+            amount={askedFare}
+            currency={item.currency}
+            decimals={0}
+            variant="display"
+            tone="primary"
+          />
+          <AppText variant="caption" tone="secondary" style={styles.fareLabel}>
+            {item.proposedFare != null
               ? requestStrings.passengerAsked
-              : requestStrings.suggested) +
-              " \u00b7 " +
-              requestStrings.range +
-              " " +
-              Math.round(item.minFare) +
-              " - " +
-              Math.round(item.maxFare)}
-          </Text>
-          <Text style={styles.meta}>
-            {[
-              item.distanceKm != null
-                ? item.distanceKm.toFixed(1) + " " + requestStrings.kmSuffix
-                : null,
-              item.durationSec != null
-                ? Math.round(item.durationSec / 60) +
-                  " " +
-                  requestStrings.minutesSuffix
-                : null,
-              item.commissionPct != null
-                ? requestStrings.commission + " " + item.commissionPct + "%"
-                : null,
-            ]
-              .filter(Boolean)
-              .join(" \u00b7 ")}
-          </Text>
+              : requestStrings.suggested}
+          </AppText>
         </View>
-      </View>
 
-      <View style={styles.leg}>
-        <View style={[styles.dot, styles.dotPickup]} />
-        <View style={styles.legText}>
-          <Text style={styles.legLabel}>{requestStrings.pickup}</Text>
-          <Text style={styles.legValue} numberOfLines={2}>
-            {item.pickupAddress || requestStrings.unknownAddress}
-          </Text>
+        <View style={styles.chips}>
+          {item.driverDistanceKm != null ? (
+            <Badge
+              icon="navigate"
+              tone="info"
+              label={`${formatDistanceKm(item.driverDistanceKm)} ${requestStrings.awayFromYou}`}
+            />
+          ) : null}
+          {item.distanceKm != null ? (
+            <Badge icon="place" label={formatDistanceKm(item.distanceKm)} />
+          ) : null}
+          {item.durationSec != null ? (
+            <Badge icon="clock" label={formatMinutes(item.durationSec / 60)} />
+          ) : null}
+          {item.commissionPct != null ? (
+            <Badge
+              icon="receipt"
+              tone="warning"
+              label={`${requestStrings.commission} ${item.commissionPct}%`}
+            />
+          ) : null}
         </View>
-      </View>
 
-      <View style={styles.leg}>
-        <View style={[styles.dot, styles.dotDrop]} />
-        <View style={styles.legText}>
-          <Text style={styles.legLabel}>{requestStrings.dropoff}</Text>
-          <Text style={styles.legValue} numberOfLines={2}>
-            {item.destAddress || requestStrings.unknownAddress}
-          </Text>
+        <View style={styles.leg}>
+          <View style={[styles.dot, styles.dotPickup]} />
+          <View style={styles.legText}>
+            <AppText variant="caption" tone="secondary">
+              {requestStrings.pickup}
+            </AppText>
+            <AppText numberOfLines={2}>
+              {item.pickupAddress || requestStrings.unknownAddress}
+            </AppText>
+          </View>
         </View>
-      </View>
 
-      {item.passengerNote ? (
-        <Text style={styles.note} numberOfLines={3}>
-          {requestStrings.passengerNote + ": " + item.passengerNote}
-        </Text>
-      ) : null}
+        <View style={styles.leg}>
+          <View style={[styles.dot, styles.dotDrop]} />
+          <View style={styles.legText}>
+            <AppText variant="caption" tone="secondary">
+              {requestStrings.dropoff}
+            </AppText>
+            <AppText numberOfLines={2}>
+              {item.destAddress || requestStrings.unknownAddress}
+            </AppText>
+          </View>
+        </View>
 
-      {myOffer && pending ? (
-        <Text style={styles.mine}>
-          {requestStrings.myOfferAmount +
-            " " +
-            money(myOffer.amount, myOffer.currency) +
-            " \u00b7 " +
-            requestStrings.myOfferPending}
-        </Text>
-      ) : null}
+        {item.passengerNote ? (
+          <AppText variant="caption" tone="secondary" numberOfLines={3}>
+            {`${requestStrings.passengerNote}: ${item.passengerNote}`}
+          </AppText>
+        ) : null}
 
-      <View style={styles.amountRow}>
-        <Text style={styles.amountLabel}>{requestStrings.amountLabel}</Text>
-        <TextInput
+        {myOffer && pending ? (
+          <AppText variant="caption" tone="brand">
+            {`${requestStrings.myOfferAmount} ${formatMoney(myOffer.amount, myOffer.currency, 0)} · ${requestStrings.myOfferPending}`}
+          </AppText>
+        ) : null}
+
+        <Input
+          label={requestStrings.amountLabel}
           value={amount}
           onChangeText={(text) => {
             editedRef.current = true;
@@ -178,57 +191,74 @@ function FareOpportunityCardComponent({
           keyboardType="numeric"
           editable={!expired && !busy}
           placeholder={requestStrings.amountPlaceholder}
-          placeholderTextColor={withAlpha(palette.textSecondary, 0.6)}
-          selectionColor={palette.primary}
-          style={styles.amountInput}
-          accessibilityLabel={requestStrings.amountLabel}
+          hint={`${requestStrings.range} ${formatAmount(item.minFare, 0)} – ${formatMoney(item.maxFare, item.currency, 0)}`}
+          error={!valid && !expired ? requestStrings.outOfRange : undefined}
         />
-      </View>
 
-      {!valid && !expired ? (
-        <Text style={styles.invalid}>{requestStrings.outOfRange}</Text>
-      ) : null}
+        {/*
+         * Direct accept is the primary action by project-owner decision: the
+         * request becomes this driver's trip immediately, with no confirmation
+         * step. Sending the typed amount when it is inside the band means the
+         * button always charges what the field shows; omitting it would silently
+         * take the passenger's ask instead.
+         */}
+        <Button
+          label={requestStrings.directAccept}
+          icon="check"
+          loading={busy}
+          disabled={busy || expired}
+          onPress={() => onDirectAccept(item.id, valid ? bidAmount : undefined)}
+        />
 
-      <View style={styles.actions}>
-        {myOffer && pending ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={requestStrings.withdraw}
+        <View style={styles.actions}>
+          <Button
+            style={styles.grow}
+            variant="secondary"
+            size="md"
+            icon="negotiate"
+            label={pending ? requestStrings.update : requestStrings.send}
+            disabled={busy || expired || !valid}
+            onPress={() => onBid(item.id, bidAmount)}
+          />
+          {myOffer && pending ? (
+            <Button
+              variant="ghost"
+              size="md"
+              icon="close"
+              label={requestStrings.withdraw}
+              disabled={busy}
+              onPress={() => onWithdraw(myOffer.id)}
+            />
+          ) : null}
+        </View>
+
+        {/*
+         * The hook calls these "swipe actions", but a swipeable row needs a
+         * gesture wrapper this list does not have, and a hidden gesture is a
+         * poor home for "report". They are visible tertiary buttons instead.
+         */}
+        <View style={styles.tertiary}>
+          <Button
+            variant="ghost"
+            size="sm"
+            icon="eyeOff"
+            label={requestStrings.hide}
             disabled={busy}
-            onPress={() => onWithdraw(myOffer.id)}
-            style={({ pressed }) => [
-              styles.secondaryButton,
-              pressed ? styles.pressed : null,
-              busy ? styles.disabled : null,
-            ]}
-          >
-            <Text style={styles.secondaryLabel}>
-              {requestStrings.withdraw}
-            </Text>
-          </Pressable>
-        ) : null}
-
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={pending ? requestStrings.update : requestStrings.send}
-          disabled={busy || expired || !valid}
-          onPress={() => onBid(item.id, Math.round(parsed * 100) / 100)}
-          style={({ pressed }) => [
-            styles.primaryButton,
-            pressed ? styles.pressed : null,
-            busy || expired || !valid ? styles.disabled : null,
-          ]}
-        >
-          <Text style={styles.primaryLabel}>
-            {busy
-              ? requestStrings.sending
-              : pending
-                ? requestStrings.update
-                : requestStrings.send}
-          </Text>
-        </Pressable>
+            onPress={() => onHide(item.id)}
+          />
+          {canReport ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              icon="flag"
+              label={requestStrings.report}
+              disabled={busy}
+              onPress={() => onReport(item)}
+            />
+          ) : null}
+        </View>
       </View>
-    </View>
+    </Card>
   );
 }
 
@@ -236,136 +266,34 @@ export const FareOpportunityCard = React.memo(FareOpportunityCardComponent);
 
 const makeStyles = (palette: Palette) =>
   StyleSheet.create({
-    card: {
-      backgroundColor: palette.surface,
-      borderRadius: radius.card,
-      borderWidth: 1,
-      borderColor: palette.border,
-      padding: spacing.lg,
-      gap: spacing.md,
-    },
-    cardExpired: { opacity: 0.55 },
+    expired: { opacity: 0.55 },
+    body: { gap: spacing.md },
 
     headRow: {
-      flexDirection: "row-reverse",
+      ...rtlRow,
       alignItems: "center",
       justifyContent: "space-between",
       gap: spacing.sm,
     },
-    passenger: {
-      ...typography.subtitle,
-      color: palette.textPrimary,
-      textAlign: "right",
-      writingDirection: "rtl",
-      flexShrink: 1,
-    },
-    timer: { ...typography.caption, color: palette.primaryText },
-    timerOff: { color: palette.textSecondary },
+    name: { flexShrink: 1 },
 
     fareRow: {
-      flexDirection: "row-reverse",
+      ...rtlRow,
       alignItems: "flex-end",
       justifyContent: "space-between",
       gap: spacing.md,
     },
-    fare: { ...typography.numeric, color: palette.primaryText },
-    metaCol: { alignItems: "flex-start", gap: 2, flexShrink: 1 },
-    meta: {
-      ...typography.caption,
-      color: palette.textSecondary,
-      textAlign: "left",
-    },
+    fareLabel: { flexShrink: 1 },
 
-    leg: {
-      flexDirection: "row-reverse",
-      alignItems: "flex-start",
-      gap: spacing.md,
-    },
+    chips: { ...rtlRow, flexWrap: "wrap", gap: spacing.sm },
+
+    leg: { ...rtlRow, alignItems: "flex-start", gap: spacing.md },
     dot: { width: 10, height: 10, borderRadius: radius.pill, marginTop: 6 },
     dotPickup: { backgroundColor: palette.online },
     dotDrop: { backgroundColor: palette.danger },
     legText: { flex: 1, gap: 2 },
-    legLabel: {
-      ...typography.caption,
-      color: palette.textSecondary,
-      textAlign: "right",
-      writingDirection: "rtl",
-    },
-    legValue: {
-      ...typography.body,
-      color: palette.textPrimary,
-      textAlign: "right",
-      writingDirection: "rtl",
-    },
 
-    note: {
-      ...typography.caption,
-      color: palette.textSecondary,
-      textAlign: "right",
-      writingDirection: "rtl",
-    },
-    mine: {
-      ...typography.caption,
-      color: palette.info,
-      textAlign: "right",
-      writingDirection: "rtl",
-    },
-
-    amountRow: {
-      flexDirection: "row-reverse",
-      alignItems: "center",
-      gap: spacing.md,
-    },
-    amountLabel: {
-      ...typography.caption,
-      color: palette.textSecondary,
-      textAlign: "right",
-      writingDirection: "rtl",
-    },
-    amountInput: {
-      flex: 1,
-      minHeight: touchTarget.normal,
-      borderRadius: radius.md,
-      backgroundColor: palette.surfaceSunken,
-      borderWidth: 1,
-      borderColor: palette.border,
-      paddingHorizontal: spacing.lg,
-      color: palette.textPrimary,
-      ...typography.numeric,
-      textAlign: "center",
-      writingDirection: "ltr",
-    },
-    invalid: {
-      ...typography.caption,
-      color: palette.warning,
-      textAlign: "right",
-      writingDirection: "rtl",
-    },
-
-    actions: { flexDirection: "row-reverse", gap: spacing.md },
-    primaryButton: {
-      flex: 2,
-      height: touchTarget.critical,
-      borderRadius: radius.pill,
-      backgroundColor: palette.primary,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    primaryLabel: { ...typography.subtitle, color: palette.onPrimary },
-    secondaryButton: {
-      flex: 1,
-      height: touchTarget.critical,
-      borderRadius: radius.pill,
-      borderWidth: 1,
-      borderColor: palette.border,
-      backgroundColor: palette.surfaceSunken,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    secondaryLabel: {
-      ...typography.subtitle,
-      color: palette.textSecondary,
-    },
-    pressed: { opacity: 0.85 },
-    disabled: { opacity: 0.5 },
+    actions: { ...rtlRow, gap: spacing.md },
+    tertiary: { ...rtlRow, gap: spacing.sm, justifyContent: "flex-start" },
+    grow: { flex: 1 },
   });

@@ -1,32 +1,26 @@
-import React, { useEffect, useMemo } from "react";
-import {
-  FlatList,
-  Pressable,
-  RefreshControl,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { FlatList, RefreshControl, StyleSheet, View } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { FareOpportunityCard } from "../../components/FareOpportunityCard";
+import {
+  ReportRequestSheet,
+  type ReportTarget,
+} from "../../components/ReportRequestSheet";
+import type { ComplaintReason } from "../../api/complaints.api";
 import { useFareOpportunities } from "../../hooks/useFareOpportunities";
 import { requestStrings } from "../../i18n/strings.requests";
 import type { DriverStackParamList } from "../../navigation/types";
-import {
-  radius,
-  spacing,
-  typography,
-  usePalette,
-  type Palette,
-} from "../../theme";
+import type { FareOpportunity } from "../../types/fareOffer";
+import { AlertBanner, AppText } from "../../ui";
+import { spacing, usePalette, type Palette } from "../../theme";
 
 /**
  * The requests page: open FareQuotes the driver may bid on.
  *
  * This does NOT replace the push offer card on Home. A `ride:offer` is an
  * assignment that must be answered within seconds and therefore stays a
- * full-width sheet over the map; a bidding request has a 2 minute window and
+ * full-width sheet over the map; a bidding request has a longer window and
  * belongs in a list the driver can read at a red light.
  */
 export function RequestsScreen() {
@@ -43,17 +37,48 @@ export function RequestsScreen() {
     error,
     busyId,
     notice,
+    dismissNotice,
     acceptedTripId,
     refresh,
     bid,
     withdraw,
+    directAccept,
+    hide,
+    report,
   } = useFareOpportunities();
+
+  const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
 
   // A won bid means there is a running trip; the trip lives on Home, so staying
   // on a list of requests the driver can no longer take would be a trap.
   useEffect(() => {
     if (acceptedTripId) navigation.navigate("Home");
   }, [acceptedTripId, navigation]);
+
+  const openReport = useCallback((item: FareOpportunity) => {
+    const againstUserId = item.passenger?.id;
+    // Second guard: the card already hides the action when the quote carries no
+    // passenger id, because the complaint endpoint cannot attribute it.
+    if (!againstUserId) return;
+    setReportTarget({
+      fareQuoteId: item.id,
+      againstUserId,
+      passengerName: item.passenger?.name ?? null,
+    });
+  }, []);
+
+  const submitReport = useCallback(
+    (input: {
+      fareQuoteId: string;
+      againstUserId: string;
+      reason: ComplaintReason;
+      message?: string;
+    }) => {
+      report(input);
+      setReportTarget(null);
+    },
+    [report],
+  );
 
   return (
     <View style={styles.root}>
@@ -70,37 +95,43 @@ export function RequestsScreen() {
         }
         ListHeaderComponent={
           <View style={styles.header}>
-            <Text style={styles.subtitle}>{requestStrings.subtitle}</Text>
-            {notice ? <Text style={styles.notice}>{notice}</Text> : null}
-            {error ? <Text style={styles.error}>{error}</Text> : null}
+            <AppText variant="caption" tone="secondary">
+              {requestStrings.subtitle}
+            </AppText>
+
+            {notice ? (
+              <AlertBanner
+                tone="info"
+                message={notice}
+                actionLabel={requestStrings.dismiss}
+                onAction={dismissNotice}
+              />
+            ) : null}
+
+            {error ? <AlertBanner tone="danger" message={error} /> : null}
+
+            {blocked ? (
+              <AlertBanner
+                tone="warning"
+                title={requestStrings.offlineTitle}
+                message={blockedReason ?? requestStrings.offlineHint}
+                actionLabel={requestStrings.goHome}
+                onAction={() => navigation.navigate("Home")}
+              />
+            ) : null}
           </View>
         }
         ListEmptyComponent={
-          <View style={styles.empty}>
-            <Text style={styles.emptyTitle}>
-              {blocked
-                ? requestStrings.offlineTitle
-                : loading
-                  ? requestStrings.refresh
-                  : requestStrings.empty}
-            </Text>
-            <Text style={styles.emptyHint}>
-              {blocked
-                ? (blockedReason ?? requestStrings.offlineHint)
-                : requestStrings.emptyHint}
-            </Text>
-            {blocked ? (
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => navigation.navigate("Home")}
-                style={styles.emptyAction}
-              >
-                <Text style={styles.emptyActionLabel}>
-                  {requestStrings.offlineTitle}
-                </Text>
-              </Pressable>
-            ) : null}
-          </View>
+          blocked ? null : (
+            <View style={styles.empty}>
+              <AppText variant="subtitle">
+                {loading ? requestStrings.refresh : requestStrings.empty}
+              </AppText>
+              <AppText variant="caption" tone="secondary">
+                {requestStrings.emptyHint}
+              </AppText>
+            </View>
+          )
         }
         renderItem={({ item }) => (
           <FareOpportunityCard
@@ -108,8 +139,18 @@ export function RequestsScreen() {
             busy={busyId === item.id || busyId === item.myOffer?.id}
             onBid={bid}
             onWithdraw={withdraw}
+            onDirectAccept={directAccept}
+            onHide={hide}
+            onReport={openReport}
           />
         )}
+      />
+
+      <ReportRequestSheet
+        target={reportTarget}
+        busy={busyId === reportTarget?.fareQuoteId}
+        onClose={() => setReportTarget(null)}
+        onSubmit={submitReport}
       />
     </View>
   );
@@ -119,54 +160,12 @@ const makeStyles = (palette: Palette) =>
   StyleSheet.create({
     root: { flex: 1, backgroundColor: palette.background },
     list: { padding: spacing.lg, gap: spacing.md, flexGrow: 1 },
-    header: { gap: spacing.xs },
-    subtitle: {
-      ...typography.caption,
-      color: palette.textSecondary,
-      textAlign: "right",
-      writingDirection: "rtl",
-    },
-    notice: {
-      ...typography.caption,
-      color: palette.info,
-      textAlign: "right",
-      writingDirection: "rtl",
-    },
-    error: {
-      ...typography.caption,
-      color: palette.danger,
-      textAlign: "right",
-      writingDirection: "rtl",
-    },
+    header: { gap: spacing.md },
     empty: {
       flex: 1,
       alignItems: "center",
       justifyContent: "center",
       gap: spacing.sm,
       paddingVertical: spacing.xl,
-    },
-    emptyTitle: {
-      ...typography.subtitle,
-      color: palette.textPrimary,
-      textAlign: "center",
-    },
-    emptyHint: {
-      ...typography.caption,
-      color: palette.textSecondary,
-      textAlign: "center",
-      writingDirection: "rtl",
-    },
-    emptyAction: {
-      marginTop: spacing.md,
-      borderRadius: radius.pill,
-      borderWidth: 1,
-      borderColor: palette.border,
-      backgroundColor: palette.surfaceSunken,
-      paddingHorizontal: spacing.xl,
-      paddingVertical: spacing.md,
-    },
-    emptyActionLabel: {
-      ...typography.subtitle,
-      color: palette.primaryText,
     },
   });
