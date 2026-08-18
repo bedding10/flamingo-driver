@@ -18,6 +18,7 @@ import { ProfileScreen } from "../screens/onboarding/ProfileScreen";
 import { DocumentsScreen } from "../screens/onboarding/DocumentsScreen";
 import { RequestsScreen } from "../screens/requests/RequestsScreen";
 import { TripChatScreen } from "../screens/trip/TripChatScreen";
+import { TripCompletedScreen } from "../screens/trip/TripCompletedScreen";
 import { ApprovalGate } from "./ApprovalGate";
 import { ToastHost } from "../components/Toast";
 import { strings } from "../i18n/strings";
@@ -26,6 +27,7 @@ import { menuStrings, walletStrings } from "../i18n/strings.menu";
 import { earningsStrings } from "../i18n/strings.earnings";
 import { hubStrings } from "../i18n/strings.profile.hub";
 import { rewardsStrings } from "../i18n/strings.rewards";
+import { tripSummaryStrings } from "../i18n/strings.trip.summary";
 import {
   notificationStrings,
   safetyStrings,
@@ -190,6 +192,17 @@ export function DriverNavigator() {
             name="TripChat"
             component={TripChatScreen}
             options={{ headerShown: true, title: strings.chat.title }}
+          />
+          {/*
+            The per-trip summary. Reached from the earnings list today; it is
+            NOT pushed automatically when a trip completes, because the trip
+            store clears the trip on any terminal status and wiring that is a
+            lifecycle change rather than a navigation one.
+          */}
+          <Stack.Screen
+            name="TripSummary"
+            component={TripCompletedScreen}
+            options={{ headerShown: true, title: tripSummaryStrings.title }}
           />
         </Stack.Navigator>
 

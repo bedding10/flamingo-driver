@@ -1,6 +1,8 @@
 import React, { useMemo, useState } from "react";
 import { ActivityIndicator, RefreshControl, StyleSheet, View } from "react-native";
 import { useQuery } from "@tanstack/react-query";
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { fetchEarnings, type DriverEarningRow } from "../../api/earnings.api";
 import {
   AppText,
@@ -17,6 +19,7 @@ import {
 } from "../../ui";
 import { spacing } from "../../theme";
 import { earningsStrings as t } from "../../i18n/strings.earnings";
+import type { DriverStackParamList } from "../../navigation/types";
 
 /**
  * Reference: `earnings_analysis.html`.
@@ -32,6 +35,9 @@ import { earningsStrings as t } from "../../i18n/strings.earnings";
  * The bucket totals come from the server. The secondary tiles (commission,
  * average) are computed from the rows that are actually on screen and are
  * labelled as such, so a driver can never read a partial sum as a full one.
+ *
+ * Each row opens the per-trip summary. That screen reuses this exact query key,
+ * so opening one costs no extra request.
  */
 type Bucket = "today" | "week" | "all";
 
@@ -64,6 +70,8 @@ const shortDateTime = (iso: string): string => {
 };
 
 export function EarningsScreen() {
+  const navigation =
+    useNavigation<NativeStackNavigationProp<DriverStackParamList>>();
   const [bucket, setBucket] = useState<Bucket>("today");
 
   const { data, isLoading, isError, refetch, isRefetching } = useQuery({
@@ -206,6 +214,9 @@ export function EarningsScreen() {
                   : ""
               }`}
               trailing={<Money amount={Number(row.net ?? 0)} variant="subtitle" />}
+              onPress={() =>
+                navigation.navigate("TripSummary", { tripId: row.tripId })
+              }
             />
           ))
         )}

@@ -81,4 +81,12 @@ export type DriverStackParamList = {
    * the store has been hydrated.
    */
   TripChat: { tripId: string };
+  /**
+   * DESIGN PHASE - the per-trip summary (reference `trip_completed.html`).
+   *
+   * tripId only, for the same reason as TripChat: the summary must survive a
+   * cold start and must not depend on the trip store, which clears
+   * `currentTrip` as soon as the status turns terminal.
+   */
+  TripSummary: { tripId: string };
 };

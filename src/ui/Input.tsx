@@ -14,7 +14,6 @@ import {
   touchTarget,
   typography,
   usePalette,
-  withAlpha,
 } from "../theme";
 import { Icon, type IconName } from "../components/Icon";
 import { AppText } from "./AppText";
@@ -169,10 +168,3 @@ const styles = StyleSheet.create({
   },
   inputMultiline: { minHeight: 96, textAlignVertical: "top" },
 });
-
-/** Kept next to the field it belongs to. */
-export const inputBorder = (focused: boolean, hasError: boolean) =>
-  hasError ? "error" : focused ? "focus" : "idle";
-
-/** Exported for screens that need the same wash behind a read-only value. */
-export const readOnlyWash = (color: string) => withAlpha(color, 0.08);
