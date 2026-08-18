@@ -7,8 +7,8 @@ import { DriverMap } from "../../components/DriverMap";
 import { RideOfferCard } from "../../components/RideOfferCard";
 import { ActiveTripCard } from "../../components/ActiveTripCard";
 import { HomeStatusCard } from "../../components/HomeStatusCard";
-import { StatusPill, type PillTone } from "../../components/StatusPill";
-import { BrandMark } from "../../components/BrandMark";
+import { StatusPill } from "../../components/StatusPill";
+import { DriverTopBar, toDriverLevel } from "../../components/DriverTopBar";
 import { Icon } from "../../components/Icon";
 import { DriverTabBar, navSpace } from "../../components/DriverTabBar";
 import { TripShareSheet } from "../../components/TripShareSheet";
@@ -34,6 +34,7 @@ import { strings } from "../../i18n/strings";
 import { shareStrings, statusStrings, tabStrings } from "../../i18n/strings.phase7";
 import { home75Strings } from "../../i18n/strings.phase75";
 import {
+  iconSize,
   radius,
   shadows,
   spacing,
@@ -44,11 +45,28 @@ import {
 /**
  * The screen a driver looks at all day.
  *
- * PHASE 7 made it map-first. PHASE 7.5 finished the job: the only permanent
- * chrome is the brand mark and one status pill at the top, a floating status
- * card and the floating navigation at the bottom. Everything is inset from the
- * screen edges, nothing is glued to them, and the map is visible behind all of
- * it. The round map controls now carry real icons instead of glyph characters.
+ * STITCH FIDELITY PASS
+ * The owner's verdict was that the app did not resemble the reference at all, so
+ * the chrome on this screen is now the reference chrome, element for element,
+ * from `main_driver_map`:
+ *
+ *   - the header is one floating row: tier-ringed avatar, a single glass status
+ *     pill carrying the dot and the city, and a round notifications button. It
+ *     replaces a brand mark plus two stacked pills, which was the biggest
+ *     visible difference between this screen and the reference.
+ *   - `my_location` is always present, on the trailing side, 56px, drawn on
+ *     `surface-container-highest` with a `surface-variant` border - NOT pink.
+ *     The reference reserves pink for the primary action.
+ *   - the navigation is attached to the bottom edge again (see DriverTabBar).
+ *
+ * WHAT IS STILL NOT THE REFERENCE, DELIBERATELY:
+ *   - `main_driver_map` shows no bottom card at all, because it only illustrates
+ *     the ONLINE state. A driver still has to be able to go online, see why they
+ *     cannot, and read a permission failure, so HomeStatusCard stays. It is the
+ *     one element on this screen with no reference counterpart.
+ *   - the socket pill has no counterpart either. It appears only when the socket
+ *     is down, because an online driver with a dead socket will never receive an
+ *     offer and must be told.
  *
  * What deliberately did NOT change: this screen is still never unmounted while
  * the driver is signed in, it still owns GPS publishing, socket status and the
@@ -56,10 +74,6 @@ import {
  * lifecycle - a driver who is ONLINE must keep publishing `driver:location`
  * because MatchingService reads that position from Redis. Going OFFLINE stops
  * the GPS, which is the only honest way to stop draining the battery.
- *
- * Performance: no state added that changes on a GPS fix. `fix` is read from the
- * store exactly as before, the palette comes from a memoised context, and the
- * cards below are the same memoised components.
  */
 export function DriverHomeScreen() {
   const insets = useSafeAreaInsets();
@@ -100,8 +114,9 @@ export function DriverHomeScreen() {
     clearUnread,
   } = useTripCommunication(trip);
 
-  // Unread notifications for the navigation badge. Reads the same react-query
-  // cache the inbox fills, so opening the map costs no request.
+  // Unread notifications for the header button and the navigation badge. Reads
+  // the same react-query cache the inbox fills, so opening the map costs no
+  // request.
   const unreadNotifications = useUnreadNotificationCount();
 
   const [shareOpen, setShareOpen] = useState(false);
@@ -215,6 +230,15 @@ export function DriverHomeScreen() {
   const recenter = useCallback(() => setFollow(true), []);
   const onPanByUser = useCallback(() => setFollow(false), []);
 
+  const openProfile = useCallback(
+    () => navigation.navigate("ProfileHub"),
+    [navigation],
+  );
+  const openNotifications = useCallback(
+    () => navigation.navigate("Notifications"),
+    [navigation],
+  );
+
   /**
    * Opens the trip chat with the passenger. The badge is dropped on the way in;
    * the authoritative receipt is still the chat screen's POST /messages/read.
@@ -248,11 +272,6 @@ export function DriverHomeScreen() {
 
   // ---- derived display state ---------------------------------------------
 
-  const availabilityTone: PillTone = onTrip
-    ? "busy"
-    : isOnline
-      ? "approved"
-      : "neutral";
   const availabilityShort = onTrip
     ? home75Strings.pillOnTrip
     : isOnline
@@ -299,8 +318,14 @@ export function DriverHomeScreen() {
       ? home75Strings.waiting
       : home75Strings.offlineHint;
 
-  // Everything floating at the bottom clears the navigation pill.
+  // Everything floating at the bottom clears the navigation bar.
   const bottomInset = navSpace(insets.bottom);
+  // The reference puts the socket pill nowhere, so it goes directly under the
+  // header: header padding + the 48px button row + one step.
+  const headerHeight =
+    Math.max(spacing["3xl"], insets.top + spacing.sm) +
+    touchTarget.stitchMin +
+    spacing.sm;
 
   return (
     <View style={[styles.root, { backgroundColor: palette.background }]}>
@@ -315,22 +340,34 @@ export function DriverHomeScreen() {
         rideClass={vehicle?.rideClass ?? null}
       />
 
-      <View style={[styles.topBar, { paddingTop: insets.top + spacing.sm }]}>
-        <BrandMark />
-        <View style={styles.topPills}>
-          <StatusPill label={availabilityShort} tone={availabilityTone} dot />
-          {linkBroken ? (
-            <StatusPill
-              label={linkLabel}
-              tone={link === "connecting" ? "pending" : "rejected"}
-              dot
-            />
-          ) : null}
-        </View>
-      </View>
+      <DriverTopBar
+        name={profile?.name ?? ""}
+        photoUrl={profile?.photoUrl}
+        level={toDriverLevel(profile?.profileLevel)}
+        statusLabel={availabilityShort}
+        statusColor={statusColor}
+        cityLabel={profile?.city}
+        badge={unreadNotifications}
+        topInset={insets.top}
+        onProfile={openProfile}
+        onNotifications={openNotifications}
+      />
 
-      {/* Map controls, one column, clear of the cards. */}
-      <View style={[styles.controls, { bottom: bottomInset + 132 }]}>
+      {linkBroken ? (
+        <View style={[styles.linkPill, { top: headerHeight }]} pointerEvents="none">
+          <StatusPill
+            label={linkLabel}
+            tone={link === "connecting" ? "pending" : "rejected"}
+            dot
+          />
+        </View>
+      ) : null}
+
+      {/*
+        Map controls. The reference draws `my_location` on the trailing side, one
+        column, always present, clear of the cards.
+      */}
+      <View style={[styles.controls, { bottom: bottomInset + spacing.md }]}>
         {trip ? (
           <Pressable
             accessibilityRole="button"
@@ -339,33 +376,35 @@ export function DriverHomeScreen() {
             style={({ pressed }) => [
               styles.roundButton,
               {
-                backgroundColor: palette.surface,
-                borderColor: palette.border,
+                backgroundColor: palette.surfaceHighest,
+                borderColor: palette.surfaceVariant,
               },
-              pressed ? { backgroundColor: palette.surfaceRaised } : null,
+              pressed ? { backgroundColor: palette.surfaceBright } : null,
             ]}
           >
-            <Icon name="share" size={22} color={palette.primaryText} />
+            <Icon name="share" size={iconSize.lg} color={palette.primaryText} />
           </Pressable>
         ) : null}
 
-        {!follow ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={home75Strings.recenter}
-            onPress={recenter}
-            style={({ pressed }) => [
-              styles.roundButton,
-              {
-                backgroundColor: palette.surface,
-                borderColor: palette.border,
-              },
-              pressed ? { backgroundColor: palette.surfaceRaised } : null,
-            ]}
-          >
-            <Icon name="target" size={22} color={palette.primaryText} />
-          </Pressable>
-        ) : null}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={home75Strings.recenter}
+          onPress={recenter}
+          style={({ pressed }) => [
+            styles.roundButton,
+            {
+              backgroundColor: palette.surfaceHighest,
+              borderColor: palette.surfaceVariant,
+            },
+            pressed ? { backgroundColor: palette.surfaceBright } : null,
+          ]}
+        >
+          <Icon
+            name="myLocation"
+            size={iconSize.lg}
+            color={palette.primaryText}
+          />
+        </Pressable>
       </View>
 
       {trip ? (
@@ -435,22 +474,16 @@ export function DriverHomeScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
 
-  topBar: {
+  linkPill: {
     position: "absolute",
     left: 0,
     right: 0,
-    top: 0,
-    flexDirection: "row-reverse",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    paddingHorizontal: spacing.lg,
-    gap: spacing.md,
+    alignItems: "center",
   },
-  topPills: { alignItems: "flex-end", gap: spacing.xs },
 
   controls: {
     position: "absolute",
-    left: spacing.lg,
+    right: spacing.lg,
     gap: spacing.sm,
   },
   roundButton: {
