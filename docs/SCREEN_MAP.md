@@ -15,6 +15,9 @@ Companion documents:
 - [`TESTING.md`](./TESTING.md) - what was actually run on this branch, and what
   still needs a device and the real backend.
 
+> **Revision 3.1.** Row 5 is DONE: the approval interstitial shipped. Section 1
+> now has no BUILD rows left.
+>
 > **Revision 3.** Rows 12, 14, 15, 19 and 21 changed. Rows 14 and 15 pointed at
 > two screens that were **cancelled** after reading the hook that already did
 > their job; row 21 is now a declared gap that will not be built. As in
@@ -49,7 +52,7 @@ The covering file is named in the row.
 | 2 | `upload_driving_license.html` | `screens/onboarding/DocumentsScreen.tsx` | DONE | `POST /driver/me/upload-url` -> R2 PUT -> `POST /driver/me/documents` |
 | 3 | `document_verification_checklist.html` | `screens/onboarding/DocumentsScreen.tsx` | DONE | `GET /driver/me` (`documents[]`) |
 | 4 | `application_under_review.html` | `screens/onboarding/PendingApprovalScreen.tsx` | DONE | `GET /driver/me` (`status`) |
-| 5 | `driver_approved_success.html` | `screens/onboarding/ApprovedScreen.tsx` | BUILD | `GET /driver/me` transition to `APPROVED` |
+| 5 | `driver_approved_success.html` | `screens/onboarding/ApprovedScreen.tsx`, rendered by `navigation/ApprovalGate.tsx` | DONE | `GET /driver/me` transition to `APPROVED` |
 | 6 | `my_vehicle.html` | `screens/profile/VehicleScreen.tsx` | DONE | `GET /driver/me` (`vehicle`) |
 | 7 | `driver_profile_hub.html` | `screens/profile/ProfileHubScreen.tsx` | DONE | `GET /driver/me` (rating, trips, level) |
 
@@ -60,10 +63,23 @@ The covering file is named in the row.
 > `CARTE_GRISE` and `TECHNICAL_INSPECTION`. The badge renders the server value.
 > Gap 8.2 is withdrawn.
 
-> **Row 5 scope.** `navigation/ApprovalGate.tsx` already routes the driver out
-> of onboarding the moment `status === "APPROVED"`, so nobody is stuck without
-> this screen. It is a celebration interstitial, not a gate - which is why it
-> is last in the queue rather than first.
+> **Row 5 - not a route, on purpose.** `ApprovalGate` already routes the driver
+> out of onboarding the moment `status === "APPROVED"`, so this was never a
+> gate; it is the transition itself, and nothing should be able to navigate
+> back to it. The gate renders it once, between the onboarding stack and the
+> working app.
+>
+> Detecting the transition needed no new storage key: `driver.store` seeds
+> itself from the on-disk profile cache, so the status captured on mount is
+> what the driver was the last time the app ran. That covers the common case,
+> where the operator approves the account while the app is closed. A fresh
+> install with no cached status gets no celebration - a reinstall would be
+> indistinguishable from a new approval, and congratulating somebody for
+> something that happened last month reads as broken.
+>
+> The screen answers "what now" rather than only celebrating: approved is not
+> the same as online, and that is precisely what a driver leaving review does
+> not know.
 
 > **Row 6 scope.** The vehicle screen is deliberately read-only and sends the
 > driver to `Profile` to edit. Two screens writing the same `PATCH /driver/me`
