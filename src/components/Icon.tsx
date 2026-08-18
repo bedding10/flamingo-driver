@@ -40,6 +40,7 @@ export type IconName =
   | "document"
   | "wallet"
   | "car"
+  | "bike"
   | "bell"
   | "support"
   | "shield"
@@ -129,6 +130,10 @@ type GlyphName = React.ComponentProps<typeof MaterialCommunityIcons>["name"];
  *
  * `chevron` points LEFT: in an Arabic layout "forward" moves toward the left
  * edge, and every existing call site relies on that.
+ *
+ * `bike` was added for the map puck: the reference draws every driver with
+ * `directions_car`, but this app knows the vehicle's approved ride class and a
+ * motorbike driver should not be shown a car.
  */
 const GLYPHS: Record<IconName, GlyphName> = {
   requests: "format-list-bulleted",
@@ -138,6 +143,7 @@ const GLYPHS: Record<IconName, GlyphName> = {
   document: "file-document-outline",
   wallet: "wallet-outline",
   car: "car",
+  bike: "motorbike",
   bell: "bell-outline",
   support: "headset",
   shield: "shield-check-outline",

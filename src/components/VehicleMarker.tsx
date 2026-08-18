@@ -1,67 +1,82 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Image, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { Marker } from "react-native-maps";
+import { LinearGradient } from "expo-linear-gradient";
+import { Icon } from "./Icon";
 import { config } from "../config";
-import { colors, withAlpha } from "../theme";
+import { iconSize, radius, usePalette, withAlpha } from "../theme";
 import type { DriverFix } from "../stores/location.store";
 
 /**
- * PHASE 2 - the driver's own vehicle on the map. PHASE 7 - caching and heading.
+ * The driver's own vehicle on the map.
  *
- * Deliberate decisions:
+ * STITCH FIDELITY PASS - this is now the reference puck, not a photo of a car.
+ * `main_driver_map` draws the driver as:
  *
- * 1. The artwork comes from R2, by object key, and the app picks between exactly
- *    two files: a motorbike for the BIKE ride class, a car for everything else.
- *    The class is whatever the backend approved on the vehicle; this component
- *    never guesses it from make or model. The Google default pin is never used.
- * 2. `tracksViewChanges` starts TRUE and is switched off as soon as the image
- *    reports it has loaded. This is the whole reason the marker is its own
- *    component: react-native-maps snapshots a custom marker view once, so a
- *    marker left at `false` while a remote image is still downloading renders
- *    permanently blank - and a driver with no marker cannot tell where they are.
- *    Leaving it at `true` forever is the opposite mistake: it re-snapshots on
- *    every single fix, for hours, which is the classic battery and frame-rate
- *    killer on this screen.
- * 3. PHASE 7: the image is prefetched once per URL per app session
- *    (`Image.prefetch` + a module-level set), so it is served from the native
- *    image cache afterwards. A GPS fix every few seconds therefore re-renders a
- *    cached bitmap and never re-downloads it. The <Image> `source` object is
- *    also built once per URL instead of per render, so React does not see a new
- *    source identity on each fix.
- * 4. PHASE 7: the last known heading is remembered. `fix.heading` is null
- *    whenever the driver is stationary or the OS has no bearing yet, and the
- *    previous code snapped the car to north (0) in that moment - a parked car
- *    visibly spinning to face north on every other fix. Keeping the last real
- *    bearing is both calmer and more truthful; only the very first fix of a
- *    session can be unrotated.
- * 5. A failed download falls back to the gold puck rather than to nothing. The
- *    map must always show the driver's position even when the CDN is
- *    unreachable or the object key is wrong.
- * 6. `flat` keeps the vehicle lying on the road surface while the map rotates.
+ *   div  bg-primary-container rounded-full p-3 animate-pulse
+ *        shadow-[0_0_24px_rgba(255,77,141,0.5)]
+ *     span material-symbols-outlined text-on-primary-container -> directions_car
+ *   div  w-1 h-8 bg-gradient-to-b from-primary-container to-transparent
+ *        opacity-50                                            -> the trail
+ *
+ * So: a 48px pink disc holding a 24px car glyph, wrapped in a pink glow, with a
+ * 4x32 gradient trail behind it. The previous version rendered a top-down car
+ * sprite downloaded from R2, which is a different picture entirely - that is
+ * what the owner meant by "it looks nothing like the images".
+ *
+ * THREE THINGS THE REFERENCE DOES THAT THIS CANNOT COPY LITERALLY:
+ *
+ *  1. `animate-pulse` is dropped ON PURPOSE. react-native-maps snapshots a
+ *     custom marker view; an animation forces `tracksViewChanges` to stay true
+ *     forever, which means re-snapshotting the marker every frame for a whole
+ *     shift. That is the documented battery and frame-rate killer on this
+ *     screen, and a pulsing dot is not worth it. The glow is static instead.
+ *  2. `shadow-[0_0_24px_...]` is a coloured glow, and Android elevation cannot
+ *     draw one. The glow is therefore a real 72px halo View filled with the same
+ *     pink at 25% - visible on both platforms - plus the iOS shadow on top.
+ *  3. The trail sits BEHIND the puck, which is what `rotation={heading}` plus a
+ *     centre anchor gives: the anchor is placed on the disc's centre, not the
+ *     centre of the whole view, so the trail sweeps around the vehicle rather
+ *     than the vehicle orbiting its own trail.
+ *
+ * KEPT FROM THE PREVIOUS VERSION, because both were right:
+ *
+ *  - the last real bearing is remembered. `fix.heading` is null whenever the
+ *    driver is stationary or the OS has no bearing yet, and snapping to north in
+ *    that moment made a parked car visibly spin.
+ *  - `tracksViewChanges` is true only briefly. The view is now entirely local
+ *    (a shape and an icon font) so it no longer has to wait for a download, but
+ *    it does have to be snapshotted at least once after the icon font is ready,
+ *    otherwise the marker renders permanently blank and a driver cannot see
+ *    where they are. Rotation is a native Marker prop and needs no re-snapshot.
+ *
+ * The BIKE ride class still gets its own glyph: the class is whatever staff
+ * approved on the vehicle, and this component never guesses it from make or
+ * model.
  */
 
-const MARKER_SIZE = 46;
+/** Reference sizes: p-3 around a 24px glyph, w-1 h-8 trail. */
+const PUCK = 48;
+const HALO = 72;
+const TAIL_WIDTH = 4;
+const TAIL_HEIGHT = 32;
+const TOTAL_HEIGHT = HALO + TAIL_HEIGHT;
+/** Anchor on the DISC's centre, not the centre of the view with the trail. */
+const ANCHOR_Y = HALO / 2 / TOTAL_HEIGHT;
 
-/** Public URL of the marker artwork for a ride class. */
+/**
+ * Public URL of the R2 marker artwork for a ride class.
+ *
+ * The map no longer uses it - the reference puck replaced the sprite - but it is
+ * still exported because the artwork is real, it is configured server-side, and
+ * removing a working helper is not part of a visual pass.
+ */
 export function vehicleMarkerUrl(rideClass?: string | null): string {
   const key =
     rideClass === "BIKE"
       ? config.media.vehicleMarkers.moto
       : config.media.vehicleMarkers.car;
   return `${config.media.publicBaseUrl}/${key}`;
-}
-
-/** URLs already handed to the native image cache, once per app session. */
-const prefetched = new Set<string>();
-/** Stable `source` objects, so a re-render never changes the image identity. */
-const sources = new Map<string, { uri: string }>();
-
-function sourceFor(uri: string): { uri: string } {
-  const existing = sources.get(uri);
-  if (existing) return existing;
-  const created = { uri };
-  sources.set(uri, created);
-  return created;
 }
 
 export type VehicleMarkerProps = {
@@ -71,22 +86,16 @@ export type VehicleMarkerProps = {
 };
 
 export function VehicleMarker({ fix, rideClass }: VehicleMarkerProps) {
-  const uri = vehicleMarkerUrl(rideClass);
-  const [loaded, setLoaded] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const palette = usePalette();
 
-  // A ride class change (staff re-classified the vehicle) swaps the URL, so the
-  // load state has to start over or the new image would never be snapshotted.
+  // Snapshot once, shortly after mount, then stop tracking. Re-armed when the
+  // glyph changes, which only happens if staff re-classify the vehicle.
+  const [ready, setReady] = useState(false);
   useEffect(() => {
-    setLoaded(false);
-    setFailed(false);
-  }, [uri]);
-
-  useEffect(() => {
-    if (prefetched.has(uri)) return;
-    prefetched.add(uri);
-    void Image.prefetch(uri).catch(() => undefined);
-  }, [uri]);
+    setReady(false);
+    const timer = setTimeout(() => setReady(true), 400);
+    return () => clearTimeout(timer);
+  }, [rideClass]);
 
   // Last real bearing. Updated during render on purpose: it must be applied to
   // the very fix that carried it, and it is derived state, not a subscription.
@@ -98,44 +107,65 @@ export function VehicleMarker({ fix, rideClass }: VehicleMarkerProps) {
   return (
     <Marker
       coordinate={{ latitude: fix.lat, longitude: fix.lng }}
-      anchor={{ x: 0.5, y: 0.5 }}
+      anchor={{ x: 0.5, y: ANCHOR_Y }}
       flat
       rotation={headingRef.current}
-      tracksViewChanges={!loaded && !failed}
+      tracksViewChanges={!ready}
     >
-      {failed ? (
-        <View style={styles.puckHalo}>
-          <View style={styles.puck} />
+      <View style={styles.stack}>
+        <View
+          style={[
+            styles.halo,
+            { backgroundColor: withAlpha(palette.primary, 0.25) },
+          ]}
+        >
+          <View
+            style={[
+              styles.puck,
+              { backgroundColor: palette.primary, shadowColor: palette.primary },
+            ]}
+          >
+            <Icon
+              name={rideClass === "BIKE" ? "bike" : "car"}
+              size={iconSize.lg}
+              color={palette.onPrimary}
+            />
+          </View>
         </View>
-      ) : (
-        <Image
-          source={sourceFor(uri)}
-          style={styles.vehicle}
-          resizeMode="contain"
-          onLoad={() => setLoaded(true)}
-          onError={() => setFailed(true)}
+
+        <LinearGradient
+          colors={[palette.primary, withAlpha(palette.primary, 0)]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={styles.tail}
         />
-      )}
+      </View>
     </Marker>
   );
 }
 
 const styles = StyleSheet.create({
-  vehicle: { width: MARKER_SIZE, height: MARKER_SIZE },
-  puckHalo: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: withAlpha(colors.gold, 0.22),
+  stack: { alignItems: "center", width: HALO, height: TOTAL_HEIGHT },
+  halo: {
+    width: HALO,
+    height: HALO,
+    borderRadius: radius.pill,
     alignItems: "center",
     justifyContent: "center",
   },
   puck: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: colors.gold,
-    borderWidth: 2,
-    borderColor: colors.ink,
+    width: PUCK,
+    height: PUCK,
+    borderRadius: radius.pill,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
+  },
+  tail: {
+    width: TAIL_WIDTH,
+    height: TAIL_HEIGHT,
+    opacity: 0.5,
   },
 });
