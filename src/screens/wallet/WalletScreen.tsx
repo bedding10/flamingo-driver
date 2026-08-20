@@ -14,6 +14,7 @@ import { PrimaryButton } from "../../components/PrimaryButton";
 import { SectionCard } from "../../components/SectionCard";
 import { toApiError } from "../../api/client";
 import { useEarnings, useWallet, useWithdrawal } from "../../hooks/useWallet";
+import { textAlignStart } from "../../i18n";
 import { walletStrings } from "../../i18n/strings.menu";
 import { strings } from "../../i18n/strings";
 import {
@@ -56,6 +57,10 @@ function shortDate(value?: string): string {
  *    lockedBalance: locked credit is exactly the part that cannot be taken out.
  *
  * PHASE 7.5 CLOSURE: colours only. No figure, endpoint or rule changed.
+ *
+ * PHASE 1 (R-11): `statsRow` and `entryRow` were `"row-reverse"` and seven text
+ * styles carried hardcoded direction. No figure, endpoint or rule changed here
+ * either - this was direction only.
  */
 export function WalletScreen() {
   const insets = useSafeAreaInsets();
@@ -272,21 +277,25 @@ const makeStyles = (palette: Palette) =>
     balanceLabel: {
       ...typography.caption,
       color: palette.textSecondary,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
+    /**
+     * No writingDirection needed: money() produces a single LTR run such as
+     * "24500 DZD", which the bidi algorithm keeps internally ordered even
+     * inside an RTL paragraph. Only the alignment had to become logical.
+     */
     balanceValue: {
       ...typography.display,
       color: palette.primaryText,
-      textAlign: "right",
+      textAlign: textAlignStart(),
     },
     locked: {
       ...typography.caption,
       color: palette.warning,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
-    statsRow: { flexDirection: "row-reverse", gap: spacing.md },
+    // Plain "row": mirrored by React Native under RTL.
+    statsRow: { flexDirection: "row", gap: spacing.md },
     stat: {
       flex: 1,
       backgroundColor: palette.surfaceSunken,
@@ -298,14 +307,14 @@ const makeStyles = (palette: Palette) =>
       alignItems: "center",
     },
     statValue: { ...typography.numeric, color: palette.primaryText },
+    // Centred inside its own stat tile, so it needs no alignment of its own.
     statLabel: {
       ...typography.caption,
       color: palette.textSecondary,
       marginTop: spacing.xs,
-      writingDirection: "rtl",
     },
     entryRow: {
-      flexDirection: "row-reverse",
+      flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
       gap: spacing.md,
@@ -316,18 +325,15 @@ const makeStyles = (palette: Palette) =>
     entryMeta: {
       ...typography.caption,
       color: palette.textSecondary,
-      writingDirection: "rtl",
     },
     hint: {
       ...typography.caption,
       color: palette.textSecondary,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
     error: {
       ...typography.caption,
       color: palette.danger,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
   });

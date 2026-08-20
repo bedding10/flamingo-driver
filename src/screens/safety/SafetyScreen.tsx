@@ -20,6 +20,7 @@ import type {
   SafetyIncidentStatus,
   SafetyIncidentType,
 } from "../../api/safety.api";
+import { textAlignStart } from "../../i18n";
 import { safetyStrings } from "../../i18n/strings.support";
 import { formatDateTime } from "../../utils/datetime";
 import {
@@ -60,6 +61,9 @@ const STATUS_LABELS: Record<SafetyIncidentStatus, string> = {
  * The SOS button itself deliberately stays on the trip card - a driver in
  * trouble must not have to open a menu - so this screen holds the setup and the
  * history, not a second trigger.
+ *
+ * PHASE 1 (R-11): `row` was `"row-reverse"` and five text styles carried
+ * hardcoded direction. See the note on `rowPhone`.
  */
 export function SafetyScreen() {
   const insets = useSafeAreaInsets();
@@ -265,11 +269,11 @@ const makeStyles = (palette: Palette) =>
     noteText: {
       ...typography.caption,
       color: palette.textPrimary,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
+    // Plain "row": mirrored by React Native under RTL.
     row: {
-      flexDirection: "row-reverse",
+      flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
       gap: spacing.sm,
@@ -283,13 +287,23 @@ const makeStyles = (palette: Palette) =>
     rowTitle: {
       ...typography.subtitle,
       color: palette.textPrimary,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
+    /**
+     * Renders two kinds of value: an emergency contact's phone number, and an
+     * incident timestamp. Both are Latin runs, so writingDirection stays "ltr"
+     * to stop the bidi algorithm reordering digits and separators.
+     *
+     * The alignment is START, not end: this is a sub-line belonging to the
+     * `rowTitle` directly above it, so it has to stay under its own title. It
+     * used to be a physical "left", which is the start of the line in French
+     * and English but the END of it in Arabic - the number would have detached
+     * from the name it belongs to depending on the language.
+     */
     rowPhone: {
       ...typography.caption,
       color: palette.textSecondary,
-      textAlign: "left",
+      textAlign: textAlignStart(),
       writingDirection: "ltr",
     },
     removeButton: {
@@ -303,13 +317,11 @@ const makeStyles = (palette: Palette) =>
     warn: {
       ...typography.caption,
       color: palette.warning,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
     muted: {
       ...typography.caption,
       color: palette.textSecondary,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
   });
