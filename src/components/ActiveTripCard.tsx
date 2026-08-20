@@ -1,6 +1,7 @@
 import React, { useMemo } from "react";
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import type { Trip, TripStatus } from "../types/trip";
+import { textAlignStart } from "../i18n";
 import { strings } from "../i18n/strings";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { Icon } from "./Icon";
@@ -71,6 +72,12 @@ function actionLabel(next: TripStatus | null): string | null {
  *
  * PHASE 7.5 CLOSURE: colours only. The state machine, the confirmations and
  * the position of the SOS button are exactly as PHASE 6 left them.
+ *
+ * PHASE 1 (R-11): six `"row-reverse"` rows and six text styles pinned with
+ * `textAlign: "right"` / `writingDirection: "rtl"`. All of them predate real
+ * RTL and now cancel React Native's own mirroring. Rows are plain `"row"` and
+ * the text resolves its own alignment. Nothing about the trip state machine,
+ * the confirmations or the SOS behaviour was touched.
  */
 function ActiveTripCardComponent({
   trip,
@@ -286,6 +293,7 @@ const makeStyles = (palette: Palette) =>
   StyleSheet.create({
     sheet: {
       position: "absolute",
+      // Symmetric: identical on both sides, so there is nothing to mirror.
       left: 0,
       right: 0,
       bottom: 0,
@@ -299,44 +307,50 @@ const makeStyles = (palette: Palette) =>
       gap: spacing.md,
       ...shadows.floating,
     },
+    // Every row below is plain "row": mirrored by React Native under RTL.
     headRow: {
-      flexDirection: "row-reverse",
+      flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
     },
     heading: {
       ...typography.subtitle,
       color: palette.textPrimary,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
     fare: { ...typography.subtitle, color: palette.primaryText },
 
     leg: {
-      flexDirection: "row-reverse",
+      flexDirection: "row",
       alignItems: "flex-start",
       gap: spacing.md,
     },
     dot: { width: 10, height: 10, borderRadius: radius.pill, marginTop: 6 },
     dotPickup: { backgroundColor: palette.online },
-    // Coral is a route token shared with the map polyline, not brand identity.
+    /**
+     * Kept on the legacy flat token deliberately. Moving this to a palette role
+     * would change colour SEMANTICS, not direction, and picking the right role
+     * for a destination dot is a PHASE 5 decision, not an RTL fix.
+     *
+     * Note also that the old claim that this is shared with the map polyline is
+     * stale: DriverMap draws its legs from primaryContainer and success. Both
+     * belong to the same PHASE 5 cleanup.
+     */
     dotDrop: { backgroundColor: colors.coral },
     legText: { flex: 1, gap: 2 },
     legLabel: {
       ...typography.caption,
       color: palette.textSecondary,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
     legValue: {
       ...typography.body,
       color: palette.textPrimary,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
 
     contactRow: {
-      flexDirection: "row-reverse",
+      flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
       gap: spacing.md,
@@ -345,15 +359,13 @@ const makeStyles = (palette: Palette) =>
     passengerLevel: {
       ...typography.caption,
       color: palette.primaryText,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
     passenger: {
       flex: 1,
       ...typography.caption,
       color: palette.textSecondary,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
     // Calling is secondary to messaging, so it is a round icon button that
     // never competes with the filled primary action.
@@ -368,7 +380,7 @@ const makeStyles = (palette: Palette) =>
       backgroundColor: palette.primaryWash,
     },
     chatButton: {
-      flexDirection: "row-reverse",
+      flexDirection: "row",
       alignItems: "center",
       gap: spacing.sm,
       minHeight: touchTarget.normal - 12,
@@ -396,11 +408,10 @@ const makeStyles = (palette: Palette) =>
     error: {
       ...typography.caption,
       color: palette.danger,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
 
-    actions: { flexDirection: "row-reverse", gap: spacing.md },
+    actions: { flexDirection: "row", gap: spacing.md },
     primaryButton: {
       flex: 2,
       height: touchTarget.critical,
