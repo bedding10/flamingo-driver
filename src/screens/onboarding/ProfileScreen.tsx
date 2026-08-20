@@ -16,6 +16,7 @@ import { SectionCard } from "../../components/SectionCard";
 import { VehicleCard } from "../../components/VehicleCard";
 import { ProfilePhotoPicker } from "../../components/ProfilePhotoPicker";
 import { PasswordSetupCard } from "../../components/PasswordSetupCard";
+import { textAlignStart } from "../../i18n";
 import { strings } from "../../i18n/strings";
 import {
   VEHICLE_FEATURE_KEYS,
@@ -99,6 +100,10 @@ function sameFeatures(a: string[], b: string[]): boolean {
  * PHASE 7.5 CLOSURE: colours only - plus the removal of two `colors.primary`
  * references, a token that does not exist on the colors object and would have
  * failed `tsc --noEmit`.
+ *
+ * PHASE 1 (R-11): the largest direction pass in the audit - three
+ * "row-reverse" rows (statsRow, pickerStatus, chipWrap) and fifteen text
+ * styles. No field, endpoint or validation rule was touched.
  */
 export function ProfileScreen() {
   const insets = useSafeAreaInsets();
@@ -603,10 +608,10 @@ const makeStyles = (palette: Palette) =>
     heading: {
       ...typography.title,
       color: palette.textPrimary,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
-    statsRow: { flexDirection: "row-reverse", gap: spacing.md },
+    // Plain "row": mirrored by React Native under RTL.
+    statsRow: { flexDirection: "row", gap: spacing.md },
     levelHero: { alignItems: "center", gap: spacing.sm },
     levelText: {
       ...typography.caption,
@@ -623,44 +628,40 @@ const makeStyles = (palette: Palette) =>
       alignItems: "center",
     },
     statValue: { ...typography.numeric, color: palette.primaryText },
+    // Centred inside its own stat tile, so it needs no alignment of its own.
     statLabel: {
       ...typography.caption,
       color: palette.textSecondary,
       marginTop: spacing.xs,
-      writingDirection: "rtl",
     },
     section: { marginTop: spacing.xs },
     pickerBlock: { gap: spacing.xs },
     pickerLabel: {
       ...typography.caption,
       color: palette.textSecondary,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
     pickerHint: {
       ...typography.caption,
       color: palette.textSecondary,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
     pickerError: {
       ...typography.caption,
       color: palette.danger,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
     pickerStatus: {
-      flexDirection: "row-reverse",
+      flexDirection: "row",
       alignItems: "center",
       gap: spacing.xs,
     },
     pickerStatusText: {
       ...typography.caption,
       color: palette.textSecondary,
-      writingDirection: "rtl",
     },
     chipWrap: {
-      flexDirection: "row-reverse",
+      flexDirection: "row",
       flexWrap: "wrap",
       gap: spacing.xs,
       marginTop: spacing.xs,
@@ -684,15 +685,13 @@ const makeStyles = (palette: Palette) =>
     chipText: {
       ...typography.caption,
       color: palette.textSecondary,
-      writingDirection: "rtl",
     },
     chipTextSelected: { color: palette.primaryText },
     fieldLabel: {
       ...typography.caption,
       color: palette.textSecondary,
       marginBottom: spacing.xs,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
     readOnly: {
       minHeight: touchTarget.normal,
@@ -706,16 +705,23 @@ const makeStyles = (palette: Palette) =>
     readOnlyValue: {
       ...typography.body,
       color: palette.textSecondary,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
-    ltr: { textAlign: "left", writingDirection: "ltr" },
+    /**
+     * Applied by ReadOnlyRow to the phone number - the identity Firebase
+     * authenticates, which this form deliberately cannot edit.
+     *
+     * writingDirection stays "ltr" so the E.164 digits and the leading "+" are
+     * not reordered. The alignment is START rather than the old physical
+     * "left", because the value has to stay under its own fieldLabel in every
+     * language - the same call as SafetyScreen's rowPhone.
+     */
+    ltr: { textAlign: textAlignStart(), writingDirection: "ltr" },
     hint: {
       ...typography.caption,
       color: palette.textSecondary,
       marginTop: spacing.xs,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
     noteBox: {
       padding: spacing.md,
@@ -728,27 +734,23 @@ const makeStyles = (palette: Palette) =>
       ...typography.caption,
       color: palette.danger,
       fontWeight: "600",
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
     noteText: {
       ...typography.body,
       color: palette.textPrimary,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
       marginTop: 2,
     },
     error: {
       ...typography.body,
       color: palette.danger,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
     success: {
       ...typography.body,
       color: palette.online,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
     save: { marginTop: spacing.sm },
   });

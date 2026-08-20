@@ -6,6 +6,7 @@ import {
   DocumentDatesModal,
   type DocumentDates,
 } from "../../components/DocumentDatesModal";
+import { textAlignStart } from "../../i18n";
 import { strings } from "../../i18n/strings";
 import { DOC_LABELS, p1 } from "../../i18n/strings.phase1";
 import {
@@ -42,6 +43,10 @@ import {
  *   2. photo source
  *   3. upload + register
  * Asking for dates after the photo would throw the photo away on any typo.
+ *
+ * PHASE 1 (R-11): no rows to fix - the row layout lives in DocumentRow, already
+ * corrected - but eight text styles were pinned `textAlign: "right"` /
+ * `writingDirection: "rtl"` and now resolve their own alignment.
  */
 export function DocumentsScreen() {
   const insets = useSafeAreaInsets();
@@ -166,14 +171,12 @@ const makeStyles = (palette: Palette) =>
     heading: {
       ...typography.title,
       color: palette.textPrimary,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
     subtitle: {
       ...typography.body,
       color: palette.textSecondary,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
       marginTop: spacing.xs,
     },
     banner: {
@@ -187,15 +190,13 @@ const makeStyles = (palette: Palette) =>
     bannerTitle: {
       ...typography.label,
       color: palette.warning,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
       marginBottom: spacing.xs,
     },
     bannerText: {
       ...typography.body,
       color: palette.textPrimary,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
     bannerOk: {
       marginTop: spacing.lg,
@@ -208,28 +209,24 @@ const makeStyles = (palette: Palette) =>
     bannerOkText: {
       ...typography.body,
       color: palette.textPrimary,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
     hint: {
       ...typography.caption,
       color: palette.textSecondary,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
       marginTop: spacing.md,
     },
     error: {
       ...typography.body,
       color: palette.danger,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
       marginTop: spacing.lg,
     },
     notice: {
       ...typography.body,
       color: palette.online,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
       marginTop: spacing.lg,
     },
     list: {
