@@ -24,6 +24,12 @@ type IconName = React.ComponentProps<typeof Icon>["name"];
  * PHASE 7.5 CLOSURE: drawn with the SVG icon set instead of a Unicode glyph,
  * and both themes come from the palette. `glyph` is still accepted for callers
  * written in PHASE 7 and is rendered only when no icon is given.
+ *
+ * PHASE 1 (R-11): the titles and bodies are centred, and `textAlign: "center"`
+ * is already direction-neutral. The `writingDirection: "rtl"` that sat next to
+ * it was forcing Arabic bidi resolution onto French and English copy, so it is
+ * gone. These are the two components behind `StitchEmptyState` and
+ * `StitchErrorState` in the design-system barrel.
  */
 export function EmptyState({
   glyph,
@@ -126,13 +132,11 @@ const makeStyles = (palette: Palette) =>
       ...typography.subtitle,
       color: palette.textPrimary,
       textAlign: "center",
-      writingDirection: "rtl",
     },
     body: {
       ...typography.caption,
       color: palette.textSecondary,
       textAlign: "center",
-      writingDirection: "rtl",
     },
     action: { alignSelf: "stretch", marginTop: spacing.md },
   });

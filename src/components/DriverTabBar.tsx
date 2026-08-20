@@ -12,8 +12,7 @@ import {
 } from "../theme";
 
 /**
- * The floating bottom navigation: requests on the right, the map in the middle,
- * the menu on the left.
+ * The floating bottom navigation: requests, the map, the menu.
  *
  * PHASE 1 (Stitch) restyled it onto the reference tokens. Stitch draws its
  * navigation on `surface-container-high` and marks the selected item with a
@@ -81,9 +80,15 @@ export function DriverTabBar({
         ]}
       >
         {/*
-          row-reverse: the first item reads on the right, so "requests" sits on
-          the right, the map stays centred and the menu is on the left - the
-          mirror of the latin layout, which is what RTL actually means.
+          Source order is requests, map, menu, and it is never reversed here.
+          React Native mirrors `flexDirection: "row"` on its own when the layout
+          direction is RTL, so in Arabic the first item lands on the right and
+          the menu on the left, while French and English read the other way.
+          This block used `row-reverse` to hand-mirror that, which now cancels
+          the automatic mirror and flips the bar back to latin order in Arabic.
+
+          Whatever the direction, the map stays in the middle - it is the
+          default section and the one the driver hits without looking.
         */}
         <Item
           icon="requests"
@@ -189,7 +194,9 @@ const styles = StyleSheet.create({
     right: TAB_BAR_MARGIN,
   },
   bar: {
-    flexDirection: "row-reverse",
+    // Plain "row". React Native mirrors it when the direction is RTL; see the
+    // note at the call site above for why hand-mirroring here was wrong.
+    flexDirection: "row",
     alignItems: "center",
     borderRadius: radius.sheet,
     borderWidth: 1,
@@ -208,12 +215,13 @@ const styles = StyleSheet.create({
   label: {
     ...typography.caption,
     fontWeight: "600",
-    writingDirection: "rtl",
   },
   badge: {
     position: "absolute",
     top: -4,
-    left: 2,
+    // `end`, not `left`: the badge belongs on the trailing corner of the icon,
+    // which is the left in Arabic and the right in French and English.
+    end: 2,
     minWidth: 18,
     height: 18,
     borderRadius: radius.pill,

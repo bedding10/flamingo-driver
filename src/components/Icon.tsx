@@ -1,13 +1,13 @@
 import React from "react";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
-import type { StyleProp, TextStyle } from "react-native";
+import { I18nManager, type StyleProp, type TextStyle } from "react-native";
 
 /**
  * PHASE 1 - the icon system.
  *
  * WHAT CHANGED AND WHY
- * The previous version drew 20 hand-written SVG paths. Stitch uses 117 distinct
- * Material Symbols names across its 38 screens, so a hand-drawn set could never
+ * The previous version drew 20 hand-written SVG paths. Stitch uses 137 distinct
+ * Material Symbols names across its 53 screens, so a hand-drawn set could never
  * cover the reference and every missing glyph became an approximation (the call
  * affordance was rendering a speech bubble). This is now one icon FONT family
  * behind one component, so a new screen names an icon instead of asking for a
@@ -27,8 +27,19 @@ import type { StyleProp, TextStyle } from "react-native";
  * with no screen touched.
  *
  * The public API is unchanged - `<Icon name="star" size={22} color={...} />` -
- * so all eight existing call sites keep working, and every name they use is
- * still a valid `IconName`.
+ * so every existing call site keeps working, and every name they use is still a
+ * valid `IconName`.
+ *
+ * DIRECTION (PHASE 1, R-11)
+ * `GLYPHS` holds the LEFT-TO-RIGHT glyph for every name. The handful of names
+ * that mean a direction rather than a thing - `chevron`, `back`, `forward` -
+ * also appear in `MIRRORED`, and are swapped when the layout direction is RTL.
+ * A call site therefore asks for a MEANING ("go deeper", "go back") and this
+ * component picks the arrow that points the right way in the current language.
+ *
+ * Before this, `chevron` was hardcoded to `chevron-left` because the app was
+ * Arabic-only and "forward" moved toward the left edge. That is wrong the
+ * moment French or English is selectable, which they now are.
  */
 
 export type IconName =
@@ -124,11 +135,9 @@ export type IconName =
 type GlyphName = React.ComponentProps<typeof MaterialCommunityIcons>["name"];
 
 /**
- * Semantic name -> glyph. The app never writes a glyph name at a call site, so
- * a wrong or renamed glyph can only ever be wrong in one place.
- *
- * `chevron` points LEFT: in an Arabic layout "forward" moves toward the left
- * edge, and every existing call site relies on that.
+ * Semantic name -> glyph, written for a LEFT-TO-RIGHT layout. The app never
+ * writes a glyph name at a call site, so a wrong or renamed glyph can only ever
+ * be wrong in one place.
  */
 const GLYPHS: Record<IconName, GlyphName> = {
   requests: "format-list-bulleted",
@@ -143,7 +152,8 @@ const GLYPHS: Record<IconName, GlyphName> = {
   shield: "shield-check-outline",
   legal: "gavel",
   logout: "logout",
-  chevron: "chevron-left",
+  // "go deeper" / disclosure. Mirrored in RTL.
+  chevron: "chevron-right",
   star: "star",
   share: "share-variant-outline",
   target: "crosshairs-gps",
@@ -152,6 +162,8 @@ const GLYPHS: Record<IconName, GlyphName> = {
   clock: "clock-outline",
   check: "check",
 
+  // Physical by name: always points right, whatever the direction. Use
+  // `chevron` for disclosure rows so they mirror correctly.
   chevronRight: "chevron-right",
   back: "arrow-left",
   forward: "arrow-right",
@@ -220,6 +232,37 @@ const GLYPHS: Record<IconName, GlyphName> = {
   featureLuggage: "bag-suitcase-outline",
 };
 
+/**
+ * The only names whose glyph depends on the layout direction. Everything absent
+ * from this table renders identically in both directions - a wallet is a wallet.
+ *
+ * Deliberately NOT in here: `transfer` and `negotiate` (a symmetric two-way
+ * arrow, correct either way), `trending` (a chart, not a pointer), `navigate`
+ * and `directions` (map glyphs whose meaning is the vehicle heading, not the
+ * reading order).
+ */
+const MIRRORED: Partial<Record<IconName, GlyphName>> = {
+  chevron: "chevron-left",
+  back: "arrow-right",
+  forward: "arrow-left",
+};
+
+/**
+ * Resolves a semantic name to the glyph that points the right way in the
+ * current layout direction.
+ *
+ * `I18nManager.isRTL` is read at render time rather than captured in a module
+ * constant. The value cannot change without a reload, so both are correct
+ * today, but reading it here keeps the component honest if that ever changes.
+ */
+export function glyphFor(name: IconName): GlyphName {
+  if (I18nManager.isRTL) {
+    const mirrored = MIRRORED[name];
+    if (mirrored) return mirrored;
+  }
+  return GLYPHS[name];
+}
+
 export function Icon({
   name,
   size = 24,
@@ -233,7 +276,7 @@ export function Icon({
 }) {
   return (
     <MaterialCommunityIcons
-      name={GLYPHS[name]}
+      name={glyphFor(name)}
       size={size}
       color={color}
       style={style}

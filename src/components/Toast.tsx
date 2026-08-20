@@ -22,6 +22,10 @@ import {
  * The host is mounted once, above the navigator, and reached through a
  * module-level `showToast()` so a service or an api layer can report without
  * being handed a React context.
+ *
+ * PHASE 1 (R-11): the text is centred, which is direction-neutral, so the
+ * `writingDirection: "rtl"` that used to sit beside it - and would have forced
+ * Arabic bidi resolution onto French and English - has been removed.
  */
 
 export type ToastTone = "info" | "success" | "error";
@@ -117,6 +121,5 @@ const styles = StyleSheet.create({
   text: {
     ...typography.subtitle,
     textAlign: "center",
-    writingDirection: "rtl",
   },
 });
