@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Image, StyleSheet, View } from "react-native";
 import { Marker } from "react-native-maps";
 import { config } from "../config";
-import { colors, withAlpha } from "../theme";
+import { usePalette, withAlpha } from "../theme";
 import type { DriverFix } from "../stores/location.store";
 
 /**
@@ -34,10 +34,20 @@ import type { DriverFix } from "../stores/location.store";
  *    visibly spinning to face north on every other fix. Keeping the last real
  *    bearing is both calmer and more truthful; only the very first fix of a
  *    session can be unrotated.
- * 5. A failed download falls back to the gold puck rather than to nothing. The
- *    map must always show the driver's position even when the CDN is
+ * 5. A failed download falls back to a BRAND PINK puck rather than to nothing.
+ *    The map must always show the driver's position even when the CDN is
  *    unreachable or the object key is wrong.
+ *
+ *    PHASE 1: this puck used to be drawn in `colors.gold`. Gold is not a
+ *    flaminGO identity colour (section 7), and this is the degraded state - the
+ *    exact moment a driver is most likely to be staring at their own marker
+ *    wondering what went wrong. It now reads the brand pink from the palette,
+ *    which also makes it correct in light mode instead of a fixed dark-only
+ *    pairing.
  * 6. `flat` keeps the vehicle lying on the road surface while the map rotates.
+ *
+ * RTL: nothing here mirrors. A map marker is positioned in world coordinates and
+ * rotated by a compass bearing, neither of which has a reading direction.
  */
 
 const MARKER_SIZE = 46;
@@ -71,6 +81,7 @@ export type VehicleMarkerProps = {
 };
 
 export function VehicleMarker({ fix, rideClass }: VehicleMarkerProps) {
+  const palette = usePalette();
   const uri = vehicleMarkerUrl(rideClass);
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -104,8 +115,21 @@ export function VehicleMarker({ fix, rideClass }: VehicleMarkerProps) {
       tracksViewChanges={!loaded && !failed}
     >
       {failed ? (
-        <View style={styles.puckHalo}>
-          <View style={styles.puck} />
+        <View
+          style={[
+            styles.puckHalo,
+            { backgroundColor: withAlpha(palette.primary, 0.22) },
+          ]}
+        >
+          <View
+            style={[
+              styles.puck,
+              {
+                backgroundColor: palette.primary,
+                borderColor: palette.background,
+              },
+            ]}
+          />
         </View>
       ) : (
         <Image
@@ -126,7 +150,6 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: withAlpha(colors.gold, 0.22),
     alignItems: "center",
     justifyContent: "center",
   },
@@ -134,8 +157,6 @@ const styles = StyleSheet.create({
     width: 16,
     height: 16,
     borderRadius: 8,
-    backgroundColor: colors.gold,
     borderWidth: 2,
-    borderColor: colors.ink,
   },
 });

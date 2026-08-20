@@ -24,6 +24,12 @@ import type { DriverAvailability } from "../types/driver";
  * availability during a trip, and a control that looks tappable but always
  * fails is worse than one that is clearly disabled. Colour never carries the
  * state alone - the label always spells it out.
+ *
+ * PHASE 1 (R-11): the content row was `"row-reverse"` and both label styles
+ * carried `writingDirection: "rtl"`. With real RTL enabled the hand-reversed row
+ * cancels the automatic mirror, which would have put the presence dot on the
+ * wrong side of the label in Arabic - on the one control the driver must read
+ * correctly at a glance. Now a plain `"row"`, which React Native mirrors itself.
  */
 type Props = {
   availability: DriverAvailability;
@@ -137,8 +143,9 @@ const styles = StyleSheet.create({
   },
   pressed: { opacity: 0.85 },
   disabled: { opacity: 0.55 },
+  // Plain "row": mirrored by React Native under RTL. See the R-11 note above.
   content: {
-    flexDirection: "row-reverse",
+    flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
   },
@@ -151,10 +158,10 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 0 },
     elevation: 4,
   },
-  label: { ...typography.subtitle, writingDirection: "rtl" },
+  // The label is centred inside the pill, so it needs no explicit alignment.
+  label: { ...typography.subtitle },
   labelCompact: {
     ...typography.label,
     fontWeight: "700",
-    writingDirection: "rtl",
   },
 });

@@ -7,6 +7,7 @@ import {
   usePalette,
   type Palette,
 } from "../theme";
+import { textAlignStart } from "../i18n";
 import { strings } from "../i18n/strings";
 import type { DriverVehicle } from "../types/driver";
 
@@ -15,6 +16,15 @@ import type { DriverVehicle } from "../types/driver";
  *
  * A driver has exactly one active vehicle in this system (the server includes
  * `vehicles: { where: { isActive: true }, take: 1 }`), so there is no list here.
+ *
+ * PHASE 1 (R-11): the two rows were `"row-reverse"` and two text styles were
+ * `textAlign: "right"` with `writingDirection: "rtl"`. Both rows are now plain
+ * `"row"` so React Native mirrors them, and the text resolves its alignment.
+ *
+ * Deliberately NOT changed: `plate` keeps `writingDirection: "ltr"` because a
+ * licence plate is latin and numeric and must never reflow, and the
+ * `alignSelf`/`alignItems: "flex-end"` values are already logical in Yoga - they
+ * follow the layout direction on their own, so "fixing" them would break them.
  */
 export function VehicleCard({ vehicle }: { vehicle: DriverVehicle | null }) {
   const palette = usePalette();
@@ -87,8 +97,9 @@ const makeStyles = (palette: Palette) =>
       borderWidth: 1,
       borderColor: palette.border,
     },
+    // Plain "row": mirrored by React Native under RTL.
     header: {
-      flexDirection: "row-reverse",
+      flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
       gap: spacing.md,
@@ -97,8 +108,7 @@ const makeStyles = (palette: Palette) =>
       ...typography.subtitle,
       color: palette.textPrimary,
       flexShrink: 1,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
     rideClass: {
       ...typography.caption,
@@ -106,6 +116,7 @@ const makeStyles = (palette: Palette) =>
       letterSpacing: 1,
     },
     plateWrapper: {
+      // Logical: follows the layout direction already.
       alignSelf: "flex-end",
       marginTop: spacing.md,
       paddingHorizontal: spacing.lg,
@@ -119,10 +130,11 @@ const makeStyles = (palette: Palette) =>
       ...typography.subtitle,
       color: palette.textPrimary,
       letterSpacing: 2,
+      // A plate is latin and numeric: it must read the same in every language.
       writingDirection: "ltr",
     },
     metaRow: {
-      flexDirection: "row-reverse",
+      flexDirection: "row",
       gap: spacing["3xl"],
       marginTop: spacing.lg,
     },
@@ -136,7 +148,6 @@ const makeStyles = (palette: Palette) =>
     empty: {
       ...typography.body,
       color: palette.textSecondary,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
   });
