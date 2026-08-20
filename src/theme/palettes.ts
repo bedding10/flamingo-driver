@@ -14,6 +14,13 @@ import { STITCH_DARK, STITCH_GLOW, STITCH_LIGHT } from "./stitch";
  * the roles Stitch actually uses (`surface-container-highest`,
  * `outline-variant`, `inverse-primary`, ...) and they let a component say what it
  * means instead of picking a shade.
+ *
+ * INVARIANT: no role in this file may be a literal hex. Every value resolves
+ * from `STITCH_DARK` / `STITCH_LIGHT`, or is derived from one with `withAlpha`.
+ * The one exception left - `warning` - had silently drifted away from the
+ * reference precisely because it was hardcoded, and has now been folded back
+ * into the token set. Scrims stay literal because they are pure black/neutral
+ * veils, not palette colours.
  */
 export type ThemeMode = "dark" | "light";
 
@@ -115,7 +122,9 @@ export const DARK_PALETTE: Palette = {
   offline: dark.outline,
   busy: dark.tertiary,
   danger: dark.error,
-  warning: "#E8A33D",
+  // PHASE 1: was a hardcoded #E8A33D, which is not a Stitch colour. Stitch's
+  // functional warning is #F59E0B and now arrives through the token set.
+  warning: dark.warning,
   info: dark.secondary,
 
   scrim: "rgba(0,0,0,0.55)",
@@ -164,7 +173,9 @@ export const LIGHT_PALETTE: Palette = {
   offline: light.outline,
   busy: light.tertiary,
   danger: light.error,
-  warning: "#B57414",
+  // PHASE 1: see DARK_PALETTE. The light warning is the darkened counterpart
+  // of Stitch's #F59E0B, carried in the token set so the two stay in step.
+  warning: light.warning,
   info: light.secondary,
 
   scrim: "rgba(25,28,30,0.45)",
