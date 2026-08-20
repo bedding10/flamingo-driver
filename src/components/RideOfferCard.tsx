@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { Icon } from "./Icon";
 import type { RideOffer } from "../types/trip";
+import { textAlignStart } from "../i18n";
 import { strings } from "../i18n/strings";
 import { offer75Strings, rideClassLabels } from "../i18n/strings.phase75";
 import {
@@ -54,6 +55,18 @@ function money(amount: number, currency?: string | null): string {
  * a constant: OFFER_TIMEOUT_MS lives in MatchingService and can be retuned
  * server side, and a driver who trusts a wrong timer loses rides. It is
  * wall-clock based, so a frozen JS thread cannot make the bar lie.
+ *
+ * PHASE 1 (R-11): this file carried the most hand-written direction
+ * compensation in the tree - eight `"row-reverse"` rows and seven text styles
+ * pinned with `textAlign: "right"` / `writingDirection: "rtl"`. With real RTL
+ * enabled every one of them cancelled React Native's own mirroring. That
+ * mattered here more than anywhere: the driver has twenty server-enforced
+ * seconds to read this card and decide, so a row on the wrong side is a lost
+ * ride, not a cosmetic defect. All rows are plain `"row"` now.
+ *
+ * Module-level StyleSheet.create is safe: importing "../i18n" runs that module
+ * (including syncDirectionAtBoot()) to completion before this file's body is
+ * evaluated, so textAlignStart() reads a settled direction.
  */
 function RideOfferCardComponent({
   offer,
@@ -285,6 +298,7 @@ export const RideOfferCard = React.memo(RideOfferCardComponent);
 const styles = StyleSheet.create({
   card: {
     position: "absolute",
+    // Symmetric inset: identical on both sides, so there is nothing to mirror.
     left: 14,
     right: 14,
     borderRadius: radius.sheet,
@@ -299,62 +313,61 @@ const styles = StyleSheet.create({
   timerTrack: { height: 4, borderRadius: radius.pill, overflow: "hidden" },
   timerFill: { height: 4, borderRadius: radius.pill },
 
+  // Every row below is plain "row": mirrored by React Native under RTL.
   headRow: {
-    flexDirection: "row-reverse",
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
   kicker: {
     ...typography.label,
     fontWeight: "700",
-    writingDirection: "rtl",
+    textAlign: textAlignStart(),
   },
   countdown: { ...typography.label, fontWeight: "700" },
 
   passengerRow: {
-    flexDirection: "row-reverse",
+    flexDirection: "row",
     alignItems: "center",
     gap: spacing.md,
   },
   passengerText: { flex: 1, gap: 2 },
   passengerName: {
     ...typography.subtitle,
-    textAlign: "right",
-    writingDirection: "rtl",
+    textAlign: textAlignStart(),
   },
   passengerMeta: {
-    flexDirection: "row-reverse",
+    flexDirection: "row",
     alignItems: "center",
     gap: spacing.md,
   },
-  metaChip: { flexDirection: "row-reverse", alignItems: "center", gap: 3 },
-  meta: { ...typography.caption, writingDirection: "rtl" },
+  metaChip: { flexDirection: "row", alignItems: "center", gap: 3 },
+  meta: { ...typography.caption },
+  // Logical: follows the layout direction already.
   fareCol: { alignItems: "flex-start", gap: 2, maxWidth: "38%" },
   fare: { ...typography.numeric, fontSize: 22 },
 
   factsRow: {
-    flexDirection: "row-reverse",
+    flexDirection: "row",
     alignItems: "center",
     gap: spacing.lg,
   },
 
-  leg: { flexDirection: "row-reverse", alignItems: "center", gap: spacing.sm },
+  leg: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   dot: { width: 8, height: 8, borderRadius: 4 },
   legValue: {
     ...typography.body,
     flex: 1,
-    textAlign: "right",
-    writingDirection: "rtl",
+    textAlign: textAlignStart(),
   },
 
   notice: {
     ...typography.caption,
-    textAlign: "right",
-    writingDirection: "rtl",
+    textAlign: textAlignStart(),
   },
 
   actions: {
-    flexDirection: "row-reverse",
+    flexDirection: "row",
     gap: spacing.md,
     marginTop: spacing.xs,
   },
@@ -377,8 +390,7 @@ const styles = StyleSheet.create({
   skipLabel: { ...typography.subtitle },
   footnote: {
     ...typography.caption,
-    textAlign: "right",
-    writingDirection: "rtl",
+    textAlign: textAlignStart(),
   },
   pressed: { opacity: 0.85 },
   disabled: { opacity: 0.5 },
