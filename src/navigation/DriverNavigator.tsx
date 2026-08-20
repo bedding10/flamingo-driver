@@ -1,5 +1,6 @@
-import React, { useMemo } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { DriverHomeScreen } from "../screens/home/DriverHomeScreen";
 import { MenuScreen } from "../screens/menu/MenuScreen";
@@ -14,7 +15,16 @@ import { DocumentsScreen } from "../screens/onboarding/DocumentsScreen";
 import { RequestsScreen } from "../screens/requests/RequestsScreen";
 import { TripChatScreen } from "../screens/trip/TripChatScreen";
 import { ApprovalGate } from "./ApprovalGate";
+import { navigationRef, navigateWhenReady } from "./navigation-ref";
+import { requestRecenter } from "./map-recenter";
 import { ToastHost } from "../components/Toast";
+import {
+  DriverTabBar,
+  navSpace,
+  type DriverTab,
+} from "../components/DriverTabBar";
+import { useUnreadNotificationCount } from "../hooks/useNotifications";
+import { useTranslation } from "../i18n";
 import { strings } from "../i18n/strings";
 import { requestStrings } from "../i18n/strings.requests";
 import { menuStrings, walletStrings } from "../i18n/strings.menu";
@@ -28,6 +38,28 @@ import { typography, usePalette } from "../theme";
 import type { DriverStackParamList } from "./types";
 
 const Stack = createNativeStackNavigator<DriverStackParamList>();
+
+/**
+ * The three sections of the driver app, in Stitch's order.
+ *
+ * These are the only routes that show the bottom navigation. Everything else
+ * (wallet, profile, documents, support, a ticket, a chat) is reached THROUGH one
+ * of these three and is a detail view, per section 16 and section 46 - so the
+ * bar would be covering content those screens do not reserve space for.
+ */
+const SECTION_ROUTES = ["Home", "Requests", "Menu"] as const;
+
+type SectionRoute = (typeof SECTION_ROUTES)[number];
+
+function tabForRoute(routeName: string | undefined): DriverTab {
+  if (routeName === "Requests") return "requests";
+  if (routeName === "Menu") return "menu";
+  return "map";
+}
+
+function isSectionRoute(routeName: string | undefined): boolean {
+  return SECTION_ROUTES.includes(routeName as SectionRoute);
+}
 
 /**
  * The signed-in stack, behind the approval gate.
@@ -47,9 +79,41 @@ const Stack = createNativeStackNavigator<DriverStackParamList>();
  * tint, which meant every pushed screen kept a dark header in light mode and
  * kept a banned gold accent. Header, tint and content background now come from
  * the palette, and the tint is the brand pink.
+ *
+ * PHASE 1 (R-8) - WHY THE BAR IS HERE AND NOT IN A SCREEN
+ * It used to be rendered inside DriverHomeScreen with `active="map"` hardcoded,
+ * so it appeared on one of its own three sections and disappeared the moment
+ * the driver opened Requests or Menu. Mounted here, as a sibling of the stack
+ * exactly like ToastHost, it persists across all three and the active item is
+ * derived from the live route instead of being asserted by a prop.
+ *
+ * It is still NOT a tab navigator, for the original and still-valid reason: the
+ * home screen owns the GPS subscription, the socket listeners and the trip
+ * lifecycle, and has to stay mounted for an entire shift. A native stack keeps
+ * it mounted underneath a pushed screen; a tab navigator would unmount or
+ * freeze it - and it would do so precisely when an offer arrives.
  */
 export function DriverNavigator() {
   const palette = usePalette();
+  const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
+
+  // Unread notifications for the bar's badge. Reads the same react-query cache
+  // the inbox fills, so showing the badge costs no extra request.
+  const unreadNotifications = useUnreadNotificationCount();
+
+  // The active route, tracked from the container ref. The bar sits outside the
+  // navigator, so it cannot read route state through a screen prop.
+  const [routeName, setRouteName] = useState<string | undefined>(() =>
+    navigationRef.isReady() ? navigationRef.getCurrentRoute()?.name : "Home",
+  );
+
+  useEffect(() => {
+    const sync = () => setRouteName(navigationRef.getCurrentRoute()?.name);
+    sync();
+    return navigationRef.addListener("state", sync);
+  }, []);
+
   const styles = useMemo(
     () =>
       StyleSheet.create({
@@ -74,19 +138,79 @@ export function DriverNavigator() {
     [palette],
   );
 
+  /**
+   * Space the two list sections must leave free so their last row is not stuck
+   * under the floating bar. Applied through the navigator's contentStyle rather
+   * than inside the screens, so adding the persistent bar cannot change what is
+   * on those screens.
+   */
+  const sectionContentStyle = useMemo(
+    () => ({
+      backgroundColor: palette.background,
+      paddingBottom: navSpace(insets.bottom),
+    }),
+    [palette, insets.bottom],
+  );
+
+  /**
+   * The centre item is not a link to itself: on the map it recentres the
+   * camera, everywhere else it returns to the map.
+   */
+  const onSelectTab = useCallback(
+    (tab: DriverTab) => {
+      if (tab === "requests") {
+        navigateWhenReady("Requests");
+        return;
+      }
+      if (tab === "menu") {
+        navigateWhenReady("Menu");
+        return;
+      }
+      if (navigationRef.getCurrentRoute()?.name === "Home") {
+        requestRecenter();
+        return;
+      }
+      navigateWhenReady("Home");
+    },
+    [],
+  );
+
+  const labels = useMemo(
+    () => ({
+      requests: t("nav.requests"),
+      map: t("nav.map"),
+      menu: t("nav.menu"),
+    }),
+    [t],
+  );
+
   return (
     <ApprovalGate>
       <View style={styles.root}>
         <Stack.Navigator screenOptions={screenOptions}>
           <Stack.Screen name="Home" component={DriverHomeScreen} />
           {/*
-            The menu and the wallet are pushed screens for the same reason as
-            Requests - the map stays the driver's default view.
+            Menu and Requests are the other two SECTIONS. They stay pushed
+            stack screens so the map underneath is never unmounted, but they
+            keep the bottom navigation visible and reserve room for it.
           */}
           <Stack.Screen
             name="Menu"
             component={MenuScreen}
-            options={{ headerShown: true, title: menuStrings.title }}
+            options={{
+              headerShown: true,
+              title: menuStrings.title,
+              contentStyle: sectionContentStyle,
+            }}
+          />
+          <Stack.Screen
+            name="Requests"
+            component={RequestsScreen}
+            options={{
+              headerShown: true,
+              title: requestStrings.title,
+              contentStyle: sectionContentStyle,
+            }}
           />
           <Stack.Screen
             name="Wallet"
@@ -129,16 +253,6 @@ export function DriverNavigator() {
             options={{ headerShown: true, title: strings.documents.title }}
           />
           {/*
-            The bidding requests list is a pushed screen rather than a tab
-            because the driver's default view must stay the map: a driver who
-            loses sight of the map loses the road.
-          */}
-          <Stack.Screen
-            name="Requests"
-            component={RequestsScreen}
-            options={{ headerShown: true, title: requestStrings.title }}
-          />
-          {/*
             Trip chat sits behind the same approval gate as everything else: a
             driver who is not APPROVED has no trip, so has nobody to message.
           */}
@@ -148,6 +262,16 @@ export function DriverNavigator() {
             options={{ headerShown: true, title: strings.chat.title }}
           />
         </Stack.Navigator>
+
+        {isSectionRoute(routeName) ? (
+          <DriverTabBar
+            active={tabForRoute(routeName)}
+            bottomInset={insets.bottom}
+            labels={labels}
+            badge={unreadNotifications}
+            onSelect={onSelectTab}
+          />
+        ) : null}
 
         <ToastHost />
       </View>

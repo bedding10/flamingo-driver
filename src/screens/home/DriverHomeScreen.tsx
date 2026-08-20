@@ -10,15 +10,15 @@ import { HomeStatusCard } from "../../components/HomeStatusCard";
 import { StatusPill, type PillTone } from "../../components/StatusPill";
 import { BrandMark } from "../../components/BrandMark";
 import { Icon } from "../../components/Icon";
-import { DriverTabBar, navSpace } from "../../components/DriverTabBar";
+import { navSpace } from "../../components/DriverTabBar";
 import { TripShareSheet } from "../../components/TripShareSheet";
+import { onRecenter } from "../../navigation/map-recenter";
 import { useAvailability } from "../../hooks/useAvailability";
 import { useRideOffer } from "../../hooks/useRideOffer";
 import { useTripLifecycle } from "../../hooks/useTripLifecycle";
 import { useTripRoute } from "../../hooks/useTripRoute";
 import { useTripCommunication } from "../../hooks/useTripCommunication";
 import { useDriverProfile } from "../../hooks/useDriverProfile";
-import { useUnreadNotificationCount } from "../../hooks/useNotifications";
 import { useDriverStore } from "../../stores/driver.store";
 import { useLocationStore } from "../../stores/location.store";
 import {
@@ -31,7 +31,7 @@ import { connectSocket, onSocketStatus } from "../../socket/socket.service";
 import type { SocketStatus } from "../../types/socket";
 import type { DriverStackParamList } from "../../navigation/types";
 import { strings } from "../../i18n/strings";
-import { shareStrings, statusStrings, tabStrings } from "../../i18n/strings.phase7";
+import { shareStrings, statusStrings } from "../../i18n/strings.phase7";
 import { home75Strings } from "../../i18n/strings.phase75";
 import {
   radius,
@@ -56,6 +56,18 @@ import {
  * lifecycle - a driver who is ONLINE must keep publishing `driver:location`
  * because MatchingService reads that position from Redis. Going OFFLINE stops
  * the GPS, which is the only honest way to stop draining the battery.
+ *
+ * PHASE 1 (R-8): the bottom navigation is no longer rendered here. It lived in
+ * this screen with `active="map"` hardcoded, which meant it only existed on one
+ * of its three sections. It is now mounted once in DriverNavigator so it
+ * persists across Requests and Menu too. This screen keeps `navSpace()` because
+ * its floating cards still have to clear that bar, and it subscribes to
+ * `onRecenter` so the bar's centre item can still recentre the camera - that
+ * follow flag is local state and stays local.
+ *
+ * PHASE 1 (R-11): the top bar was `flexDirection: "row-reverse"`, which
+ * double-flipped now that real RTL is enabled, and the map control column was
+ * pinned with `left`, which never mirrors. Now `"row"` and `end`.
  *
  * Performance: no state added that changes on a GPS fix. `fix` is read from the
  * store exactly as before, the palette comes from a memoised context, and the
@@ -99,10 +111,6 @@ export function DriverHomeScreen() {
     call: callPassenger,
     clearUnread,
   } = useTripCommunication(trip);
-
-  // Unread notifications for the navigation badge. Reads the same react-query
-  // cache the inbox fills, so opening the map costs no request.
-  const unreadNotifications = useUnreadNotificationCount();
 
   const [shareOpen, setShareOpen] = useState(false);
 
@@ -216,6 +224,13 @@ export function DriverHomeScreen() {
   const onPanByUser = useCallback(() => setFollow(false), []);
 
   /**
+   * The bottom bar's centre item recentres the camera when the driver is
+   * already on the map. The bar is mounted in DriverNavigator, outside this
+   * screen, so it reaches the camera through this subscription.
+   */
+  useEffect(() => onRecenter(recenter), [recenter]);
+
+  /**
    * Opens the trip chat with the passenger. The badge is dropped on the way in;
    * the authoritative receipt is still the chat screen's POST /messages/read.
    */
@@ -235,16 +250,6 @@ export function DriverHomeScreen() {
       if (!ok) Alert.alert(strings.safety.errorTitle, strings.chat.callFailed);
     });
   }, [callPassenger]);
-
-  /** Navigation handler. The centre item recentres instead of navigating. */
-  const onTab = useCallback(
-    (tab: "requests" | "map" | "menu") => {
-      if (tab === "requests") navigation.navigate("Requests");
-      else if (tab === "menu") navigation.navigate("Menu");
-      else recenter();
-    },
-    [navigation, recenter],
-  );
 
   // ---- derived display state ---------------------------------------------
 
@@ -299,7 +304,8 @@ export function DriverHomeScreen() {
       ? home75Strings.waiting
       : home75Strings.offlineHint;
 
-  // Everything floating at the bottom clears the navigation pill.
+  // Everything floating at the bottom clears the navigation pill, which is now
+  // mounted by DriverNavigator rather than by this screen.
   const bottomInset = navSpace(insets.bottom);
 
   return (
@@ -415,14 +421,6 @@ export function DriverHomeScreen() {
         />
       )}
 
-      <DriverTabBar
-        active="map"
-        bottomInset={insets.bottom}
-        labels={tabStrings}
-        badge={unreadNotifications}
-        onSelect={onTab}
-      />
-
       <TripShareSheet
         visible={shareOpen}
         tripId={trip?.id ?? null}
@@ -440,7 +438,9 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     top: 0,
-    flexDirection: "row-reverse",
+    // Plain "row": React Native mirrors it under RTL, so the brand mark leads
+    // and the pills trail in every language. See the R-11 note above.
+    flexDirection: "row",
     alignItems: "flex-start",
     justifyContent: "space-between",
     paddingHorizontal: spacing.lg,
@@ -450,7 +450,9 @@ const styles = StyleSheet.create({
 
   controls: {
     position: "absolute",
-    left: spacing.lg,
+    // `end`, not `left`: the control column belongs on the trailing edge, which
+    // mirrors with the layout. `left` would stay put in both directions.
+    end: spacing.lg,
     gap: spacing.sm,
   },
   roundButton: {
