@@ -5,7 +5,8 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider } from "./auth/AuthProvider";
 import { RootNavigator } from "./navigation/RootNavigator";
-import { ThemeProvider, useTheme } from "./theme";
+import { I18nProvider } from "./i18n";
+import { ThemeProvider, useAppFonts, useTheme } from "./theme";
 
 /**
  * Cache policy tuned for a phone that spends the day on a mobile network:
@@ -38,6 +39,28 @@ function ThemedStatusBar() {
   );
 }
 
+/**
+ * PHASE 1 - the font gate.
+ *
+ * Nothing below this renders until `expo-font` has settled, for a concrete
+ * reason: `typography.ts` resolves its family lazily, at StyleSheet-creation
+ * time. If a screen mounted before the faces were ready it would build its
+ * styles against the system fallback and keep them - the fonts would load and
+ * then never be applied.
+ *
+ * It renders `null` rather than a spinner so the NATIVE splash screen stays up.
+ * A spinner here would mean two loading states back to back on a cold start.
+ *
+ * `useAppFonts` always reaches `ready`, including when a face fails to decode.
+ * A driver must be able to open the app and go online on the wrong typeface;
+ * being locked out of a shift by a font is not an acceptable failure mode.
+ */
+function FontGate({ children }: { children: React.ReactNode }) {
+  const { ready } = useAppFonts();
+  if (!ready) return null;
+  return <>{children}</>;
+}
+
 export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -47,13 +70,22 @@ export default function App() {
             PHASE 7.5: the theme wraps the navigator, not individual screens, so
             one switch repaints the whole app and no screen can drift out of the
             design system.
+
+            PHASE 1: I18nProvider sits directly above it. Importing `./i18n` also
+            settles the native layout direction at module scope, which has to
+            happen before the first render - React Native cannot flip a mounted
+            tree between LTR and RTL.
           */}
-          <ThemeProvider>
-            <ThemedStatusBar />
-            <AuthProvider>
-              <RootNavigator />
-            </AuthProvider>
-          </ThemeProvider>
+          <I18nProvider>
+            <ThemeProvider>
+              <ThemedStatusBar />
+              <FontGate>
+                <AuthProvider>
+                  <RootNavigator />
+                </AuthProvider>
+              </FontGate>
+            </ThemeProvider>
+          </I18nProvider>
         </QueryClientProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
