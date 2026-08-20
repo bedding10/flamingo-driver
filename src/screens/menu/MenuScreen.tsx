@@ -16,6 +16,7 @@ import { Icon, type IconName } from "../../components/Icon";
 import { useDriverProfile } from "../../hooks/useDriverProfile";
 import { useUnreadNotificationCount } from "../../hooks/useNotifications";
 import { useAuthStore } from "../../auth/auth.store";
+import { textAlignStart } from "../../i18n";
 import { menuStrings } from "../../i18n/strings.menu";
 import { menu75Strings } from "../../i18n/strings.phase75";
 import { strings } from "../../i18n/strings";
@@ -48,9 +49,8 @@ const LEVEL_LABELS: Record<string, string> = {
  *
  * What it is now: one profile hero at the top, then quiet section titles over
  * compact 56pt list rows grouped in rounded cards - the consumer-app pattern.
- * Each row is an icon, a title, a one-line subtitle and a chevron that points
- * LEFT because the layout is RTL. Sign-out is a row too, in red, not a button
- * bolted to the bottom.
+ * Each row is an icon, a title, a one-line subtitle and a forward chevron.
+ * Sign-out is a row too, in red, not a button bolted to the bottom.
  *
  * Honest omissions, unchanged from PHASE 7 because they are backend facts, not
  * design choices:
@@ -61,6 +61,11 @@ const LEVEL_LABELS: Record<string, string> = {
  *  - VEHICLE: /vehicles is staff-only on the server and the driver edits the
  *    car inside the profile form, so "my vehicle" leads there rather than to a
  *    screen that could not save anything.
+ *
+ * PHASE 1 (R-11): `heroStats`, `heroStat` and the list `row` were all
+ * `"row-reverse"`, and six text styles were pinned right. Every destination in
+ * the app renders through that one `row`, so it was the single highest-leverage
+ * fix on this screen.
  */
 export function MenuScreen() {
   const insets = useSafeAreaInsets();
@@ -389,7 +394,13 @@ function Row({
         </View>
       ) : null}
 
-      {/* Chevron points left: "forward" in an RTL layout. */}
+      {/*
+        Forward affordance. `chevron` is one of the three mirrored names in
+        Icon.tsx, so the glyph is LTR-canonical and React Native flips it: it
+        points left in Arabic and right in French and English. The comment that
+        used to sit here asserted a fixed leftward direction, which stopped
+        being true once the icon started mirroring.
+      */}
       <Icon name="chevron" size={18} color={palette.textMuted} />
     </Pressable>
   );
@@ -407,7 +418,8 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     ...shadows.soft,
   },
-  name: { ...typography.title, textAlign: "center", writingDirection: "rtl" },
+  // Centred hero text: centre has no side to mirror.
+  name: { ...typography.title, textAlign: "center" },
   levelPill: {
     paddingHorizontal: spacing.md,
     paddingVertical: 3,
@@ -415,28 +427,27 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   levelText: { ...typography.caption, fontWeight: "700" },
+  // Plain "row": mirrored by React Native under RTL.
   heroStats: {
-    flexDirection: "row-reverse",
+    flexDirection: "row",
     alignItems: "center",
     gap: spacing.md,
     marginTop: spacing.xs,
   },
-  heroStat: { flexDirection: "row-reverse", alignItems: "center", gap: 4 },
+  heroStat: { flexDirection: "row", alignItems: "center", gap: 4 },
   heroStatValue: { ...typography.label, fontWeight: "700" },
-  heroStatText: { ...typography.caption, writingDirection: "rtl" },
+  heroStatText: { ...typography.caption },
   heroDivider: { width: 1, height: 12 },
   heroVehicle: {
     ...typography.caption,
     textAlign: "center",
-    writingDirection: "rtl",
   },
 
   section: { gap: spacing.sm },
   sectionTitle: {
     ...typography.caption,
     fontWeight: "700",
-    textAlign: "right",
-    writingDirection: "rtl",
+    textAlign: textAlignStart(),
     paddingHorizontal: spacing.xs,
   },
   group: {
@@ -445,9 +456,13 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
 
+  /**
+   * Every destination in the app renders through this one row, so this single
+   * flexDirection decided whether the whole menu read correctly. Plain "row".
+   */
   row: {
     minHeight: 60,
-    flexDirection: "row-reverse",
+    flexDirection: "row",
     alignItems: "center",
     gap: spacing.md,
     paddingHorizontal: spacing.lg,
@@ -463,10 +478,9 @@ const styles = StyleSheet.create({
   rowText: { flex: 1, gap: 1 },
   rowLabel: {
     ...typography.subtitle,
-    textAlign: "right",
-    writingDirection: "rtl",
+    textAlign: textAlignStart(),
   },
-  rowHint: { ...typography.caption, textAlign: "right", writingDirection: "rtl" },
+  rowHint: { ...typography.caption, textAlign: textAlignStart() },
   badge: {
     minWidth: 22,
     height: 22,

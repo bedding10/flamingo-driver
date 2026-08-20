@@ -11,6 +11,7 @@ import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { FareOpportunityCard } from "../../components/FareOpportunityCard";
 import { useFareOpportunities } from "../../hooks/useFareOpportunities";
+import { textAlignStart } from "../../i18n";
 import { requestStrings } from "../../i18n/strings.requests";
 import type { DriverStackParamList } from "../../navigation/types";
 import {
@@ -28,6 +29,10 @@ import {
  * assignment that must be answered within seconds and therefore stays a
  * full-width sheet over the map; a bidding request has a 2 minute window and
  * belongs in a list the driver can read at a red light.
+ *
+ * PHASE 1 (R-11): no rows to fix here - this screen is a single column - but
+ * four text styles were pinned `textAlign: "right"` / `writingDirection: "rtl"`
+ * and now resolve their own alignment. `emptyHint` keeps centre.
  */
 export function RequestsScreen() {
   const palette = usePalette();
@@ -123,20 +128,17 @@ const makeStyles = (palette: Palette) =>
     subtitle: {
       ...typography.caption,
       color: palette.textSecondary,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
     notice: {
       ...typography.caption,
       color: palette.info,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
     error: {
       ...typography.caption,
       color: palette.danger,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
     empty: {
       flex: 1,
@@ -145,6 +147,7 @@ const makeStyles = (palette: Palette) =>
       gap: spacing.sm,
       paddingVertical: spacing.xl,
     },
+    // Centre does not mirror, so both of these are correct in any direction.
     emptyTitle: {
       ...typography.subtitle,
       color: palette.textPrimary,
@@ -154,7 +157,6 @@ const makeStyles = (palette: Palette) =>
       ...typography.caption,
       color: palette.textSecondary,
       textAlign: "center",
-      writingDirection: "rtl",
     },
     emptyAction: {
       marginTop: spacing.md,
