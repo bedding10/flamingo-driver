@@ -19,6 +19,7 @@ import {
   withAlpha,
   type Palette,
 } from "../theme";
+import { textAlignStart } from "../i18n";
 import { strings } from "../i18n/strings";
 import { DOC_LABELS, p1 } from "../i18n/strings.phase1";
 import { formatDateInput, parseIsoDay } from "../utils/documentDates";
@@ -50,6 +51,11 @@ type Styles = ReturnType<typeof makeStyles>;
  * later. That is not the app inventing policy - a technical inspection past its
  * date is simply not a valid document, and the server would mark it EXPIRED on
  * the very next read.
+ *
+ * PHASE 1 (R-11): five text styles were pinned to `textAlign: "right"` with
+ * `writingDirection: "rtl"`, and the two centred button labels carried a
+ * writing direction they did not need. They now resolve from the layout
+ * direction. The date INPUT is deliberately left pinned LTR - see below.
  */
 export function DocumentDatesModal({ type, onCancel, onConfirm }: Props) {
   const palette = usePalette();
@@ -235,29 +241,25 @@ const makeStyles = (palette: Palette) =>
     title: {
       ...typography.title,
       color: palette.textPrimary,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
     docName: {
       ...typography.label,
       color: palette.primaryText,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
       marginTop: spacing.xs,
     },
     subtitle: {
       ...typography.caption,
       color: palette.textSecondary,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
       marginTop: spacing.xs,
     },
     field: { marginTop: spacing.lg },
     fieldLabel: {
       ...typography.caption,
       color: palette.textSecondary,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
       marginBottom: spacing.xs,
     },
     input: {
@@ -268,8 +270,10 @@ const makeStyles = (palette: Palette) =>
       backgroundColor: palette.surfaceSunken,
       paddingHorizontal: spacing.lg,
       color: palette.textPrimary,
-      // The value is always YYYY-MM-DD, which is a Latin-digit sequence:
-      // forcing LTR stops RTL layout from displaying it back to front.
+      // DELIBERATE EXCEPTION, kept as written: the value is always YYYY-MM-DD,
+      // which is a latin-digit sequence, so forcing LTR stops an RTL layout
+      // from displaying it back to front. Same class as BrandMark's wordmark
+      // and VehicleCard's plate - latin content pinned on purpose.
       textAlign: "left",
       writingDirection: "ltr",
       ...typography.body,
@@ -277,8 +281,7 @@ const makeStyles = (palette: Palette) =>
     error: {
       ...typography.body,
       color: palette.danger,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
       marginTop: spacing.lg,
     },
     primary: {
@@ -289,10 +292,10 @@ const makeStyles = (palette: Palette) =>
       justifyContent: "center",
       marginTop: spacing.xl,
     },
+    // Centred in the button: nothing to resolve.
     primaryLabel: {
       ...typography.label,
       color: palette.onPrimary,
-      writingDirection: "rtl",
     },
     secondary: {
       minHeight: touchTarget.normal,
@@ -303,7 +306,6 @@ const makeStyles = (palette: Palette) =>
     secondaryLabel: {
       ...typography.body,
       color: palette.textSecondary,
-      writingDirection: "rtl",
     },
     pressed: { opacity: 0.75 },
   });

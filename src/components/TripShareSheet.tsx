@@ -18,6 +18,7 @@ import {
   type ActiveTripShare,
   type ShareTtlMinutes,
 } from "../api/tripShare.api";
+import { textAlignStart } from "../i18n";
 import { shareStrings } from "../i18n/strings.phase7";
 import { formatDateTime } from "../utils/datetime";
 import {
@@ -45,6 +46,12 @@ import {
  * NOTE (carried, unchanged this round): the public follow page itself is a
  * Dashboard + PUBLIC_SHARE_BASE_URL task and is still open. Nothing here works
  * around that on the client.
+ *
+ * PHASE 1 (R-11): the chip row and the active-link row were `"row-reverse"` and
+ * seven text styles were pinned to `textAlign: "right"` with
+ * `writingDirection: "rtl"`. Both rows are now plain `"row"` so React Native
+ * mirrors them, and the text resolves its own alignment. The chip labels are
+ * centred inside their pills, so they only lose the writing direction.
  */
 export function TripShareSheet({
   visible,
@@ -234,31 +241,28 @@ const makeStyles = (palette: Palette) =>
     title: {
       ...typography.title,
       color: palette.textPrimary,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
     body: { gap: spacing.md, paddingBottom: spacing.md },
     text: {
       ...typography.body,
       color: palette.textPrimary,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
     privacy: {
       ...typography.caption,
       color: palette.textSecondary,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
     sectionLabel: {
       ...typography.label,
       color: palette.primaryText,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
       marginTop: spacing.sm,
     },
+    // Plain "row": mirrored by React Native under RTL.
     chips: {
-      flexDirection: "row-reverse",
+      flexDirection: "row",
       flexWrap: "wrap",
       gap: spacing.sm,
     },
@@ -275,21 +279,20 @@ const makeStyles = (palette: Palette) =>
       borderColor: withAlpha(palette.primary, 0.6),
       backgroundColor: palette.primaryWash,
     },
+    // Centred inside the pill: nothing to resolve.
     chipLabel: {
       ...typography.subtitle,
       color: palette.textSecondary,
-      writingDirection: "rtl",
     },
     chipLabelOn: { color: palette.primaryText },
     submit: { marginTop: spacing.sm },
     muted: {
       ...typography.caption,
       color: palette.textSecondary,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
     linkRow: {
-      flexDirection: "row-reverse",
+      flexDirection: "row",
       alignItems: "center",
       gap: spacing.md,
       backgroundColor: palette.surface,
@@ -302,8 +305,7 @@ const makeStyles = (palette: Palette) =>
     linkWhen: {
       ...typography.subtitle,
       color: palette.textPrimary,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
     revoke: {
       minHeight: touchTarget.normal - 12,
