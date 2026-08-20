@@ -3,6 +3,7 @@ import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BrandMark } from "../../components/BrandMark";
 import { config } from "../../config";
+import { textAlignStart } from "../../i18n";
 import { legalStrings } from "../../i18n/strings.phase7";
 import { colors, radius, spacing, typography } from "../../theme";
 
@@ -19,6 +20,13 @@ import { colors, radius, spacing, typography } from "../../theme";
  *
  * The version block reads the NATIVE values through config.app, so what the
  * driver reports to support is what the store actually installed.
+ *
+ * PHASE 1 (R-11): title and body were pinned `textAlign: "right"` /
+ * `writingDirection: "rtl"` and now resolve their own alignment. The `mono`
+ * block keeps "left" / "ltr" on purpose - see the note on that style.
+ *
+ * STILL OUTSTANDING (PHASE 10): this screen reads the legacy flat `colors` bag
+ * rather than the palette, so it is dark-only and ignores light mode.
  */
 export function LegalScreen() {
   const insets = useSafeAreaInsets();
@@ -81,15 +89,20 @@ const styles = StyleSheet.create({
   title: {
     ...typography.subtitle,
     color: colors.gold,
-    textAlign: "right",
-    writingDirection: "rtl",
+    textAlign: textAlignStart(),
   },
   body: {
     ...typography.body,
     color: colors.textOnDarkSecondary,
-    textAlign: "right",
-    writingDirection: "rtl",
+    textAlign: textAlignStart(),
   },
+  /**
+   * Deliberately physical, and one of the pinned Latin-content exceptions:
+   * this renders config.app.version, the build number and the bundle id. Those
+   * are Latin identifiers a driver reads out to support, and letting the bidi
+   * algorithm reorder "1.4.0" or "com.flamingo.driver" inside an Arabic
+   * paragraph would garble the one string that has to be transcribed exactly.
+   */
   mono: {
     ...typography.caption,
     color: colors.textOnDarkSecondary,

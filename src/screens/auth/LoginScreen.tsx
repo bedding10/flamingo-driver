@@ -11,6 +11,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { InputField } from "../../components/InputField";
 import { PrimaryButton } from "../../components/PrimaryButton";
+import { textAlignStart } from "../../i18n";
 import { strings } from "../../i18n/strings";
 import { pw } from "../../i18n/strings.password";
 import { colors, radius, spacing, typography, withAlpha } from "../../theme";
@@ -43,6 +44,15 @@ const MIN_PASSWORD_LENGTH = 6;
  *
  * The screen holds no token and no user object; it hands the tokens to the auth
  * store and unmounts when the root tree switches to the signed-in stack.
+ *
+ * PHASE 1 DESIGN FOUNDATION (R-11): `modeRow` was `"row-reverse"`, `title`,
+ * `subtitle`, `error` and `footNote` were pinned `textAlign: "right"`, and
+ * `modeText`, `link` and `timer` carried a bare `writingDirection: "rtl"` with
+ * no alignment at all. All of that predates real RTL and now double-flips.
+ *
+ * STILL OUTSTANDING (PHASE 2): this screen reads the legacy flat `colors` bag
+ * rather than the palette, so it is dark-only and ignores light mode. PHASE 2
+ * rebuilds this flow against the Stitch auth screens and will migrate it.
  */
 export function LoginScreen() {
   const insets = useSafeAreaInsets();
@@ -353,8 +363,9 @@ const styles = StyleSheet.create({
     letterSpacing: 3,
     marginTop: spacing.xs,
   },
+  // Plain "row": mirrored by React Native under RTL.
   modeRow: {
-    flexDirection: "row-reverse",
+    flexDirection: "row",
     gap: spacing.xs,
     marginBottom: spacing.xl,
   },
@@ -372,10 +383,10 @@ const styles = StyleSheet.create({
     borderColor: colors.gold,
     backgroundColor: withAlpha(colors.gold, 0.16),
   },
+  // Centred inside its own Pressable, so it needs no alignment of its own.
   modeText: {
     ...typography.caption,
     color: colors.textOnDarkSecondary,
-    writingDirection: "rtl",
   },
   modeTextActive: { color: colors.gold },
   card: { width: "100%" },
@@ -383,48 +394,52 @@ const styles = StyleSheet.create({
   title: {
     ...typography.title,
     color: colors.textOnDark,
-    textAlign: "right",
-    writingDirection: "rtl",
+    textAlign: textAlignStart(),
   },
   subtitle: {
     ...typography.body,
     color: colors.textOnDarkSecondary,
-    textAlign: "right",
-    writingDirection: "rtl",
+    textAlign: textAlignStart(),
     marginTop: spacing.xs,
     marginBottom: spacing.xl,
   },
+  /**
+   * Deliberately LTR, and one of the pinned Latin-content exceptions: this
+   * echoes the number the driver just typed, normalised to E.164. A leading
+   * "+" inside an Arabic paragraph can be reordered by the bidi algorithm and
+   * land at the wrong end, so the one string that proves we are texting the
+   * right phone would be the string we render wrong. Centre plus explicit LTR.
+   */
   phoneEcho: {
     ...typography.numeric,
     color: colors.gold,
     textAlign: "center",
+    writingDirection: "ltr",
     marginBottom: spacing.lg,
   },
   error: {
     ...typography.caption,
     color: colors.danger,
-    textAlign: "right",
-    writingDirection: "rtl",
+    textAlign: textAlignStart(),
     marginTop: spacing.md,
   },
   footNote: {
     ...typography.caption,
     color: colors.textOnDarkSecondary,
-    textAlign: "right",
-    writingDirection: "rtl",
+    textAlign: textAlignStart(),
     marginTop: spacing.md,
   },
   action: { marginTop: spacing.xl },
+  // Already correct: plain "row" with space-between mirrors on its own.
   footer: {
     marginTop: spacing.xl,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
-  link: { ...typography.label, color: colors.gold, writingDirection: "rtl" },
+  link: { ...typography.label, color: colors.gold },
   timer: {
     ...typography.caption,
     color: colors.textOnDarkSecondary,
-    writingDirection: "rtl",
   },
 });

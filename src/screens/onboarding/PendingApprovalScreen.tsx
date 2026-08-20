@@ -30,6 +30,15 @@ type Navigation = NativeStackNavigationProp<OnboardingStackParamList>;
  *
  * The profile comes from the shared query, so opening this screen costs no extra
  * request and the status updates as soon as an operator approves the account.
+ *
+ * PHASE 1 (R-11): this screen had no `"row-reverse"` anywhere - it is a single
+ * centred column - but four text styles carried a bare `writingDirection: "rtl"`
+ * with no alignment beside it, which under real RTL only fought the inherited
+ * direction. Removed. `title` and `body` keep `textAlign: "center"`, which is
+ * correct in both directions because centre has no side to mirror.
+ *
+ * STILL OUTSTANDING (PHASE 2): reads the legacy flat `colors` bag rather than
+ * the palette, so it is dark-only and ignores light mode.
  */
 export function PendingApprovalScreen() {
   const insets = useSafeAreaInsets();
@@ -56,7 +65,7 @@ export function PendingApprovalScreen() {
 
       <View style={styles.badge}>
         <Text style={styles.badgeLabel}>{strings.approval.statusLabel}</Text>
-        <Text style={styles.badgeValue}>{status ?? "—"}</Text>
+        <Text style={styles.badgeValue}>{status ?? "\u2014"}</Text>
       </View>
 
       <Text style={styles.title}>{copy.title}</Text>
@@ -180,7 +189,6 @@ const styles = StyleSheet.create({
   badgeLabel: {
     ...typography.caption,
     color: colors.textOnDarkSecondary,
-    writingDirection: "rtl",
   },
   badgeValue: {
     ...typography.label,
@@ -188,24 +196,22 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     marginTop: 2,
   },
+  // Centre does not mirror, so these two are correct in both directions.
   title: {
     ...typography.title,
     color: colors.textOnDark,
     textAlign: "center",
-    writingDirection: "rtl",
   },
   body: {
     ...typography.body,
     color: colors.textOnDarkSecondary,
     textAlign: "center",
-    writingDirection: "rtl",
     marginTop: spacing.md,
   },
   checklist: { alignSelf: "stretch", alignItems: "center", marginTop: spacing.lg },
   checklistTitle: {
     ...typography.caption,
     color: colors.textOnDarkSecondary,
-    writingDirection: "rtl",
   },
   checklistRow: { marginTop: spacing.sm },
   action: { marginTop: spacing["3xl"], alignSelf: "stretch" },
