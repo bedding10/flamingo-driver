@@ -1,4 +1,4 @@
-import { STITCH_METRICS, STITCH_RADIUS } from "./stitch";
+import { STITCH_ICON_SIZE, STITCH_METRICS, STITCH_RADIUS } from "./stitch";
 
 /**
  * PHASE 1 - spacing and radii, aligned to the Stitch config.
@@ -26,24 +26,36 @@ export const layout = {
   gutter: STITCH_METRICS.gutter,
   containerPadding: STITCH_METRICS.containerPadding,
   sheetMargin: STITCH_METRICS.bottomSheetMargin,
+  safeAreaBottomMin: STITCH_METRICS.safeAreaBottomMin,
 } as const;
 
 /**
- * Radii. Stitch uses DEFAULT 4, lg 8, xl 12, one 2xl 24, and `full`.
+ * Radii - RE-MAPPED IN PHASE 1 onto the corrected Stitch scale.
  *
- * `card` moves from 16 to the Stitch xl (12): every card, row and tile in the
- * reference pack is `rounded-xl`. `sheet` takes the 24 Stitch uses for the large
- * sheet corner. The old key names are kept so no screen has to change to pick up
- * the corrected radius.
+ * The previous mapping resolved `card` to 12px because `STITCH_RADIUS.xl` was
+ * wrong (see `stitch.ts`). Stitch puts `rounded-xl` - 24px - on every card, row
+ * and tile, and its own spec prose says "cards 24px radius with ambient
+ * shadow". So `card` moves 12 -> 24. This is the largest single visual
+ * correction in PHASE 1 and it lands on every existing screen at once, without
+ * any screen being edited, because they all read `radius.card`.
+ *
+ * `sm`/`lg` also moved (8 -> 8, 8 -> 16) to stop two different keys silently
+ * resolving to the same number.
  */
 export const radius = {
-  xs: STITCH_RADIUS.DEFAULT,
-  sm: STITCH_RADIUS.lg,
-  md: STITCH_RADIUS.xl,
-  lg: STITCH_RADIUS.lg,
-  xl: STITCH_RADIUS.xl,
-  card: STITCH_RADIUS.xl,
-  sheet: STITCH_RADIUS.xxl,
+  xs: STITCH_RADIUS.sm, // 4
+  sm: STITCH_RADIUS.DEFAULT, // 8
+  md: STITCH_RADIUS.md, // 12
+  lg: STITCH_RADIUS.lg, // 16
+  xl: STITCH_RADIUS.xl, // 24
+  /** Cards, rows, tiles. Stitch `rounded-xl`. */
+  card: STITCH_RADIUS.xl, // 24
+  /** Bottom sheet top corners. Stitch `rounded-t-xl`. */
+  sheet: STITCH_RADIUS.xl, // 24
+  /** The few sheets Stitch draws at `rounded-t-[32px]`. */
+  sheetLarge: 32,
+  /** Text inputs. Stitch spec prose: "inputs 8px radius, pink focus". */
+  input: STITCH_RADIUS.DEFAULT, // 8
   pill: STITCH_RADIUS.full,
 } as const;
 
@@ -52,16 +64,16 @@ export const radius = {
  *
  * Stitch specifies `touch-target-min: 48px`. This app keeps a larger floor - 56
  * for ordinary controls, 72 for the accept/decline pair - as a declared UX
- * improvement under the owner's rule 9: the passenger app is used standing
- * still, the driver app is used one-handed with the car in gear. 48 stays
- * available as `stitchMin` for dense, non-critical rows so the reference value
- * is never lost.
+ * improvement: the passenger app is used standing still, the driver app is used
+ * one-handed with the car in gear. 48 stays available as `stitchMin` for dense,
+ * non-critical rows so the reference value is never lost.
  */
 export const touchTarget = {
   normal: 56,
   critical: 72,
   stitchMin: STITCH_METRICS.touchTargetMin,
+  /** Stitch draws the map FAB at 56x56. */
+  fab: 56,
 } as const;
 
-/** Stitch renders map FABs at 56x56 with a 24-28px glyph. */
-export const iconSize = { sm: 16, md: 20, lg: 24, xl: 28 } as const;
+export const iconSize = STITCH_ICON_SIZE;
