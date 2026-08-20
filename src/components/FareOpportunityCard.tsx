@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import type { FareOpportunity } from "../types/fareOffer";
+import { textAlignStart } from "../i18n";
 import { requestStrings } from "../i18n/strings.requests";
 import {
   radius,
@@ -39,6 +40,15 @@ function clock(ms: number): string {
  * ([minFare, maxFare] returned with the request) so the driver is not sent into
  * a guaranteed FARE_OFFER_OUT_OF_RANGE. The suggested fare is only a starting
  * value - nothing is computed on the client.
+ *
+ * PHASE 1 (R-11): five `"row-reverse"` rows and nine text styles pinned to
+ * `textAlign: "right"` / `writingDirection: "rtl"`, plus one `textAlign: "left"`
+ * which is the same bug mirrored. All of them are hand-written compensations
+ * from before real RTL was enabled, and they now cancel React Native's own
+ * mirroring. Rows are plain `"row"` and text resolves its own alignment.
+ *
+ * The numeric bid input keeps `writingDirection: "ltr"` on purpose - it holds a
+ * latin-digit amount and is centred.
  */
 function FareOpportunityCardComponent({
   item,
@@ -246,8 +256,9 @@ const makeStyles = (palette: Palette) =>
     },
     cardExpired: { opacity: 0.55 },
 
+    // All rows below are plain "row": mirrored by React Native under RTL.
     headRow: {
-      flexDirection: "row-reverse",
+      flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
       gap: spacing.sm,
@@ -255,15 +266,15 @@ const makeStyles = (palette: Palette) =>
     passenger: {
       ...typography.subtitle,
       color: palette.textPrimary,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
       flexShrink: 1,
     },
     timer: { ...typography.caption, color: palette.primaryText },
     timerOff: { color: palette.textSecondary },
 
     fareRow: {
-      flexDirection: "row-reverse",
+      flexDirection: "row",
+      // Logical: follows the layout direction already.
       alignItems: "flex-end",
       justifyContent: "space-between",
       gap: spacing.md,
@@ -273,11 +284,12 @@ const makeStyles = (palette: Palette) =>
     meta: {
       ...typography.caption,
       color: palette.textSecondary,
-      textAlign: "left",
+      // Was hardcoded "left" - the same bug as "right", mirrored.
+      textAlign: textAlignStart(),
     },
 
     leg: {
-      flexDirection: "row-reverse",
+      flexDirection: "row",
       alignItems: "flex-start",
       gap: spacing.md,
     },
@@ -288,39 +300,34 @@ const makeStyles = (palette: Palette) =>
     legLabel: {
       ...typography.caption,
       color: palette.textSecondary,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
     legValue: {
       ...typography.body,
       color: palette.textPrimary,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
 
     note: {
       ...typography.caption,
       color: palette.textSecondary,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
     mine: {
       ...typography.caption,
       color: palette.info,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
 
     amountRow: {
-      flexDirection: "row-reverse",
+      flexDirection: "row",
       alignItems: "center",
       gap: spacing.md,
     },
     amountLabel: {
       ...typography.caption,
       color: palette.textSecondary,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
     amountInput: {
       flex: 1,
@@ -332,17 +339,18 @@ const makeStyles = (palette: Palette) =>
       paddingHorizontal: spacing.lg,
       color: palette.textPrimary,
       ...typography.numeric,
+      // DELIBERATE: a latin-digit DZD amount, centred. Pinned LTR so an RTL
+      // layout cannot present the number back to front.
       textAlign: "center",
       writingDirection: "ltr",
     },
     invalid: {
       ...typography.caption,
       color: palette.warning,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
 
-    actions: { flexDirection: "row-reverse", gap: spacing.md },
+    actions: { flexDirection: "row", gap: spacing.md },
     primaryButton: {
       flex: 2,
       height: touchTarget.critical,
