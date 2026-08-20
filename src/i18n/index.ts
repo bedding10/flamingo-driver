@@ -34,8 +34,9 @@ export {
 } from "./language";
 export {
   backChevron,
+  isLayoutRTL,
   NUMERIC_DIRECTION,
-  rowDirection,
+  rowNeverMirrored,
   textAlignEnd,
   textAlignStart,
 } from "./rtl";

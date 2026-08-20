@@ -6,6 +6,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from "react-native";
+import { textAlignStart } from "../i18n";
 import { radius, spacing, typography, usePalette, type Palette } from "../theme";
 
 /** Surface grouping related fields, with an optional hint line. */
@@ -32,6 +33,12 @@ export function SectionCard({
   );
 }
 
+/**
+ * PHASE 1: `textAlign: "right"` and `writingDirection: "rtl"` were hardcoded,
+ * which right-aligned French and English too. React Native does not mirror
+ * `textAlign`, so it is resolved from the layout direction instead. Resolving
+ * it here is safe because the direction cannot change without a reload.
+ */
 const makeStyles = (palette: Palette) =>
   StyleSheet.create({
     card: {
@@ -44,14 +51,12 @@ const makeStyles = (palette: Palette) =>
     title: {
       ...typography.subtitle,
       color: palette.textPrimary,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
     hint: {
       ...typography.caption,
       color: palette.textSecondary,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
       marginTop: spacing.xs,
     },
     body: { marginTop: spacing.lg, gap: spacing.lg },

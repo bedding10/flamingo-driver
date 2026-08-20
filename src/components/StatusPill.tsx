@@ -77,7 +77,14 @@ function hexOf(color: string): string {
 
 const styles = StyleSheet.create({
   pill: {
-    flexDirection: "row-reverse",
+    /**
+     * PHASE 1: was "row-reverse". That only looked right because RTL had never
+     * actually been enabled - it was hand-mirroring an LTR layout. React Native
+     * mirrors plain "row" automatically once I18nManager.isRTL is set, so
+     * "row-reverse" would now flip the dot back to the wrong side in Arabic and
+     * put it on the wrong side in French and English.
+     */
+    flexDirection: "row",
     alignItems: "center",
     gap: spacing.xs,
     paddingHorizontal: spacing.md,
@@ -87,5 +94,6 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
   },
   dot: { width: 8, height: 8, borderRadius: 4 },
-  label: { ...typography.caption, fontWeight: "600", writingDirection: "rtl" },
+  /** The label inherits the app's writing direction; it must not force one. */
+  label: { ...typography.caption, fontWeight: "600" },
 });

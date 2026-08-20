@@ -102,7 +102,12 @@ const makeStyles = (palette: Palette) =>
     pressed: { opacity: 0.82 },
     blocked: { opacity: 0.5 },
     content: { alignItems: "center", justifyContent: "center" },
-    label: { ...typography.label, writingDirection: "rtl" },
+    /**
+     * PHASE 1: dropped the hardcoded `writingDirection: "rtl"`. The label is
+     * centred, so it needs no direction of its own - and forcing RTL here would
+     * have mis-ordered punctuation in the French and English labels.
+     */
+    label: { ...typography.label, textAlign: "center" },
     labelOnFilled: { color: palette.onPrimary },
     labelOnSurface: { color: palette.primaryText },
   });

@@ -21,6 +21,23 @@ import { getLanguage, isRTLLanguage, type Language } from "./language";
  *
  * Boot order matters: `syncDirectionAtBoot()` must run before the first render,
  * so it is called from the module scope of `i18n/index.ts`, not from an effect.
+ *
+ * WHAT REACT NATIVE MIRRORS FOR YOU, AND WHAT IT DOES NOT
+ * -------------------------------------------------------
+ * This is the part that causes most RTL bugs, so it is written down here:
+ *
+ *   MIRRORS AUTOMATICALLY once `I18nManager.isRTL` is true:
+ *     flexDirection "row", marginStart/End, paddingStart/End, start/end,
+ *     borderStartWidth/EndWidth, and the default writing direction of text.
+ *
+ *   DOES NOT MIRROR - these are absolute and stay where you put them:
+ *     textAlign "left"/"right", marginLeft/Right, paddingLeft/Right,
+ *     left/right, transforms, and anything drawn inside an icon or image.
+ *
+ * So `flexDirection: "row"` is already correct in both directions and must NOT
+ * be swapped to "row-reverse" by hand - doing that flips an RTL layout back to
+ * LTR. `textAlign`, on the other hand, has to be resolved explicitly, which is
+ * what `textAlignStart` / `textAlignEnd` below are for.
  */
 
 /**
@@ -95,35 +112,45 @@ export async function reloadForDirectionChange(): Promise<boolean> {
   }
 }
 
+/** True when the layout engine is currently mirrored. */
+export function isLayoutRTL(): boolean {
+  try {
+    return I18nManager.isRTL;
+  } catch {
+    return false;
+  }
+}
+
 /**
- * Direction-aware helpers.
+ * Text alignment that follows the reading direction.
  *
- * Screens should use these instead of writing `textAlign: "right"`. `start`
- * follows the reading direction; `left` never does.
+ * Needed because React Native does not mirror `textAlign`. Screens should use
+ * this instead of writing `textAlign: "right"`.
+ *
+ * Safe to call inside `makeStyles`: the direction cannot change during the
+ * lifetime of the process, since flipping it requires a reload.
  */
 export function textAlignStart(): "left" | "right" {
-  try {
-    return I18nManager.isRTL ? "right" : "left";
-  } catch {
-    return "left";
-  }
+  return isLayoutRTL() ? "right" : "left";
 }
 
 export function textAlignEnd(): "left" | "right" {
-  try {
-    return I18nManager.isRTL ? "left" : "right";
-  } catch {
-    return "right";
-  }
+  return isLayoutRTL() ? "left" : "right";
 }
 
-/** Row direction that mirrors correctly. */
-export function rowDirection(): "row" | "row-reverse" {
-  try {
-    return I18nManager.isRTL ? "row-reverse" : "row";
-  } catch {
-    return "row";
-  }
+/**
+ * A row that must NOT mirror.
+ *
+ * Use for sequences that read left-to-right in every language: phone numbers,
+ * OTP digit boxes, licence plates, fares, timers, and any row of Latin
+ * numerals. Because React Native mirrors plain `"row"` under RTL, keeping such
+ * a row visually LTR means explicitly reversing it back.
+ *
+ * For ordinary content rows, just use `flexDirection: "row"` - it is already
+ * correct in both directions.
+ */
+export function rowNeverMirrored(): "row" | "row-reverse" {
+  return isLayoutRTL() ? "row-reverse" : "row";
 }
 
 /**
@@ -133,11 +160,7 @@ export function rowDirection(): "row" | "row-reverse" {
  * mirror it, and getting this wrong is the most visible RTL bug there is.
  */
 export function backChevron(): "chevron-left" | "chevron-right" {
-  try {
-    return I18nManager.isRTL ? "chevron-right" : "chevron-left";
-  } catch {
-    return "chevron-left";
-  }
+  return isLayoutRTL() ? "chevron-right" : "chevron-left";
 }
 
 /** Numeric content (fares, plates, OTP, phone) always reads LTR. */

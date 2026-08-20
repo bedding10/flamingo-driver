@@ -6,6 +6,7 @@ import {
   View,
   type TextInputProps,
 } from "react-native";
+import { textAlignStart } from "../i18n";
 import {
   radius,
   spacing,
@@ -43,23 +44,31 @@ export function InputField({ label, numeric = false, style, ...rest }: Props) {
 const makeStyles = (palette: Palette) =>
   StyleSheet.create({
     wrapper: { width: "100%" },
+    /**
+     * PHASE 1: was hardcoded to the right, which mis-aligned French and
+     * English. Follows the layout direction now.
+     */
     label: {
       ...typography.caption,
       color: palette.textSecondary,
       marginBottom: spacing.xs,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
     input: {
       minHeight: touchTarget.normal,
-      borderRadius: radius.md,
+      /** Stitch spec: inputs are 8px, not the 12px card radius. */
+      borderRadius: radius.input,
       backgroundColor: palette.surfaceSunken,
       borderWidth: 1,
       borderColor: palette.border,
       paddingHorizontal: spacing.lg,
       color: palette.textPrimary,
     },
-    text: { ...typography.body, textAlign: "right", writingDirection: "rtl" },
+    text: { ...typography.body, textAlign: textAlignStart() },
+    /**
+     * Correct as it was: a phone number, OTP or plate reads left-to-right in
+     * every language, so this one stays explicitly LTR and centred.
+     */
     numeric: {
       ...typography.numeric,
       textAlign: "center",
