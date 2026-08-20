@@ -1,0 +1,170 @@
+/**
+ * PHASE 1 - English.
+ *
+ * English is the SHAPE SOURCE for the other locales: `Dictionary` is derived
+ * from this object, so a key added here and forgotten in `ar.ts` or `fr.ts` is
+ * a TypeScript error rather than a string that silently renders in the wrong
+ * language on a driver's phone.
+ *
+ * Copy is taken from the Stitch screens where a screen exists, and from the
+ * existing Arabic app copy where it does not. It is deliberately short: this
+ * text is read at a glance, often in sunlight, sometimes at a red light.
+ *
+ * SCOPE: PHASE 1 ships the foundation plus the slices PHASE 1 and PHASE 2 need.
+ * Later phases add their own slices as their screens are built - the legacy
+ * `src/i18n/strings.ts` keeps serving the screens that have not migrated yet.
+ */
+export const en = {
+  common: {
+    appName: "flaminGO",
+    driverSuffix: "Driver",
+    retry: "Try again",
+    cancel: "Cancel",
+    confirm: "Confirm",
+    save: "Save",
+    saved: "Saved",
+    back: "Back",
+    next: "Next",
+    close: "Close",
+    done: "Done",
+    loading: "Loading…",
+    refresh: "Refresh",
+    signOut: "Sign out",
+    ok: "OK",
+    yes: "Yes",
+    no: "No",
+    notAvailable: "Not available",
+  },
+
+  units: {
+    km: "km",
+    min: "min",
+    secondsShort: "s",
+  },
+
+  language: {
+    title: "Language",
+    arabic: "العربية",
+    french: "Français",
+    english: "English",
+    /** Shown when the choice flips the layout direction and needs a reload. */
+    restartTitle: "Restart required",
+    restartBody:
+      "Switching to this language changes the layout direction. The app needs to restart to apply it.",
+    restartNow: "Restart now",
+    restartLater: "Not now",
+    restartManual:
+      "Please close and reopen the app to finish changing the language.",
+  },
+
+  /** The three bottom-bar sections. Map is the default. */
+  nav: {
+    requests: "Requests",
+    map: "Map",
+    menu: "Menu",
+  },
+
+  splash: {
+    tagline: "Drive with flaminGO",
+  },
+
+  login: {
+    role: "For drivers",
+    phoneTitle: "Sign in",
+    phoneSubtitle: "Enter the phone number registered with the company",
+    phoneLabel: "Phone number",
+    phonePlaceholder: "0555 55 55 55",
+    sendCode: "Send verification code",
+    codeTitle: "Verification code",
+    codeSubtitle: "Enter the 6-digit code sent to",
+    codeLabel: "Code",
+    verify: "Verify and continue",
+    changeNumber: "Change number",
+    resend: "Resend code",
+    resendIn: "Resend in",
+    passwordTitle: "Password",
+    passwordLabel: "Password",
+    passwordSubtitle: "Enter your flaminGO password",
+    signIn: "Sign in",
+  },
+
+  approval: {
+    pendingTitle: "Your account is under review",
+    pendingBody:
+      "Complete your details and documents to speed up the review. You can start driving once flaminGO approves your account.",
+    rejectedTitle: "Account rejected",
+    rejectedBody:
+      "Your account was not approved. Review your documents, re-upload the rejected ones, or contact flaminGO.",
+    suspendedTitle: "Account temporarily suspended",
+    suspendedBody:
+      "Your account is suspended. You cannot receive rides until the suspension is lifted.",
+    bannedTitle: "Account banned",
+    bannedBody: "This account has been permanently banned from flaminGO.",
+    statusLabel: "Account status",
+    checkAgain: "Check status",
+    loadFailed: "Could not load your account status.",
+  },
+
+  level: {
+    bronze: "Bronze",
+    silver: "Silver",
+    gold: "Gold",
+    diamond: "Diamond",
+    legendary: "Legendary",
+    levelLabel: "Level",
+    nextLevel: "Next level",
+    progress: "Progress",
+  },
+
+  home: {
+    goOnline: "Go online",
+    goOffline: "Go offline",
+    onTripLabel: "On a trip",
+    offlineHint: "You are offline. No ride requests will reach you.",
+    onlineHint: "You are online. Keep the app open to receive requests.",
+    onTripHint: "You have an active trip. Finish it before changing status.",
+    notApproved: "You cannot go online until flaminGO approves your account.",
+    vehicleMissing: "No vehicle registered yet.",
+    linkConnected: "Connected",
+    linkConnecting: "Connecting…",
+    linkDown: "Connection lost",
+    recenter: "Recenter",
+    permissionDenied:
+      "Location access denied. Location is required to receive nearby rides.",
+    permissionBlocked:
+      "Location permission is permanently denied. Tap to open settings.",
+    permissionServicesOff: "Location services (GPS) are off. Tap to turn them on.",
+  },
+
+  documents: {
+    title: "Documents",
+    LICENSE: "Driving licence",
+    ID_CARD: "ID card",
+    INSURANCE: "Insurance",
+    REGISTRATION: "Carte grise",
+    PROFILE_PHOTO: "Profile photo",
+    statusPending: "Pending",
+    statusApproved: "Verified",
+    statusRejected: "Rejected",
+    statusMissing: "Missing",
+  },
+
+  errors: {
+    invalidPhone: "That phone number is not valid.",
+    invalidCode: "That code is not correct. Check the digits and try again.",
+    expiredCode: "The code has expired. Request a new one.",
+    tooManyRequests: "Too many attempts. Wait a moment and try again.",
+    network: "No internet connection. Check your network and try again.",
+    notDriver: "This account is not registered as a flaminGO driver.",
+    accountInactive: "This account is not active. Contact flaminGO.",
+    generic: "Something went wrong. Please try again.",
+  },
+} as const;
+
+/**
+ * The contract every locale must satisfy.
+ * `ar.ts` and `fr.ts` are typed against this, so a missing key fails typecheck.
+ */
+export type Dictionary = {
+  readonly [K in keyof typeof en]: { readonly [P in keyof (typeof en)[K]]: string };
+};
