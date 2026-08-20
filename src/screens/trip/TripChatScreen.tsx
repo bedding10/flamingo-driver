@@ -30,6 +30,7 @@ import {
 } from "../../api/trip-communication.api";
 import { joinTripRoom, onSocketEvent } from "../../socket/socket.service";
 import type { DriverStackParamList } from "../../navigation/types";
+import { textAlignEnd, textAlignStart } from "../../i18n";
 import { strings } from "../../i18n/strings";
 import { Icon } from "../../components/Icon";
 import {
@@ -63,6 +64,10 @@ type ChatRoute = RouteProp<DriverStackParamList, "TripChat">;
  * TripMessage.senderId. Using participant.id avoids that mismatch entirely.
  *
  * PHASE 7.5 CLOSURE: colours only.
+ *
+ * PHASE 1 (R-11): this screen held the worst direction defect in the audit -
+ * the bubbles were on the wrong sides. See the note on `rowMine`. Beyond that,
+ * three rows were `"row-reverse"` and seven text styles were pinned.
  */
 export function TripChatScreen() {
   const insets = useSafeAreaInsets();
@@ -345,8 +350,9 @@ const makeStyles = (palette: Palette) =>
       backgroundColor: palette.surface,
       gap: 2,
     },
+    // Plain "row": mirrored by React Native under RTL.
     headerRow: {
-      flexDirection: "row-reverse",
+      flexDirection: "row",
       alignItems: "center",
       gap: spacing.md,
     },
@@ -364,14 +370,12 @@ const makeStyles = (palette: Palette) =>
     headerTitle: {
       ...typography.subtitle,
       color: palette.textPrimary,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
     headerHint: {
       ...typography.caption,
       color: palette.textSecondary,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
 
     list: { padding: spacing.lg, gap: spacing.sm },
@@ -380,14 +384,23 @@ const makeStyles = (palette: Palette) =>
       color: palette.textSecondary,
       textAlign: "center",
       marginTop: spacing["3xl"],
-      writingDirection: "rtl",
     },
 
     row: { flexDirection: "row" },
-    // RTL: the driver's own messages sit on the left, the passenger's on the
-    // right, matching how the passenger app renders the same thread mirrored.
-    rowMine: { justifyContent: "flex-start" },
-    rowTheirs: { justifyContent: "flex-end" },
+    /**
+     * THE R-11 DEFECT THAT MATTERED MOST.
+     *
+     * These were inverted: rowMine was "flex-start" and rowTheirs was
+     * "flex-end". justifyContent runs along the main axis, and React Native
+     * mirrors the main axis of a "row" under RTL, so "flex-start" resolves to
+     * the RIGHT in Arabic - the driver's own messages were rendering where the
+     * passenger's belong, and the passenger's where the driver's belong.
+     *
+     * The logical form below is correct in every language: own messages trail
+     * (left in Arabic, right in French and English), incoming messages lead.
+     */
+    rowMine: { justifyContent: "flex-end" },
+    rowTheirs: { justifyContent: "flex-start" },
 
     bubble: {
       maxWidth: "80%",
@@ -404,27 +417,26 @@ const makeStyles = (palette: Palette) =>
     },
     bubbleText: {
       ...typography.body,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
     bubbleTextMine: { color: palette.onPrimary },
     bubbleTextTheirs: { color: palette.textPrimary },
+    // Trailing edge of the driver's own bubble, mirrored rather than physical.
     receipt: {
       ...typography.caption,
       color: withAlpha(palette.onPrimary, 0.75),
-      textAlign: "left",
+      textAlign: textAlignEnd(),
     },
 
     error: {
       ...typography.caption,
       color: palette.danger,
       paddingHorizontal: spacing.xl,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
 
     quickRow: {
-      flexDirection: "row-reverse",
+      flexDirection: "row",
       flexWrap: "wrap",
       gap: spacing.sm,
       paddingHorizontal: spacing.lg,
@@ -441,11 +453,10 @@ const makeStyles = (palette: Palette) =>
     quickText: {
       ...typography.caption,
       color: palette.textPrimary,
-      writingDirection: "rtl",
     },
 
     composer: {
-      flexDirection: "row-reverse",
+      flexDirection: "row",
       alignItems: "flex-end",
       gap: spacing.md,
       paddingHorizontal: spacing.lg,
@@ -466,8 +477,7 @@ const makeStyles = (palette: Palette) =>
       paddingTop: spacing.md,
       ...typography.body,
       color: palette.textPrimary,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
     sendButton: {
       height: touchTarget.normal,

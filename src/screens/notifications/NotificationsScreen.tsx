@@ -11,6 +11,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNotifications } from "../../hooks/useNotifications";
 import type { AppNotification } from "../../api/notifications.api";
+import { textAlignEnd, textAlignStart } from "../../i18n";
 import { notificationStrings } from "../../i18n/strings.support";
 import { formatDateTime } from "../../utils/datetime";
 import { Icon } from "../../components/Icon";
@@ -33,6 +34,9 @@ import {
  *
  * PHASE 7.5 CLOSURE: palette-driven, with an unread dot and a pink unread
  * badge instead of the old gold one.
+ *
+ * PHASE 1 (R-11): `cardHead` was `"row-reverse"` and five text styles carried
+ * hardcoded direction. See the note on `when` for the one non-obvious call.
  */
 export function NotificationsScreen() {
   const insets = useSafeAreaInsets();
@@ -186,8 +190,9 @@ const makeStyles = (palette: Palette) =>
     },
     cardUnread: { borderColor: withAlpha(palette.primary, 0.5) },
     pressed: { opacity: 0.85 },
+    // Plain "row": mirrored by React Native under RTL.
     cardHead: {
-      flexDirection: "row-reverse",
+      flexDirection: "row",
       alignItems: "center",
       gap: spacing.sm,
     },
@@ -203,8 +208,7 @@ const makeStyles = (palette: Palette) =>
       ...typography.subtitle,
       color: palette.textPrimary,
       flex: 1,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
     badge: {
       ...typography.caption,
@@ -218,27 +222,36 @@ const makeStyles = (palette: Palette) =>
     cardBody: {
       ...typography.body,
       color: palette.textSecondary,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
+    /**
+     * Trailing edge, LTR content. This was a physical "left", which is the
+     * trailing edge in Arabic but the LEADING edge in French and English - the
+     * timestamp would have jumped from one side of the card to the other with
+     * the language. textAlignEnd() keeps it trailing in both.
+     *
+     * writingDirection stays "ltr" on purpose: the value is a formatted date,
+     * and its digits and separators must not be reordered by the bidi
+     * algorithm. Same deliberate exception class as the version block in
+     * LegalScreen and the plate in VehicleCard.
+     */
     when: {
       ...typography.caption,
       color: palette.textMuted,
-      textAlign: "left",
+      textAlign: textAlignEnd(),
       writingDirection: "ltr",
     },
+    // Centre does not mirror.
     empty: {
       ...typography.body,
       color: palette.textSecondary,
       textAlign: "center",
       marginTop: spacing["3xl"],
-      writingDirection: "rtl",
     },
     footer: {
       ...typography.caption,
       color: palette.textMuted,
       textAlign: "center",
       marginTop: spacing.md,
-      writingDirection: "rtl",
     },
   });
