@@ -9,13 +9,14 @@ import {
   typography,
   usePalette,
 } from "../theme";
+import { textAlignStart } from "../i18n";
 import type { DriverAvailability } from "../types/driver";
 
 /**
  * The compact home status card.
  *
  * It is one floating rounded card, inset from the edges like the navigation,
- * with a single row: state on the right, action on the left. The vehicle line is
+ * with a single row: the state leads, the action trails. The vehicle line is
  * secondary and truncated, the hint is one line and only shown when it actually
  * adds something (offline, or on a trip), and warnings (permissions, approval,
  * errors) are still surfaced - a redesign must never hide the reason the driver
@@ -26,6 +27,19 @@ import type { DriverAvailability } from "../types/driver";
  * bottom-sheet margin from the config. React Native has no backdrop blur on
  * Android, so `palette.overlay` is the same surface at a higher alpha rather
  * than a fake blur.
+ *
+ * PHASE 1 (R-11): the two rows were `row-reverse` and the four text styles were
+ * `textAlign: "right"` with `writingDirection: "rtl"`. That was an Arabic-only
+ * layout hand-mirrored before real RTL existed. Now that forceRTL is on, React
+ * Native mirrors `"row"` itself, so the hand-mirroring cancelled it out and put
+ * the card back into latin order in Arabic. Rows are plain "row"; the text uses
+ * textAlignStart().
+ *
+ * Why textAlignStart() is safe in a module-level StyleSheet: this file imports
+ * "../i18n", and an imported module's body is evaluated before the body of the
+ * module importing it. `syncDirectionAtBoot()` therefore runs before this
+ * stylesheet is built, so the direction is already settled. The direction also
+ * cannot change without a bundle reload, so there is nothing to react to.
  */
 export function HomeStatusCard({
   availability,
@@ -158,15 +172,16 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     ...shadows.floating,
   },
+  // Plain "row": React Native mirrors it under RTL. See the R-11 note above.
   row: {
-    flexDirection: "row-reverse",
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: spacing.md,
   },
   textCol: { flex: 1, gap: 2 },
   statusRow: {
-    flexDirection: "row-reverse",
+    flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
   },
@@ -182,19 +197,16 @@ const styles = StyleSheet.create({
   },
   status: {
     ...typography.subtitle,
-    textAlign: "right",
-    writingDirection: "rtl",
+    textAlign: textAlignStart(),
     flexShrink: 1,
   },
   vehicle: {
     ...typography.caption,
-    textAlign: "right",
-    writingDirection: "rtl",
+    textAlign: textAlignStart(),
   },
   hint: {
     ...typography.caption,
-    textAlign: "right",
-    writingDirection: "rtl",
+    textAlign: textAlignStart(),
   },
   warning: {
     borderWidth: 1,
@@ -204,7 +216,6 @@ const styles = StyleSheet.create({
   },
   warningText: {
     ...typography.caption,
-    textAlign: "right",
-    writingDirection: "rtl",
+    textAlign: textAlignStart(),
   },
 });

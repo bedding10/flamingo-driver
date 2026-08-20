@@ -8,6 +8,7 @@ import {
 } from "react-native";
 import Svg, { Circle, Path } from "react-native-svg";
 import { spacing, radius, typography, usePalette } from "../theme";
+import { rowNeverMirrored } from "../i18n";
 
 /**
  * PHASE 7.5 - the flaminGO mark.
@@ -20,6 +21,20 @@ import { spacing, radius, typography, usePalette } from "../theme";
  * The "GO" is pink; the rest of the word takes the theme's primary text colour,
  * which is what makes the same component work on the dark map overlay and on a
  * white menu surface.
+ *
+ * PHASE 1 (R-11) - WHY THIS ROW MUST NOT MIRROR
+ * A brand lockup is artwork, not content. "flaminGO" is a latin wordmark and the
+ * glyph belongs on a fixed side of it, so the pair has to look identical in
+ * Arabic, French and English. React Native mirrors plain `flexDirection: "row"`
+ * once the layout is RTL, which would have thrown the flamingo to the other side
+ * of the word in Arabic. `rowNeverMirrored()` pins it.
+ *
+ * This is the one place where reversing the row by hand is CORRECT, and it is
+ * the opposite of the fix applied to the content rows elsewhere in this phase -
+ * hence the helper's name, so the intent is unmistakable at a glance.
+ *
+ * `writingDirection: "ltr"` on the word is the matching guarantee for the text
+ * itself: the brand never reflows, whatever the surrounding paragraph does.
  */
 function FlamingoGlyph({ size, color }: { size: number; color: string }) {
   return (
@@ -94,7 +109,12 @@ export function BrandMark({
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
+  row: {
+    // Deliberately reversed under RTL so the lockup stays visually identical.
+    flexDirection: rowNeverMirrored(),
+    alignItems: "center",
+    gap: spacing.xs,
+  },
   word: {
     ...typography.label,
     letterSpacing: -0.2,
