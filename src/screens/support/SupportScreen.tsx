@@ -20,6 +20,7 @@ import type {
   SupportTicketSummary,
   TicketStatus,
 } from "../../api/support.api";
+import { textAlignEnd, textAlignStart } from "../../i18n";
 import { supportStrings } from "../../i18n/strings.support";
 import { formatDateTime } from "../../utils/datetime";
 import type { DriverStackParamList } from "../../navigation/types";
@@ -48,6 +49,9 @@ const STATUS_LABELS: Record<TicketStatus, string> = {
  * already open. They are together because a driver with an unanswered ticket
  * must see it before opening a second one about the same problem - duplicate
  * tickets are what buries a real case in the support queue.
+ *
+ * PHASE 1 (R-11): `rowHead` was `"row-reverse"` and four text styles carried
+ * hardcoded direction.
  */
 export function SupportScreen() {
   const insets = useSafeAreaInsets();
@@ -184,8 +188,9 @@ const makeStyles = (palette: Palette) =>
       gap: 2,
     },
     pressed: { opacity: 0.85 },
+    // Plain "row": mirrored by React Native under RTL.
     rowHead: {
-      flexDirection: "row-reverse",
+      flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
       gap: spacing.sm,
@@ -194,24 +199,23 @@ const makeStyles = (palette: Palette) =>
       ...typography.subtitle,
       color: palette.textPrimary,
       flex: 1,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
     status: {
       ...typography.caption,
       color: palette.primaryText,
-      writingDirection: "rtl",
     },
+    // Trailing timestamp, LTR digits. Was a physical "left", which is trailing
+    // in Arabic but leading in French and English.
     when: {
       ...typography.caption,
       color: palette.textMuted,
-      textAlign: "left",
+      textAlign: textAlignEnd(),
       writingDirection: "ltr",
     },
     empty: {
       ...typography.body,
       color: palette.textSecondary,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
   });

@@ -14,6 +14,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { InputField } from "../../components/InputField";
 import { PrimaryButton } from "../../components/PrimaryButton";
 import { supportApi } from "../../api";
+import { textAlignEnd, textAlignStart } from "../../i18n";
 import { supportStrings } from "../../i18n/strings.support";
 import { formatDateTime } from "../../utils/datetime";
 import { SUPPORT_TICKETS_KEY } from "./SupportScreen";
@@ -37,6 +38,9 @@ import {
  *
  * A CLOSED ticket hides the reply box because the server refuses the POST with
  * 400 - showing a box that always fails would be a lie.
+ *
+ * PHASE 1 (R-11): six text styles carried hardcoded direction. The BUBBLE SIDES
+ * were already correct - see the note on `bubbleMine`.
  */
 export function TicketScreen() {
   const insets = useSafeAreaInsets();
@@ -160,8 +164,7 @@ const makeStyles = (palette: Palette) =>
     subject: {
       ...typography.subtitle,
       color: palette.textPrimary,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
     bubble: {
       borderRadius: radius.card,
@@ -171,6 +174,20 @@ const makeStyles = (palette: Palette) =>
       gap: 2,
       maxWidth: "92%",
     },
+    /**
+     * ALREADY CORRECT - deliberately left alone.
+     *
+     * alignSelf resolves on the CROSS axis, and the parent is a column, so the
+     * cross axis is horizontal and React Native mirrors it. "flex-end" is the
+     * right in French and English and the left in Arabic: the driver's own
+     * messages trail and staff messages lead, in every language, with no
+     * intervention.
+     *
+     * TripChatScreen's bubbles looked almost identical and WERE broken, because
+     * there the values were justifyContent on the MAIN axis of a "row" and had
+     * been swapped to compensate for a layout that did not yet mirror. The axis
+     * is the entire difference.
+     */
     bubbleMine: {
       alignSelf: "flex-end",
       backgroundColor: palette.primaryWash,
@@ -182,18 +199,17 @@ const makeStyles = (palette: Palette) =>
     author: {
       ...typography.caption,
       color: palette.primaryText,
-      writingDirection: "rtl",
     },
     body: {
       ...typography.body,
       color: palette.textPrimary,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
+    // Trailing timestamp inside the bubble, LTR digits.
     when: {
       ...typography.caption,
       color: palette.textMuted,
-      textAlign: "left",
+      textAlign: textAlignEnd(),
       writingDirection: "ltr",
     },
     replyBox: { gap: spacing.md, marginTop: spacing.md },
@@ -205,14 +221,13 @@ const makeStyles = (palette: Palette) =>
     closed: {
       ...typography.caption,
       color: palette.warning,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
       marginTop: spacing.md,
     },
+    // Centre does not mirror.
     empty: {
       ...typography.body,
       color: palette.textSecondary,
       textAlign: "center",
-      writingDirection: "rtl",
     },
   });
