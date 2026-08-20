@@ -16,6 +16,7 @@ import {
   withAlpha,
   type Palette,
 } from "../theme";
+import { textAlignStart } from "../i18n";
 import { strings } from "../i18n/strings";
 import { p1 } from "../i18n/strings.phase1";
 import { StatusPill, type PillTone } from "./StatusPill";
@@ -44,6 +45,17 @@ type Props = {
  *   - the rejection reason, so "مرفوضة" stops being a dead end
  *   - the expiry date with a countdown, so renewal happens before the block
  *   - the EXPIRED state itself
+ *
+ * PHASE 1 (R-11): this file carried ten hand-written direction compensations -
+ * one `"row-reverse"` row and nine `textAlign: "right"` / `writingDirection:
+ * "rtl"` text styles. With real RTL enabled they cancelled the automatic
+ * mirroring, which mattered more here than almost anywhere else: the rejection
+ * reason and the expiry countdown are exactly the strings a blocked driver has
+ * to be able to read. The row is now plain `"row"` and the text resolves its
+ * own alignment.
+ *
+ * The `alignItems: "flex-end"` values are deliberately untouched - flex-start
+ * and flex-end are logical in Yoga and already follow the layout direction.
  */
 export function DocumentRow({
   title,
@@ -181,9 +193,10 @@ function statusTone(status: DocumentStatus | null): PillTone {
 
 const makeStyles = (palette: Palette) =>
   StyleSheet.create({
+    // Plain "row": mirrored by React Native under RTL. See the R-11 note above.
     row: {
       minHeight: touchTarget.critical,
-      flexDirection: "row-reverse",
+      flexDirection: "row",
       alignItems: "center",
       gap: spacing.lg,
       paddingVertical: spacing.md,
@@ -202,19 +215,19 @@ const makeStyles = (palette: Palette) =>
     },
     image: { width: "100%", height: "100%" },
     thumbPlaceholder: { ...typography.title, color: palette.textSecondary },
+    // Logical: already follows the layout direction.
     texts: { flex: 1, alignItems: "flex-end" },
     title: {
       ...typography.label,
       color: palette.textPrimary,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
     requiredMark: { color: palette.primaryText },
     action: {
       ...typography.caption,
       color: palette.primaryText,
       marginTop: 2,
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
     dates: {
       alignItems: "flex-end",
@@ -224,11 +237,10 @@ const makeStyles = (palette: Palette) =>
     dateLine: {
       ...typography.caption,
       color: palette.textSecondary,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
     dateValue: { color: palette.textPrimary },
-    countdown: { ...typography.caption, writingDirection: "rtl" },
+    countdown: { ...typography.caption, textAlign: textAlignStart() },
     countdownCalm: { color: palette.textSecondary },
     countdownWarning: { color: palette.warning },
     countdownDanger: { color: palette.danger },
@@ -244,21 +256,18 @@ const makeStyles = (palette: Palette) =>
       ...typography.caption,
       color: palette.danger,
       fontWeight: "600",
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
     noteText: {
       ...typography.body,
       color: palette.textPrimary,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
       marginTop: 2,
     },
     expiredHint: {
       ...typography.caption,
       color: palette.danger,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
       marginBottom: spacing.md,
     },
   });

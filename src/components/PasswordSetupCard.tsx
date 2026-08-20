@@ -5,6 +5,7 @@ import { PrimaryButton } from "./PrimaryButton";
 import { SectionCard } from "./SectionCard";
 import { authApi } from "../api";
 import { toApiError } from "../api/client";
+import { textAlignStart } from "../i18n";
 import { strings } from "../i18n/strings";
 import { pw } from "../i18n/strings.password";
 import { spacing, typography, usePalette, type Palette } from "../theme";
@@ -26,6 +27,10 @@ const MAX_LENGTH = 72;
  * Firebase flow has no hash yet, and the server accepts the first set without
  * one. Once a password exists the server requires it again - the client does
  * not decide that, it only sends what it has.
+ *
+ * PHASE 1 (R-11): the three message styles were pinned to `textAlign: "right"`
+ * with `writingDirection: "rtl"`, which right-aligned the validation errors in
+ * French and English too. They now resolve from the layout direction.
  */
 export function PasswordSetupCard() {
   const palette = usePalette();
@@ -138,20 +143,17 @@ const makeStyles = (palette: Palette) =>
     hint: {
       ...typography.caption,
       color: palette.textSecondary,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
     error: {
       ...typography.caption,
       color: palette.danger,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
     success: {
       ...typography.caption,
       color: palette.online,
-      textAlign: "right",
-      writingDirection: "rtl",
+      textAlign: textAlignStart(),
     },
     action: { marginTop: spacing.sm },
   });

@@ -43,6 +43,11 @@ export type ProfilePhotoPickerProps = {
  *    the caption says plainly that staff still review it.
  * 5. The frame is still whatever the server sent. This component decides no
  *    level and knows no threshold.
+ *
+ * PHASE 1 (R-11): two `"row-reverse"` rows and six text styles carrying
+ * `writingDirection: "rtl"`. The rows are now plain `"row"`. The four centred
+ * captions keep `textAlign: "center"` and simply lose the writing direction -
+ * centred text has no side to resolve, so there is nothing to mirror.
  */
 export function ProfilePhotoPicker({
   avatarUrl,
@@ -119,7 +124,8 @@ export function ProfilePhotoPicker({
 const makeStyles = (palette: Palette) =>
   StyleSheet.create({
     root: { alignItems: "center", gap: spacing.sm },
-    row: { flexDirection: "row-reverse", gap: spacing.sm },
+    // Plain "row": mirrored by React Native under RTL.
+    row: { flexDirection: "row", gap: spacing.sm },
     button: {
       minHeight: touchTarget.normal,
       justifyContent: "center",
@@ -133,40 +139,35 @@ const makeStyles = (palette: Palette) =>
     buttonText: {
       ...typography.caption,
       color: palette.primaryText,
-      writingDirection: "rtl",
     },
     status: {
-      flexDirection: "row-reverse",
+      flexDirection: "row",
       alignItems: "center",
       gap: spacing.xs,
     },
     statusText: {
       ...typography.caption,
       color: palette.textSecondary,
-      writingDirection: "rtl",
     },
+    // Centred captions: nothing to mirror, so they keep "center".
     hint: {
       ...typography.caption,
       color: palette.textSecondary,
       textAlign: "center",
-      writingDirection: "rtl",
     },
     review: {
       ...typography.caption,
       color: palette.textSecondary,
       textAlign: "center",
-      writingDirection: "rtl",
     },
     error: {
       ...typography.caption,
       color: palette.danger,
       textAlign: "center",
-      writingDirection: "rtl",
     },
     success: {
       ...typography.caption,
       color: palette.online,
       textAlign: "center",
-      writingDirection: "rtl",
     },
   });

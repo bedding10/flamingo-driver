@@ -20,6 +20,11 @@ import { LEVEL_TINTS, STITCH_DARK } from "./stitch";
  * system. Pointing the alias at pink keeps gold off those screens with no risk
  * of a broken import. Real gold lives in `LEVEL_TINTS` and is re-exported below
  * under a name that says what it is for.
+ *
+ * NOTE FOR ANYONE AUDITING THIS FILE: because `gold` resolves to pink, finding
+ * `colors.gold` at a call site does NOT mean gold is on screen there. It means
+ * that call site has not been migrated to `usePalette()` yet, which is a
+ * light-mode bug rather than a branding one. Judge those call sites on that.
  */
 
 /**
@@ -86,7 +91,13 @@ export const colors = {
   offline: STITCH_DARK.outline,
   busy: STITCH_DARK.tertiary,
   danger: STITCH_DARK.error,
-  warning: "#E8A33D",
+  /**
+   * PHASE 1: was the hardcoded #E8A33D, a hex that appears NOWHERE in the
+   * Stitch reference - it was invented. Stitch uses #F59E0B for warning, eight
+   * times. This was the last place the invented value survived after
+   * palettes.ts was corrected.
+   */
+  warning: STITCH_DARK.warning, // #F59E0B
   info: STITCH_DARK.secondary,
 } as const;
 
