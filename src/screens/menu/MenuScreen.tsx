@@ -40,37 +40,30 @@ const LEVEL_LABELS: Record<string, string> = {
 };
 
 /**
- * PHASE 7.5 - the menu, rebuilt from scratch.
+ * The driver menu.
  *
- * What it was: every destination rendered as a full-width card with a title and
- * a two-line description, one after another, each the same weight as the one
- * above it. Twelve equal boxes is not a hierarchy - it reads like an admin
- * dashboard, and that is exactly what this replaces.
+ * One profile hero at the top, then quiet section titles over compact list rows
+ * grouped in rounded cards - the consumer-app pattern. Each row is an icon, a
+ * title, a one-line subtitle and a forward chevron. Sign-out is a row too, in
+ * red, not a button bolted to the bottom.
  *
- * What it is now: one profile hero at the top, then quiet section titles over
- * compact 56pt list rows grouped in rounded cards - the consumer-app pattern.
- * Each row is an icon, a title, a one-line subtitle and a forward chevron.
- * Sign-out is a row too, in red, not a button bolted to the bottom.
+ * SOS REMOVED: the Safety row is gone with the rest of the SOS system, so
+ * Support is now the last row of the support group. `menu75Strings.safety` and
+ * `safetyHint` are left in the string table unused rather than deleted, so a
+ * translation file does not have to change for a navigation change.
+ *
+ * APPEARANCE KEPT: the dark/light toggle stays - both themes are supported, per
+ * the request. The redesigned screens are dark-first but the legacy palette
+ * still resolves both modes.
  *
  * Honest omissions, unchanged because they are backend facts, not design
  * choices:
  *  - rating COUNT: GET /driver/me returns `rating` and `totalTrips` with no
  *    number of ratings. Printing totalTrips next to the stars would claim every
- *    trip was rated, which is false. The stat is simply absent until the
- *    backend sends it (registered as a PHASE 8 backend requirement).
+ *    trip was rated, which is false.
  *  - VEHICLE: /vehicles is STAFF-only on the server, so the car is edited
- *    through the car* fields on PATCH /driver/me rather than through a vehicle
- *    endpoint this app is allowed to call. That constraint has not changed.
- *    PHASE 2: what HAS changed is where the row leads. It used to point at
- *    Profile, because the vehicle fields were the second half of the profile
- *    form. They are their own screen now, so it points at Vehicle - and if this
- *    row had been left pointing at Profile, tapping "my vehicle" would have
- *    landed on a screen with no vehicle fields on it.
- *
- * PHASE 1 (R-11): `heroStats`, `heroStat` and the list `row` were all
- * `"row-reverse"`, and six text styles were pinned right. Every destination in
- * the app renders through that one `row`, so it was the single highest-leverage
- * fix on this screen.
+ *    through the car* fields on PATCH /driver/me. The row points at Vehicle,
+ *    which is its own screen since the vehicle fields left the profile form.
  */
 export function MenuScreen() {
   const insets = useSafeAreaInsets();
@@ -234,7 +227,7 @@ export function MenuScreen() {
         />
       </Section>
 
-      {/* ---- support and safety -------------------------------------------- */}
+      {/* ---- support ------------------------------------------------------- */}
       <Section title={menu75Strings.sectionSupport}>
         <Row
           icon="bell"
@@ -247,14 +240,8 @@ export function MenuScreen() {
           icon="support"
           label={menu75Strings.support}
           hint={menu75Strings.supportHint}
-          onPress={() => navigation.navigate("Support")}
-        />
-        <Row
-          icon="shield"
-          label={menu75Strings.safety}
-          hint={menu75Strings.safetyHint}
           last
-          onPress={() => navigation.navigate("Safety")}
+          onPress={() => navigation.navigate("Support")}
         />
       </Section>
 
@@ -402,9 +389,7 @@ function Row({
       {/*
         Forward affordance. `chevron` is one of the three mirrored names in
         Icon.tsx, so the glyph is LTR-canonical and React Native flips it: it
-        points left in Arabic and right in French and English. The comment that
-        used to sit here asserted a fixed leftward direction, which stopped
-        being true once the icon started mirroring.
+        points left in Arabic and right in French and English.
       */}
       <Icon name="chevron" size={18} color={palette.textMuted} />
     </Pressable>
