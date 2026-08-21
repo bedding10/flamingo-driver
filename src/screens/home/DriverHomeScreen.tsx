@@ -1,13 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, Linking, Pressable, StyleSheet, View } from "react-native";
+import { Alert, Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { DriverMap } from "../../components/DriverMap";
 import { RideOfferCard } from "../../components/RideOfferCard";
 import { ActiveTripCard } from "../../components/ActiveTripCard";
-import { HomeStatusCard } from "../../components/HomeStatusCard";
-import { StatusPill, type PillTone } from "../../components/StatusPill";
+import { AvailabilityToggle } from "../../components/AvailabilityToggle";
+import { StatusPill } from "../../components/StatusPill";
 import { BrandMark } from "../../components/BrandMark";
 import { Icon } from "../../components/Icon";
 import { navSpace } from "../../components/DriverTabBar";
@@ -26,12 +26,11 @@ import {
   stopLocationTracking,
   type LocationPermissionResult,
 } from "../../services/location.service";
-import { safetyApi } from "../../api";
 import { connectSocket, onSocketStatus } from "../../socket/socket.service";
 import type { SocketStatus } from "../../types/socket";
 import type { DriverStackParamList } from "../../navigation/types";
 import { strings } from "../../i18n/strings";
-import { shareStrings, statusStrings } from "../../i18n/strings.phase7";
+import { shareStrings } from "../../i18n/strings.phase7";
 import { home75Strings } from "../../i18n/strings.phase75";
 import {
   radius,
@@ -44,34 +43,38 @@ import {
 /**
  * The screen a driver looks at all day.
  *
- * PHASE 7 made it map-first. PHASE 7.5 finished the job: the only permanent
- * chrome is the brand mark and one status pill at the top, a floating status
- * card and the floating navigation at the bottom. Everything is inset from the
- * screen edges, nothing is glued to them, and the map is visible behind all of
- * it. The round map controls now carry real icons instead of glyph characters.
+ * This screen is never unmounted while the driver is signed in, it owns GPS
+ * publishing, socket status and the trip lifecycle, and tracking follows
+ * AVAILABILITY rather than the screen lifecycle - a driver who is ONLINE must
+ * keep publishing `driver:location` because MatchingService reads that position
+ * from Redis. Going OFFLINE stops the GPS, which is the only honest way to stop
+ * draining the battery.
  *
- * What deliberately did NOT change: this screen is still never unmounted while
- * the driver is signed in, it still owns GPS publishing, socket status and the
- * trip lifecycle, and tracking still follows AVAILABILITY rather than the screen
- * lifecycle - a driver who is ONLINE must keep publishing `driver:location`
- * because MatchingService reads that position from Redis. Going OFFLINE stops
- * the GPS, which is the only honest way to stop draining the battery.
+ * BOTTOM STATUS CARD REMOVED (by request): the card that showed the vehicle line
+ * and the big "start receiving requests" button is gone. Going online is now a
+ * single switch in the top bar (AvailabilityToggle), and the map keeps the whole
+ * screen when there is nothing to act on. The vehicle make/model/plate is no
+ * longer repeated here - it lives in the vehicle screen, which is its home.
+ * What survived from that card is the part a driver cannot work without: the
+ * permission / not-approved / server-error notice, now a compact floating strip.
  *
- * PHASE 1 (R-8): the bottom navigation is no longer rendered here. It lived in
- * this screen with `active="map"` hardcoded, which meant it only existed on one
- * of its three sections. It is now mounted once in DriverNavigator so it
- * persists across Requests and Menu too. This screen keeps `navSpace()` because
- * its floating cards still have to clear that bar, and it subscribes to
- * `onRecenter` so the bar's centre item can still recentre the camera - that
- * follow flag is local state and stays local.
+ * SOS REMOVED: the emergency report, its pending flag and the safetyApi import
+ * are gone with the rest of the SOS system, and ActiveTripCard no longer takes
+ * an `onSos` prop.
  *
- * PHASE 1 (R-11): the top bar was `flexDirection: "row-reverse"`, which
- * double-flipped now that real RTL is enabled, and the map control column was
- * pinned with `left`, which never mirrors. Now `"row"` and `end`.
+ * TRACKING DISCLOSURE REMOVED (by request): the in-app "location tracking while
+ * you work" dialog is gone, so `startLocationTracking` is now called WITHOUT a
+ * `disclose` callback. Per the service contract that means no background
+ * permission is requested at all and delivery stays on the foreground watcher.
+ * The consequence is deliberate and worth stating: with the screen off, Android
+ * can suspend that watcher, `driver:location` stops and matching can stop
+ * seeing this driver. Re-enabling background delivery later requires a
+ * disclosure dialog again - Play policy will not accept the OS prompt cold.
  *
- * Performance: no state added that changes on a GPS fix. `fix` is read from the
- * store exactly as before, the palette comes from a memoised context, and the
- * cards below are the same memoised components.
+ * The bottom navigation is mounted once in DriverNavigator, not here, so it
+ * persists across Requests and Menu. This screen keeps `navSpace()` because its
+ * floating cards still have to clear that bar, and it subscribes to `onRecenter`
+ * so the bar's centre item can recentre the camera.
  */
 export function DriverHomeScreen() {
   const insets = useSafeAreaInsets();
@@ -83,7 +86,7 @@ export function DriverHomeScreen() {
   const profile = useDriverStore((state) => state.profile);
   const fix = useLocationStore((state) => state.fix);
 
-  const { availability, isOnline, onTrip, blocked, pending, error, toggle } =
+  const { isOnline, onTrip, blocked, pending, error, toggle } =
     useAvailability();
 
   // Offers are owned by their own hook so this screen stays a layout, not a
@@ -103,8 +106,8 @@ export function DriverHomeScreen() {
   // Trip has actually been accepted by the backend.
   const activeRoute = useTripRoute(trip);
 
-  // PHASE 4: unread messages and callability for the running trip, both read
-  // from GET /trip-communication/:tripId. Nothing is decided locally.
+  // Unread messages and callability for the running trip, both read from
+  // GET /trip-communication/:tripId. Nothing is decided locally.
   const {
     unreadCount,
     callablePhone,
@@ -113,32 +116,6 @@ export function DriverHomeScreen() {
   } = useTripCommunication(trip);
 
   const [shareOpen, setShareOpen] = useState(false);
-
-  // SOS.
-  //
-  // `fix` is the last accepted GPS fix held by the location store. It can be
-  // null when tracking is off, and the report still goes out without a
-  // position: a report with no coordinates beats no report at all. Nothing here
-  // is trusted by the server - the device sends a trip id, the server verifies
-  // the trip belongs to this driver, stamps the time and stores the position.
-  const [sosPending, setSosPending] = useState(false);
-  const raiseSos = useCallback(async () => {
-    if (sosPending) return;
-    setSosPending(true);
-    try {
-      await safetyApi.reportSos({
-        tripId: trip?.id,
-        lat: fix?.lat,
-        lng: fix?.lng,
-        type: "SOS",
-      });
-      Alert.alert(strings.safety.sentTitle, strings.safety.sentBody);
-    } catch {
-      Alert.alert(strings.safety.errorTitle, strings.safety.errorBody);
-    } finally {
-      setSosPending(false);
-    }
-  }, [sosPending, trip, fix]);
 
   const [link, setLink] = useState<SocketStatus>("idle");
   const [permission, setPermission] = useState<LocationPermissionResult | null>(
@@ -150,37 +127,6 @@ export function DriverHomeScreen() {
   // service is idempotent per mode, and this keeps the effect from even calling
   // it when nothing changed.
   const trackingModeRef = useRef<"idle" | "trip" | null>(null);
-
-  /**
-   * The background-location disclosure, shown before the OS prompt.
-   *
-   * Play policy requires the driver to be told what is collected and why BEFORE
-   * the system dialog appears, and Android never re-prompts once a driver
-   * refuses - so firing the system dialog cold would burn the only chance we
-   * get. Declining is not an error: tracking stays foreground-only.
-   */
-  const discloseBackground = useCallback(
-    () =>
-      new Promise<boolean>((resolve) => {
-        Alert.alert(
-          strings.tracking.disclosureTitle,
-          strings.tracking.disclosureBody,
-          [
-            {
-              text: strings.tracking.disclosureDecline,
-              style: "cancel",
-              onPress: () => resolve(false),
-            },
-            {
-              text: strings.tracking.disclosureAccept,
-              onPress: () => resolve(true),
-            },
-          ],
-          { cancelable: false },
-        );
-      }),
-    [],
-  );
 
   useEffect(() => {
     // The socket is session-owned and already open after login; this only
@@ -201,16 +147,15 @@ export function DriverHomeScreen() {
     if (trackingModeRef.current === desired) return;
 
     trackingModeRef.current = desired;
-    void startLocationTracking(desired, {
-      disclose: discloseBackground,
-    }).then((result) => {
+    // No `disclose`: foreground-only tracking, no background prompt.
+    void startLocationTracking(desired).then((result) => {
       if (!cancelled) setPermission(result);
     });
 
     return () => {
       cancelled = true;
     };
-  }, [isOnline, onTrip, discloseBackground]);
+  }, [isOnline, onTrip]);
 
   // Leaving the signed-in stack entirely (sign-out) must not leave the GPS on.
   useEffect(() => {
@@ -247,36 +192,20 @@ export function DriverHomeScreen() {
    */
   const dialPassenger = useCallback(() => {
     void callPassenger().then((ok) => {
-      if (!ok) Alert.alert(strings.safety.errorTitle, strings.chat.callFailed);
+      if (!ok) Alert.alert(strings.chat.callFailed, undefined);
     });
   }, [callPassenger]);
 
   // ---- derived display state ---------------------------------------------
 
-  const availabilityTone: PillTone = onTrip
-    ? "busy"
-    : isOnline
-      ? "approved"
-      : "neutral";
-  const availabilityShort = onTrip
-    ? home75Strings.pillOnTrip
-    : isOnline
-      ? home75Strings.pillOnline
-      : home75Strings.pillOffline;
-
   // The socket pill is only shown when there is something wrong: a green
-  // "connected" chip next to a green "online" chip is noise, but a driver who is
-  // online with a dead socket will never receive an offer and must be told.
+  // "connected" chip next to the switch is noise, but a driver who is online
+  // with a dead socket will never receive an offer and must be told.
   const linkBroken = link !== "connected";
   const linkLabel =
     link === "connecting" ? home75Strings.linkConnecting : home75Strings.linkDown;
 
   const vehicle = profile?.vehicle;
-  const vehicleLine = vehicle?.plate
-    ? [vehicle.make, vehicle.model].filter(Boolean).join(" ") +
-      " \u00b7 " +
-      vehicle.plate
-    : strings.home.vehicleMissing;
 
   const permissionNotice =
     permission === "servicesOff"
@@ -287,22 +216,17 @@ export function DriverHomeScreen() {
           ? strings.home.permissionDenied
           : null;
 
-  const statusLabel = onTrip
-    ? statusStrings.onTrip
-    : isOnline
-      ? statusStrings.online
-      : statusStrings.offline;
-  const statusColor = onTrip
-    ? palette.busy
-    : isOnline
-      ? palette.online
-      : palette.offline;
-
-  const hint = onTrip
-    ? home75Strings.onTripHint
-    : isOnline
-      ? home75Strings.waiting
-      : home75Strings.offlineHint;
+  /**
+   * The one line that used to live in the status card. Order matters: a denied
+   * GPS permission beats "not approved yet", which beats a transient server
+   * error, because that is the order in which the driver has to fix them.
+   */
+  const alert =
+    permissionNotice ??
+    (blocked ? strings.home.notApproved : null) ??
+    notice ??
+    error ??
+    null;
 
   // Everything floating at the bottom clears the navigation pill, which is now
   // mounted by DriverNavigator rather than by this screen.
@@ -315,16 +239,28 @@ export function DriverHomeScreen() {
         follow={follow}
         onPanByUser={onPanByUser}
         route={activeRoute}
-        // PHASE 2: picks the marker artwork. The class is the one staff approved
-        // on the vehicle, so an unapproved or missing vehicle falls back to the
-        // car marker rather than blocking the map.
+        // Picks the marker artwork. The class is the one staff approved on the
+        // vehicle, so an unapproved or missing vehicle falls back to the car
+        // marker rather than blocking the map.
         rideClass={vehicle?.rideClass ?? null}
       />
 
       <View style={[styles.topBar, { paddingTop: insets.top + spacing.sm }]}>
         <BrandMark />
         <View style={styles.topPills}>
-          <StatusPill label={availabilityShort} tone={availabilityTone} dot />
+          {/* The only way to go online or offline. */}
+          <AvailabilityToggle
+            isOnline={isOnline}
+            onTrip={onTrip}
+            pending={pending}
+            blocked={blocked}
+            onToggle={() => void toggle()}
+            labels={{
+              online: home75Strings.pillOnline,
+              offline: home75Strings.pillOffline,
+              onTrip: home75Strings.pillOnTrip,
+            }}
+          />
           {linkBroken ? (
             <StatusPill
               label={linkLabel}
@@ -383,7 +319,6 @@ export function DriverHomeScreen() {
           bottomInset={bottomInset}
           onAdvance={() => void advance()}
           onCancel={() => void cancelTripNow()}
-          onSos={() => void raiseSos()}
           onChat={openChat}
           onCall={callablePhone ? dialPassenger : undefined}
           unreadCount={unreadCount}
@@ -397,29 +332,28 @@ export function DriverHomeScreen() {
           onAccept={accept}
           onDecline={decline}
         />
-      ) : (
-        <HomeStatusCard
-          availability={availability}
-          statusLabel={statusLabel}
-          statusColor={statusColor}
-          vehicleLine={vehicleLine}
-          hint={hint}
-          warning={permissionNotice ?? (blocked ? strings.home.notApproved : notice)}
-          error={error}
-          pending={pending}
-          blocked={blocked}
-          bottom={bottomInset}
-          labels={{
-            goOnline: home75Strings.startReceiving,
-            goOffline: home75Strings.stopReceiving,
-            onTrip: home75Strings.onTripLocked,
-          }}
-          onToggle={() => void toggle()}
-          onWarningPress={
-            permissionNotice ? () => void Linking.openSettings() : undefined
-          }
-        />
-      )}
+      ) : alert ? (
+        // Everything that blocks work still has to be said out loud. Tapping it
+        // opens the OS settings only when the problem actually lives there.
+        <Pressable
+          accessibilityRole={permissionNotice ? "button" : "text"}
+          disabled={!permissionNotice}
+          onPress={() => void Linking.openSettings()}
+          style={[
+            styles.alert,
+            {
+              bottom: bottomInset + spacing.md,
+              backgroundColor: palette.surface,
+              borderColor: palette.border,
+            },
+          ]}
+        >
+          <Icon name="alert" size={18} color={palette.warning} />
+          <Text style={[styles.alertText, { color: palette.primaryText }]}>
+            {alert}
+          </Text>
+        </Pressable>
+      ) : null}
 
       <TripShareSheet
         visible={shareOpen}
@@ -439,7 +373,7 @@ const styles = StyleSheet.create({
     right: 0,
     top: 0,
     // Plain "row": React Native mirrors it under RTL, so the brand mark leads
-    // and the pills trail in every language. See the R-11 note above.
+    // and the switch trails in every language.
     flexDirection: "row",
     alignItems: "flex-start",
     justifyContent: "space-between",
@@ -451,7 +385,7 @@ const styles = StyleSheet.create({
   controls: {
     position: "absolute",
     // `end`, not `left`: the control column belongs on the trailing edge, which
-    // mirrors with the layout. `left` would stay put in both directions.
+    // mirrors with the layout.
     end: spacing.lg,
     gap: spacing.sm,
   },
@@ -464,4 +398,19 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     ...shadows.floating,
   },
+
+  alert: {
+    position: "absolute",
+    start: spacing.lg,
+    end: spacing.lg,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.card,
+    borderWidth: 1,
+    ...shadows.floating,
+  },
+  alertText: { flex: 1, fontSize: 14, lineHeight: 20 },
 });

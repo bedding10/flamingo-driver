@@ -1,84 +1,137 @@
-import React, { useMemo } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
-import { BrandMark } from "../components/BrandMark";
-import { useTranslation } from "../i18n";
+import React, { useEffect, useMemo, useRef } from "react";
 import {
-  radius,
-  spacing,
-  stitchType,
-  usePalette,
-  withAlpha,
-  type Palette,
-} from "../theme";
+  ActivityIndicator,
+  Animated,
+  Easing,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+
+import { useTranslation } from "../i18n";
+import { MOTION, RADIUS, SPACING, typo } from "../theme/tokens";
+import { useTokens, type Tokens } from "../theme/useTokens";
+
+/** Stitch draws the halo at `w-32 h-32` blurred out to roughly this radius. */
+const GLOW_SIZE = 320;
 
 /**
- * The splash, shown while the keystore is read.
+ * `animate-pulse-glow` in the reference: opacity 0.3 -> 0.55 and back.
  *
- * PHASE 1 - REBUILT. What was here before:
+ * Split per scheme on purpose. A translucent pink circle over #101415 reads as
+ * light coming off the mark; the same circle over #fff8f8 reads as a printed
+ * smudge, because there is nothing darker for it to glow against. Light mode
+ * therefore pulses a narrower, fainter band.
+ */
+const GLOW_RANGE = {
+  dark: { min: 0.08, max: 0.2 },
+  light: { min: 0.05, max: 0.12 },
+} as const;
+
+/**
+ * Stitch `splash_screen`, on `src/theme/tokens.ts`.
  *
- *   - the wordmark and the spinner were both `colors.gold`. Gold is not a
- *     flaminGO brand colour (section 7), and this was the very first screen a
- *     driver ever sees, so the app opened by contradicting its own identity.
- *   - the background was the hardcoded `colors.ink`, so the splash ignored the
- *     theme and flashed dark before a light-mode app finished booting.
- *   - the wordmark was plain text at the legacy `typography.display`, not the
- *     real BrandMark, so the logo here did not match the logo everywhere else.
+ * The reference is a centred column: a pink halo behind the mark, the
+ * "flamin" + "Go" wordmark at headline-xl with the second half in
+ * primary-container, and a wide-tracked caption beneath it.
  *
- * It now uses the palette, the Stitch type scale and the actual BrandMark, in
- * the brand pink, with the ambient pink glow the Stitch reference puts behind
- * the mark.
+ * Deliberately cheap: no images, no network, no custom font required to render.
+ * It has to be able to appear on the first frame while the keystore is read.
+ * useTokens() is safe here even if this ever mounts above ThemeProvider - the
+ * theme context carries a dark default rather than throwing.
  *
- * HONEST LIMIT: this is the splash rebuilt on the new foundation. It is NOT a
- * verified pixel match against the Stitch reference screen (screen_29) - that
- * comparison is a Visual QA item, and Visual QA needs a running build, which
- * the environment this was written in cannot produce.
- *
- * Still deliberately cheap: no images, no network, no custom font required to
- * render. It has to be able to appear on the first frame.
+ * NOT REPRODUCED: the abstract flamingo SVG mark. There is no vector asset in
+ * the repo for it, and hand-tracing the reference path into JSX would be a new
+ * logo rather than the brand's. The halo plus wordmark is the same composition
+ * minus that glyph, and it is recorded as a visual delta.
  */
 export function BootScreen() {
-  const palette = usePalette();
   const { t } = useTranslation();
-  const styles = useMemo(() => makeStyles(palette), [palette]);
+  const tokens = useTokens();
+  const styles = useMemo(() => makeStyles(tokens), [tokens]);
+  const pulse = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, {
+          toValue: 1,
+          duration: MOTION.pulse,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulse, {
+          toValue: 0,
+          duration: MOTION.pulse,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
+
+  const range = GLOW_RANGE[tokens.mode];
+  const glowStyle = {
+    opacity: pulse.interpolate({
+      inputRange: [0, 1],
+      outputRange: [range.min, range.max],
+    }),
+  };
 
   return (
     <View style={styles.root}>
       {/*
-        The ambient glow, not a decoration: Stitch puts a soft pink halo behind
-        the mark on the dark splash. Drawn as a large translucent circle because
-        React Native has no box-shadow blur on Android.
+        The ambient glow, not a decoration: the reference puts a blurred pink
+        halo behind the mark. Drawn as a large translucent circle because React
+        Native has no box-shadow blur on Android.
       */}
-      <View style={styles.glow} pointerEvents="none" />
+      <Animated.View style={[styles.glow, glowStyle]} pointerEvents="none" />
 
-      <BrandMark size={34} compact />
+      <Text style={styles.wordmark}>
+        flamin<Text style={styles.wordmarkAccent}>Go</Text>
+      </Text>
 
+      {/* Stitch: uppercase, wide tracking, tertiary, slightly dimmed. */}
       <Text style={styles.tagline}>{t("splash.tagline")}</Text>
 
-      <ActivityIndicator color={palette.primaryText} style={styles.spinner} />
+      <ActivityIndicator
+        color={tokens.colors.primary}
+        style={styles.spinner}
+      />
     </View>
   );
 }
 
-const makeStyles = (palette: Palette) =>
-  StyleSheet.create({
+function makeStyles(t: Tokens) {
+  return StyleSheet.create({
     root: {
       flex: 1,
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: palette.background,
+      backgroundColor: t.colors.background,
     },
     glow: {
       position: "absolute",
-      width: 320,
-      height: 320,
-      borderRadius: radius.pill,
-      backgroundColor: withAlpha(palette.primary, 0.12),
+      width: GLOW_SIZE,
+      height: GLOW_SIZE,
+      borderRadius: RADIUS.full,
+      backgroundColor:
+        t.mode === "light" ? t.colors.primary : t.colors.primaryContainer,
     },
+    wordmark: { ...typo("headlineXl"), color: t.colors.onSurface },
+    /* Brand constant: the "Go" half stays hot pink in both schemes. */
+    wordmarkAccent: { color: t.colors.primaryContainer },
     tagline: {
-      ...stitchType.labelMd,
-      color: palette.textSecondary,
-      marginTop: spacing.md,
+      ...typo("labelMd"),
+      color: t.colors.tertiary,
+      letterSpacing: 2,
+      textTransform: "uppercase",
+      opacity: 0.8,
+      marginTop: SPACING.sm,
       textAlign: "center",
     },
-    spinner: { marginTop: spacing["3xl"] },
+    spinner: { marginTop: SPACING.xxl },
   });
+}

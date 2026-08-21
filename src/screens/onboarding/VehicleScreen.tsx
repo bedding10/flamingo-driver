@@ -1,3 +1,5 @@
+import { MaterialIcons } from "@expo/vector-icons";
+import { useNavigation, useNavigationState } from "@react-navigation/native";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
@@ -9,11 +11,14 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import { toApiError } from "../../api/client";
 import { InputField } from "../../components/InputField";
-import { PrimaryButton } from "../../components/PrimaryButton";
 import { ReadOnlyRow } from "../../components/ReadOnlyRow";
-import { SectionCard } from "../../components/SectionCard";
-import { VehicleCard } from "../../components/VehicleCard";
+import {
+  useDriverProfile,
+  useUpdateDriverProfile,
+} from "../../hooks/useDriverProfile";
 import { textAlignStart } from "../../i18n";
 import { strings } from "../../i18n/strings";
 import {
@@ -22,21 +27,31 @@ import {
   VEHICLE_STATUS_LABELS,
   p1,
 } from "../../i18n/strings.phase1";
-import {
-  radius,
-  spacing,
-  touchTarget,
-  typography,
-  usePalette,
-  withAlpha,
-  type Palette,
-} from "../../theme";
-import {
-  useDriverProfile,
-  useUpdateDriverProfile,
-} from "../../hooks/useDriverProfile";
-import { toApiError } from "../../api/client";
+import { alpha, RADIUS, SPACING, typo } from "../../theme/tokens";
+import { useTokens, type Tokens } from "../../theme/useTokens";
 import type { UpdateDriverProfileInput } from "../../types/driver";
+import { HEADER_HEIGHT, PillButton, StickyHeader } from "../../ui";
+
+const CHIP_MIN_HEIGHT = 56;
+
+/**
+ * Per-scheme wash strengths. Every one of these reads on #101415 and is close
+ * to invisible on the light #fff8f8 surface, so the light scheme is stronger.
+ */
+const CHIP_WASH = { dark: 0.16, light: 0.22 } as const;
+const OK_WASH = { dark: 0.2, light: 0.16 } as const;
+const OK_BORDER = { dark: 0.3, light: 0.5 } as const;
+const NOTE_WASH = { dark: 0.12, light: 0.16 } as const;
+const NOTE_BORDER = { dark: 0.4, light: 0.55 } as const;
+const HERO_BORDER = { dark: 0.1, light: 0.25 } as const;
+
+/** Local copy for the final onboarding action. */
+const COPY = {
+  sendForReview:
+    "\u0625\u0631\u0633\u0627\u0644 \u0627\u0644\u0645\u0644\u0641 \u0644\u0644\u0645\u0631\u0627\u062c\u0639\u0629",
+  reviewBlocked:
+    "\u0623\u062f\u062e\u0644 \u0627\u0644\u0637\u0631\u0627\u0632 \u0648\u0631\u0642\u0645 \u0627\u0644\u0644\u0648\u062d\u0629 \u0623\u0648\u0644\u0627\u064b.",
+} as const;
 
 /** Order-insensitive comparison, since the server deduplicates and may reorder. */
 function sameFeatures(a: string[], b: string[]): boolean {
@@ -47,15 +62,11 @@ function sameFeatures(a: string[], b: string[]): boolean {
 }
 
 /**
- * The active vehicle, saved through PATCH /driver/me.
+ * Stitch `my_vehicle` - STEP 5, the last one the driver fills in.
  *
- * PHASE 2: this block used to be the second half of ProfileScreen. Sections 13
- * and 62 put VEHICLE INFORMATION after DOCUMENTS in the onboarding order, and
- * that order is impossible to express while the vehicle fields sit inside the
- * screen the driver reaches first. So it is its own screen, its own delta and
- * its own save.
+ * phone -> OTP -> basic info -> documents -> THIS SCREEN -> review.
  *
- * The server constraints that shaped the old form still apply here, unchanged:
+ * The server constraints that shaped this form are unchanged:
  *
  * 1. Only CHANGED fields are sent. The server resets vehicle verification to
  *    PENDING whenever an identity field (make / model / plate / year) differs
@@ -63,28 +74,50 @@ function sameFeatures(a: string[], b: string[]): boolean {
  *    already approved vehicle. carFeatures is deliberately NOT one of those
  *    identity fields, so a driver can correct the comfort list of an approved
  *    car without losing the approval.
- * 2. Vehicle TYPE is read-only: its catalogue is behind a STAFF-only endpoint,
- *    so this app cannot list it and will not invent a picker over data it
- *    cannot read.
+ * 2. Vehicle TYPE is read-only: its catalogue sits behind a STAFF-only
+ *    endpoint, so this app will not invent a picker over data it cannot read.
  * 3. Service class (rideClass) is read-only for a different reason - staff
- *    assign it during vehicle review, on purpose, so a driver cannot quietly
- *    relabel an approved van as "economy" to pick up more offers.
+ *    assign it during review, so a driver cannot quietly relabel an approved
+ *    van as "economy" to pick up more offers.
  *
- * There is no /vehicles write path for drivers: that route is staff-only, so
- * everything here travels as car* fields on the driver PATCH. No endpoint was
- * invented to make this screen look self-contained.
+ * There is no /vehicles write path for drivers, so everything travels as car*
+ * fields on the driver PATCH. No endpoint was invented to make this screen look
+ * self-contained.
  *
- * STILL OUTSTANDING (PHASE 2, visual rebuild): Stitch draws this as my_vehicle
- * (screenshot 14) and vehicle_details_specs - a vehicle hero card with the
- * plate as a badge, spec rows and an inspection status block. This is still the
- * PHASE 1 stacked-input form.
+ * THE FINAL ACTION ONLY EXISTS DURING ONBOARDING. This screen is registered in
+ * the driver stack too (an approved driver still has to fix a plate), and that
+ * stack has no Pending route, so the review button is rendered only when the
+ * live navigator actually declares one. It is enabled once a model AND a plate
+ * exist - the two fields the server refuses a vehicle without.
+ *
+ * REBUILT ON THE REFERENCE: the hero card with the pink-wash gradient, the
+ * state pill, the make/model headline and the plate badge, then the editable
+ * specs below it. The reference's vehicle photograph, maintenance reminders and
+ * document expiry dates are NOT built: there is no vehicle-photo field, no
+ * maintenance endpoint and no per-document expiry surface on the driver API,
+ * and inventing them would put fiction on a screen an operator reviews. The
+ * vehicle PHOTOS the reference collects are uploaded on the documents step,
+ * which is the only pipeline the server exposes.
+ *
+ * THEME: all colours come from useTokens(), so the screen follows the
+ * dark/light switch.
  */
 export function VehicleScreen() {
   const insets = useSafeAreaInsets();
-  const palette = usePalette();
-  const styles = useMemo(() => makeStyles(palette), [palette]);
+  const navigation = useNavigation();
   const { data: profile } = useDriverProfile();
   const mutation = useUpdateDriverProfile();
+  const t = useTokens();
+  const styles = useMemo(() => makeStyles(t), [t]);
+
+  /**
+   * Is this the onboarding stack? Read from the live navigator rather than
+   * guessed from driver status: navigating to a route the current stack does
+   * not declare throws at runtime.
+   */
+  const inOnboarding = useNavigationState((state) =>
+    state.routeNames.includes("Pending"),
+  );
 
   const vehicle = profile?.vehicle ?? null;
 
@@ -100,12 +133,8 @@ export function VehicleScreen() {
   const [saved, setSaved] = useState(false);
 
   /**
-   * One-shot hydration.
-   *
-   * Every field is initialised from `profile`, which is undefined on the first
-   * render whenever the query has no cached data. This runs once per profile id
-   * and never again, so a background refetch cannot overwrite a plate the
-   * driver is halfway through typing.
+   * One-shot hydration: runs once per profile id, so a background refetch
+   * cannot overwrite a plate the driver is halfway through typing.
    */
   const hydratedFor = useRef<string | null>(null);
   useEffect(() => {
@@ -150,6 +179,9 @@ export function VehicleScreen() {
   }, [make, model, color, plate, year, features, vehicle]);
 
   const dirty = Object.keys(changes).length > 0;
+
+  /** What the server itself requires before a vehicle exists at all. */
+  const vehicleReady = !!vehicle?.model && !!vehicle?.plate;
 
   const toggleFeature = (key: string) => {
     setFeatures((current) =>
@@ -200,6 +232,12 @@ export function VehicleScreen() {
     }
   };
 
+  const approved = vehicle?.verificationStatus === "APPROVED";
+  const headline = [vehicle?.make, vehicle?.model].filter(Boolean).join(" ");
+  const subline = [vehicle?.color, vehicle?.year]
+    .filter(Boolean)
+    .join(" \u2022 ");
+
   return (
     <KeyboardAvoidingView
       style={styles.root}
@@ -208,18 +246,62 @@ export function VehicleScreen() {
       <ScrollView
         contentContainerStyle={[
           styles.content,
-          { paddingTop: insets.top + spacing.xl },
-          { paddingBottom: insets.bottom + spacing["3xl"] },
+          {
+            paddingTop: insets.top + HEADER_HEIGHT + SPACING.lg,
+            paddingBottom: insets.bottom + SPACING.xxl,
+          },
         ]}
         keyboardShouldPersistTaps="handled"
       >
         <Text style={styles.heading}>{strings.profile.vehicleSection}</Text>
 
-        <SectionCard
-          title={strings.profile.vehicleSection}
-          hint={strings.profile.vehicleHint}
-        >
-          <VehicleCard vehicle={vehicle} />
+        {/* Hero card. The state pill reports the SERVER verdict, so it cannot
+            claim a vehicle is active while review is still pending. */}
+        <View style={[styles.hero, t.shadowCard]}>
+          <View
+            style={[
+              styles.statePill,
+              approved ? styles.stateOk : styles.statePending,
+            ]}
+          >
+            <Text
+              style={[
+                styles.stateText,
+                {
+                  color: approved
+                    ? t.semantic.success
+                    : t.colors.onSurfaceVariant,
+                },
+              ]}
+            >
+              {vehicle?.verificationStatus
+                ? VEHICLE_STATUS_LABELS[vehicle.verificationStatus] ??
+                  vehicle.verificationStatus
+                : strings.profile.rideClassPending}
+            </Text>
+          </View>
+
+          <Text style={styles.heroTitle}>
+            {headline || strings.profile.vehicleHint}
+          </Text>
+          {subline ? <Text style={styles.heroSub}>{subline}</Text> : null}
+
+          {/* Plate badge. Pinned LTR and wide-tracked, like the reference's
+              mono badge: an Algerian plate is a Latin/digit run. */}
+          <View style={styles.plateBadge}>
+            <MaterialIcons
+              name="directions-car"
+              size={t.iconSize.lg}
+              color={t.colors.primary}
+            />
+            <Text style={styles.plateText}>{vehicle?.plate ?? "\u2014"}</Text>
+          </View>
+        </View>
+
+        {/* Editable specs. */}
+        <View style={[styles.card, t.shadowCard]}>
+          <Text style={styles.cardTitle}>{strings.profile.vehicleSection}</Text>
+          <Text style={styles.cardHint}>{strings.profile.vehicleHint}</Text>
 
           <InputField
             label={strings.profile.makeLabel}
@@ -296,117 +378,208 @@ export function VehicleScreen() {
 
           {/* The review verdict, so a rejected vehicle stops being a silent
               dead end. Both values are read-only server output. */}
-          {vehicle?.verificationStatus ? (
-            <ReadOnlyRow
-              label={p1.profile.vehicleStatusLabel}
-              value={
-                VEHICLE_STATUS_LABELS[vehicle.verificationStatus] ??
-                vehicle.verificationStatus
-              }
-              hint={strings.profile.vehicleHint}
-            />
-          ) : null}
           {vehicle?.verificationNote ? (
             <View style={styles.noteBox}>
-              <Text style={styles.noteTitle}>{p1.profile.vehicleNoteLabel}</Text>
+              <Text style={styles.noteTitle}>
+                {p1.profile.vehicleNoteLabel}
+              </Text>
               <Text style={styles.noteText}>{vehicle.verificationNote}</Text>
             </View>
           ) : null}
-        </SectionCard>
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-        {saved && !error ? (
-          <Text style={styles.success}>{strings.common.saved}</Text>
-        ) : null}
+          {error ? <Text style={styles.error}>{error}</Text> : null}
+          {saved && !error ? (
+            <Text style={styles.success}>{strings.common.saved}</Text>
+          ) : null}
 
-        <PrimaryButton
-          label={strings.profile.saveChanges}
-          onPress={() => void onSave()}
-          loading={mutation.isPending}
-          disabled={!dirty}
-          style={styles.save}
-        />
+          <PillButton
+            label={strings.profile.saveChanges}
+            variant={inOnboarding ? "secondary" : "primary"}
+            onPress={() => void onSave()}
+            loading={mutation.isPending}
+            disabled={!dirty}
+            style={styles.save}
+          />
+
+          {/* Last step of registration. Rendered only inside the onboarding
+              stack, which is the only stack that declares a Pending route. */}
+          {inOnboarding ? (
+            <>
+              <PillButton
+                label={COPY.sendForReview}
+                trailingIcon="arrow-forward"
+                disabled={!vehicleReady}
+                onPress={() => navigation.navigate("Pending" as never)}
+              />
+              {!vehicleReady ? (
+                <Text style={styles.cardHint}>{COPY.reviewBlocked}</Text>
+              ) : null}
+            </>
+          ) : null}
+        </View>
       </ScrollView>
+
+      <StickyHeader
+        onBackPress={navigation.canGoBack() ? navigation.goBack : undefined}
+      />
     </KeyboardAvoidingView>
   );
 }
 
-const makeStyles = (palette: Palette) =>
-  StyleSheet.create({
-    root: { flex: 1, backgroundColor: palette.background },
-    content: { paddingHorizontal: spacing.xl, gap: spacing.lg },
+function makeStyles(t: Tokens) {
+  const light = t.mode === "light";
+  const key = light ? "light" : "dark";
+
+  return StyleSheet.create({
+    root: { flex: 1, backgroundColor: t.colors.background },
+    content: { paddingHorizontal: SPACING.container, gap: SPACING.lg },
     heading: {
-      ...typography.title,
-      color: palette.textPrimary,
+      ...typo("headlineLgMobile"),
+      color: t.colors.onSurface,
       textAlign: textAlignStart(),
     },
-    pickerBlock: { gap: spacing.xs },
+    /** Stitch `bg-surface-container rounded-[24px] p-6` with a pink wash. */
+    hero: {
+      borderRadius: RADIUS.card,
+      backgroundColor: t.colors.surfaceContainer,
+      borderWidth: 1,
+      borderColor: alpha(t.colors.primary, HERO_BORDER[key]),
+      padding: SPACING.xl,
+      gap: SPACING.sm,
+    },
+    statePill: {
+      alignSelf: "flex-start",
+      paddingHorizontal: SPACING.md,
+      paddingVertical: SPACING.xs,
+      borderRadius: RADIUS.full,
+      borderWidth: 1,
+    },
+    stateOk: {
+      backgroundColor: alpha(t.semantic.success, OK_WASH[key]),
+      borderColor: alpha(t.semantic.success, OK_BORDER[key]),
+    },
+    statePending: {
+      // surfaceVariant is nearly the light card colour, so both the fill and
+      // the border would vanish there.
+      backgroundColor: light
+        ? alpha(t.colors.outlineVariant, 0.6)
+        : alpha(t.colors.surfaceVariant, 0.6),
+      borderColor: light ? t.colors.outlineVariant : t.colors.surfaceVariant,
+    },
+    stateText: { ...typo("labelSm") },
+    heroTitle: {
+      ...typo("headlineLgMobile"),
+      color: t.colors.onSurface,
+      textAlign: textAlignStart(),
+    },
+    heroSub: {
+      ...typo("bodyMd"),
+      color: t.colors.onSurfaceVariant,
+      textAlign: textAlignStart(),
+    },
+    plateBadge: {
+      alignSelf: "flex-start",
+      flexDirection: "row",
+      alignItems: "center",
+      gap: SPACING.md,
+      marginTop: SPACING.sm,
+      paddingHorizontal: SPACING.lg,
+      paddingVertical: SPACING.md,
+      borderRadius: RADIUS.lg,
+      backgroundColor: t.colors.surfaceContainerHigh,
+      borderWidth: 1,
+      borderColor: light ? t.colors.outlineVariant : t.colors.surfaceVariant,
+    },
+    plateText: {
+      ...typo("titleMd"),
+      color: t.colors.onSurface,
+      letterSpacing: 2,
+      writingDirection: "ltr",
+    },
+    card: {
+      borderRadius: RADIUS.card,
+      backgroundColor: t.colors.surfaceContainer,
+      borderWidth: 1,
+      borderColor: light
+        ? t.colors.outlineVariant
+        : alpha(t.colors.surfaceVariant, 0.3),
+      padding: SPACING.xl,
+      gap: SPACING.lg,
+    },
+    cardTitle: {
+      ...typo("titleMd"),
+      color: t.colors.onSurface,
+      textAlign: textAlignStart(),
+    },
+    cardHint: {
+      ...typo("labelSm"),
+      color: t.colors.onSurfaceVariant,
+      textAlign: textAlignStart(),
+    },
+    pickerBlock: { gap: SPACING.xs },
     pickerLabel: {
-      ...typography.caption,
-      color: palette.textSecondary,
+      ...typo("labelMd"),
+      color: t.colors.onSurface,
       textAlign: textAlignStart(),
     },
     pickerHint: {
-      ...typography.caption,
-      color: palette.textSecondary,
+      ...typo("labelSm"),
+      color: t.colors.onSurfaceVariant,
       textAlign: textAlignStart(),
     },
     // Plain "row": mirrored by React Native under RTL.
     chipWrap: {
       flexDirection: "row",
       flexWrap: "wrap",
-      gap: spacing.xs,
-      marginTop: spacing.xs,
+      gap: SPACING.xs,
+      marginTop: SPACING.xs,
     },
     chip: {
-      // Driver touch floor (56pt), not a normal chip size: this is filled in
-      // the car, and a mis-tap means the wrong claim about the vehicle.
-      minHeight: touchTarget.normal,
+      // Driver touch floor, not a normal chip size: this is filled in the car,
+      // and a mis-tap means the wrong claim about the vehicle.
+      minHeight: CHIP_MIN_HEIGHT,
       justifyContent: "center",
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.xs,
-      borderRadius: radius.md,
+      paddingHorizontal: SPACING.md,
+      paddingVertical: SPACING.xs,
+      borderRadius: RADIUS.lg,
       borderWidth: 1,
-      borderColor: palette.border,
-      backgroundColor: palette.surfaceSunken,
+      borderColor: t.colors.outlineVariant,
+      backgroundColor: t.colors.surface,
     },
     chipSelected: {
-      borderColor: palette.primary,
-      backgroundColor: palette.primaryWash,
+      borderColor: light ? t.colors.primary : t.colors.primaryContainer,
+      backgroundColor: alpha(t.colors.primaryContainer, CHIP_WASH[key]),
     },
-    chipText: {
-      ...typography.caption,
-      color: palette.textSecondary,
-    },
-    chipTextSelected: { color: palette.primaryText },
+    chipText: { ...typo("labelSm"), color: t.colors.onSurfaceVariant },
+    chipTextSelected: { color: t.colors.primary },
     noteBox: {
-      padding: spacing.md,
-      borderRadius: radius.sm,
-      backgroundColor: withAlpha(palette.danger, 0.12),
+      padding: SPACING.md,
+      borderRadius: RADIUS.lg,
+      backgroundColor: alpha(t.colors.error, NOTE_WASH[key]),
       borderWidth: 1,
-      borderColor: withAlpha(palette.danger, 0.4),
+      borderColor: alpha(t.colors.error, NOTE_BORDER[key]),
     },
     noteTitle: {
-      ...typography.caption,
-      color: palette.danger,
-      fontWeight: "600",
+      ...typo("labelSm"),
+      color: t.colors.error,
       textAlign: textAlignStart(),
     },
     noteText: {
-      ...typography.body,
-      color: palette.textPrimary,
+      ...typo("bodyMd"),
+      color: t.colors.onSurface,
       textAlign: textAlignStart(),
       marginTop: 2,
     },
     error: {
-      ...typography.body,
-      color: palette.danger,
+      ...typo("bodyMd"),
+      color: t.colors.error,
       textAlign: textAlignStart(),
     },
     success: {
-      ...typography.body,
-      color: palette.online,
+      ...typo("bodyMd"),
+      color: t.semantic.success,
       textAlign: textAlignStart(),
     },
-    save: { marginTop: spacing.sm },
+    save: { marginTop: SPACING.sm },
   });
+}

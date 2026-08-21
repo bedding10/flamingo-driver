@@ -1,5 +1,6 @@
-import React, { useEffect, useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { fareOffersApi, toApiError } from "../api";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { Icon } from "./Icon";
 import type { RideOffer } from "../types/trip";
@@ -26,6 +27,28 @@ type Props = {
 
 const TICK_MS = 250;
 
+/**
+ * Copy for the counter-offer panel. Local on purpose: src/i18n/strings.ts must
+ * not be rewritten and these lines are used only here.
+ */
+const NEG = {
+  open: "\u0627\u0642\u062a\u0631\u062d \u0633\u0639\u0631\u064b\u0627",
+  title:
+    "\u0633\u0639\u0631\u0643 \u0627\u0644\u0645\u0642\u062a\u0631\u062d",
+  band: "\u0627\u0644\u0645\u062f\u0649 \u0627\u0644\u0645\u0633\u0645\u0648\u062d",
+  notePlaceholder:
+    "\u0645\u0644\u0627\u062d\u0637\u0629 \u0644\u0644\u0631\u0627\u0643\u0628 (\u0627\u062e\u062a\u064a\u0627\u0631\u064a)",
+  send: "\u0623\u0631\u0633\u0644 \u0627\u0644\u0639\u0631\u0636",
+  sending: "\u062c\u0627\u0631\u064d \u0627\u0644\u0625\u0631\u0633\u0627\u0644...",
+  cancel: "\u0625\u0644\u063a\u0627\u0621",
+  waiting:
+    "\u0628\u0627\u0646\u062a\u0638\u0627\u0631 \u0631\u062f \u0627\u0644\u0631\u0627\u0643\u0628 \u0639\u0644\u0649 \u0633\u0639\u0631\u0643",
+  waitingHint:
+    "\u0625\u0646 \u0642\u0628\u0644 \u0627\u0644\u0631\u0627\u0643\u0628 \u0633\u062a\u0628\u062f\u0623 \u0627\u0644\u0631\u062d\u0644\u0629 \u062a\u0644\u0642\u0627\u0626\u064a\u064b\u0627.",
+  invalid:
+    "\u0623\u062f\u062e\u0644 \u0645\u0628\u0644\u063a\u064b\u0627 \u0635\u062d\u064a\u062d\u064b\u0627 \u062f\u0627\u062e\u0644 \u0627\u0644\u0645\u062f\u0649.",
+} as const;
+
 function money(amount: number, currency?: string | null): string {
   const rounded = Math.round(amount);
   return currency ? rounded + " " + currency : String(rounded);
@@ -41,15 +64,25 @@ function money(amount: number, currency?: string | null): string {
  * than a full-bleed sheet, so the map and the pickup pin stay visible: a driver
  * decides on an offer by looking at WHERE it is.
  *
- * Three deliberate omissions, all for the same reason - the server does not send
- * them and inventing them would mislead the person deciding:
+ * NEGOTIATION (Stitch ride_negotiation_offer + negotiation_waiting_state): the
+ * driver can answer a dispatched offer with his own price instead of taking it
+ * or skipping it. The panel is GATED on `offer.fareQuoteId`, because
+ * POST /driver/fare-offers is keyed on a quote id and MatchingService does not
+ * send one with `ride:offer` yet; and on `offer.negotiable !== false`, which
+ * mirrors VehicleType.allowsNegotiation. When the field is absent the card keeps
+ * its old footnote pointing at the requests list, so nothing on screen promises
+ * an action the server cannot take. See SERVER_TODO.md section 3.
+ *
+ * The band shown and enforced is the server's own (negotiationMin /
+ * negotiationMax from VehiclePricingRule). No band is invented locally: without
+ * it the driver types freely and the server's rejection is what he reads.
+ *
+ * Two deliberate omissions remain, for the same reason - the server does not
+ * send them and inventing them would mislead the person deciding:
  *  - rating COUNT: `passenger.rating` arrives without a sample size.
  *  - distance to the passenger and ETA: `ride:offer` carries the trip distance
  *    (`distanceKm`) only, so that is what is labelled. No haversine is computed
  *    from the last GPS fix and passed off as a routed distance.
- *  - "suggest a fare": the gateway accepts ride:accept and ride:decline only.
- *    Fare bidding is the open-requests flow, so the card says where it lives
- *    instead of showing a button that can send nothing.
  *
  * The countdown is driven by `offer.expiresInMs` sent with every offer, never by
  * a constant: OFFER_TIMEOUT_MS lives in MatchingService and can be retuned
@@ -82,6 +115,14 @@ function RideOfferCardComponent({
   const deadlineRef = useRef(Date.now() + total);
   const [remaining, setRemaining] = useState(total);
 
+  /** Counter-offer state: closed -> editing -> sent. */
+  const [negotiating, setNegotiating] = useState(false);
+  const [amount, setAmount] = useState<string>("");
+  const [note, setNote] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [negError, setNegError] = useState<string | null>(null);
+
   useEffect(() => {
     // Re-armed per offer: a new tripId is a new deadline.
     deadlineRef.current = Date.now() + total;
@@ -92,6 +133,15 @@ function RideOfferCardComponent({
     }, TICK_MS);
     return () => clearInterval(timer);
   }, [offer.tripId, total]);
+
+  // A new offer resets the panel: the previous bid belonged to another request.
+  useEffect(() => {
+    setNegotiating(false);
+    setSent(false);
+    setNegError(null);
+    setNote("");
+    setAmount(String(Math.round(offer.fare)));
+  }, [offer.tripId, offer.fare]);
 
   const seconds = Math.ceil(remaining / 1000);
   const ratio = Math.max(0, Math.min(1, remaining / total));
@@ -115,6 +165,58 @@ function RideOfferCardComponent({
   const rideClassLabel = offer.rideClass
     ? (rideClassLabels[offer.rideClass] ?? offer.rideClass)
     : null;
+
+  /** Can this offer be answered with a price at all? Server data decides. */
+  const canNegotiate =
+    Boolean(offer.fareQuoteId) && offer.negotiable !== false && !awaiting;
+
+  const min = offer.negotiationMin ?? null;
+  const max = offer.negotiationMax ?? null;
+  /** A 5% nudge, floor 10, purely a keypad shortcut - not a pricing rule. */
+  const step = useMemo(
+    () => Math.max(10, Math.round(offer.fare * 0.05)),
+    [offer.fare],
+  );
+
+  const numeric = Number(amount);
+  const valid =
+    Number.isFinite(numeric) &&
+    numeric > 0 &&
+    (min == null || numeric >= min) &&
+    (max == null || numeric <= max);
+
+  const nudge = (delta: number) => {
+    const base = Number.isFinite(numeric) ? numeric : offer.fare;
+    let next = Math.round(base + delta);
+    if (min != null && next < min) next = Math.round(min);
+    if (max != null && next > max) next = Math.round(max);
+    setAmount(String(next));
+    setNegError(null);
+  };
+
+  const sendCounterOffer = async () => {
+    if (!offer.fareQuoteId) return;
+    if (!valid) {
+      setNegError(NEG.invalid);
+      return;
+    }
+    setSending(true);
+    setNegError(null);
+    try {
+      await fareOffersApi.submitFareOffer({
+        fareQuoteId: offer.fareQuoteId,
+        amount: Math.round(numeric),
+        note: note.trim() ? note.trim() : undefined,
+      });
+      setSent(true);
+      setNegotiating(false);
+    } catch (error) {
+      // The server owns the band and the race; its message is the truth.
+      setNegError(toApiError(error).message);
+    } finally {
+      setSending(false);
+    }
+  };
 
   return (
     <View
@@ -250,45 +352,215 @@ function RideOfferCardComponent({
         <Text style={[styles.notice, { color: palette.warning }]}>{notice}</Text>
       ) : null}
 
-      <View style={styles.actions}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={offer75Strings.skip}
-          disabled={awaiting}
-          onPress={() => onDecline(offer.tripId)}
-          style={({ pressed }) => [
-            styles.skipButton,
-            { borderColor: palette.borderStrong },
-            pressed ? styles.pressed : null,
-            awaiting ? styles.disabled : null,
+      {/* ---- counter-offer -------------------------------------------------
+          Only rendered when the payload can actually be bid on. */}
+      {sent ? (
+        <View
+          style={[
+            styles.negPanel,
+            {
+              backgroundColor: palette.surfaceSunken,
+              borderColor: palette.border,
+            },
           ]}
         >
-          <Text style={[styles.skipLabel, { color: palette.textSecondary }]}>
-            {offer75Strings.skip}
+          <Text style={[styles.negTitle, { color: palette.textPrimary }]}>
+            {NEG.waiting + ": " + money(numeric, offer.currency)}
           </Text>
-        </Pressable>
-
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={offer75Strings.accept}
-          disabled={awaiting}
-          onPress={() => onAccept(offer.tripId)}
-          style={({ pressed }) => [
-            styles.acceptButton,
-            { backgroundColor: palette.primary },
-            pressed ? styles.pressed : null,
-            awaiting ? styles.disabled : null,
+          <Text style={[styles.meta, { color: palette.textSecondary }]}>
+            {NEG.waitingHint}
+          </Text>
+        </View>
+      ) : negotiating ? (
+        <View
+          style={[
+            styles.negPanel,
+            {
+              backgroundColor: palette.surfaceSunken,
+              borderColor: palette.border,
+            },
           ]}
         >
-          <Text style={[styles.acceptLabel, { color: palette.onPrimary }]}>
-            {awaiting ? offer75Strings.awaiting : offer75Strings.accept}
+          <Text style={[styles.negTitle, { color: palette.textPrimary }]}>
+            {NEG.title}
           </Text>
-        </Pressable>
-      </View>
 
-      <Text style={[styles.footnote, { color: palette.textMuted }]}>
-        {offer75Strings.bidElsewhere}
-      </Text>
+          {/* Stepper. Plain "row": mirrored under RTL. */}
+          <View style={styles.stepperRow}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="-"
+              onPress={() => nudge(-step)}
+              style={[styles.stepper, { borderColor: palette.borderStrong }]}
+            >
+              <Text style={[styles.stepperText, { color: palette.textPrimary }]}>
+                {"\u2212"}
+              </Text>
+            </Pressable>
+
+            <TextInput
+              value={amount}
+              onChangeText={(next) => {
+                setAmount(next.replace(/[^0-9]/g, ""));
+                setNegError(null);
+              }}
+              keyboardType="number-pad"
+              style={[
+                styles.amountInput,
+                {
+                  color: palette.textPrimary,
+                  borderColor: valid ? palette.border : palette.danger,
+                  backgroundColor: palette.surface,
+                },
+              ]}
+            />
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="+"
+              onPress={() => nudge(step)}
+              style={[styles.stepper, { borderColor: palette.borderStrong }]}
+            >
+              <Text style={[styles.stepperText, { color: palette.textPrimary }]}>
+                {"+"}
+              </Text>
+            </Pressable>
+          </View>
+
+          {min != null || max != null ? (
+            <Text style={[styles.meta, { color: palette.textSecondary }]}>
+              {NEG.band +
+                ": " +
+                money(min ?? 0, offer.currency) +
+                " \u2013 " +
+                money(max ?? 0, offer.currency)}
+            </Text>
+          ) : null}
+
+          <TextInput
+            value={note}
+            onChangeText={setNote}
+            placeholder={NEG.notePlaceholder}
+            placeholderTextColor={palette.textMuted}
+            style={[
+              styles.noteInput,
+              {
+                color: palette.textPrimary,
+                borderColor: palette.border,
+                backgroundColor: palette.surface,
+              },
+            ]}
+          />
+
+          {negError ? (
+            <Text style={[styles.notice, { color: palette.danger }]}>
+              {negError}
+            </Text>
+          ) : null}
+
+          <View style={styles.actions}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={NEG.cancel}
+              disabled={sending}
+              onPress={() => {
+                setNegotiating(false);
+                setNegError(null);
+              }}
+              style={({ pressed }) => [
+                styles.skipButton,
+                { borderColor: palette.borderStrong },
+                pressed ? styles.pressed : null,
+                sending ? styles.disabled : null,
+              ]}
+            >
+              <Text style={[styles.skipLabel, { color: palette.textSecondary }]}>
+                {NEG.cancel}
+              </Text>
+            </Pressable>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={NEG.send}
+              disabled={sending || !valid}
+              onPress={() => {
+                void sendCounterOffer();
+              }}
+              style={({ pressed }) => [
+                styles.acceptButton,
+                { backgroundColor: palette.primary },
+                pressed ? styles.pressed : null,
+                sending || !valid ? styles.disabled : null,
+              ]}
+            >
+              <Text style={[styles.acceptLabel, { color: palette.onPrimary }]}>
+                {sending ? NEG.sending : NEG.send}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : (
+        <View style={styles.actions}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={offer75Strings.skip}
+            disabled={awaiting}
+            onPress={() => onDecline(offer.tripId)}
+            style={({ pressed }) => [
+              styles.skipButton,
+              { borderColor: palette.borderStrong },
+              pressed ? styles.pressed : null,
+              awaiting ? styles.disabled : null,
+            ]}
+          >
+            <Text style={[styles.skipLabel, { color: palette.textSecondary }]}>
+              {offer75Strings.skip}
+            </Text>
+          </Pressable>
+
+          {canNegotiate ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={NEG.open}
+              onPress={() => setNegotiating(true)}
+              style={({ pressed }) => [
+                styles.skipButton,
+                { borderColor: palette.primary },
+                pressed ? styles.pressed : null,
+              ]}
+            >
+              <Text style={[styles.skipLabel, { color: palette.primaryText }]}>
+                {NEG.open}
+              </Text>
+            </Pressable>
+          ) : null}
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={offer75Strings.accept}
+            disabled={awaiting}
+            onPress={() => onAccept(offer.tripId)}
+            style={({ pressed }) => [
+              styles.acceptButton,
+              { backgroundColor: palette.primary },
+              pressed ? styles.pressed : null,
+              awaiting ? styles.disabled : null,
+            ]}
+          >
+            <Text style={[styles.acceptLabel, { color: palette.onPrimary }]}>
+              {awaiting ? offer75Strings.awaiting : offer75Strings.accept}
+            </Text>
+          </Pressable>
+        </View>
+      )}
+
+      {/* The old pointer to the bidding list stays ONLY while this offer cannot
+          be negotiated in place. */}
+      {!canNegotiate && !sent ? (
+        <Text style={[styles.footnote, { color: palette.textMuted }]}>
+          {offer75Strings.bidElsewhere}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -363,6 +635,48 @@ const styles = StyleSheet.create({
 
   notice: {
     ...typography.caption,
+    textAlign: textAlignStart(),
+  },
+
+  /** The counter-offer block, sunken so it reads as a sub-surface. */
+  negPanel: {
+    borderRadius: radius.card,
+    borderWidth: 1,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  negTitle: {
+    ...typography.subtitle,
+    fontWeight: "700",
+    textAlign: textAlignStart(),
+  },
+  stepperRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  stepper: {
+    width: touchTarget.min,
+    height: touchTarget.min,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  stepperText: { ...typography.title },
+  amountInput: {
+    flex: 1,
+    height: touchTarget.min,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    paddingHorizontal: spacing.md,
+    ...typography.numeric,
+    // A price is a number: centred, so there is no side to mirror.
+    textAlign: "center",
+  },
+  noteInput: {
+    minHeight: touchTarget.min,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    ...typography.body,
     textAlign: textAlignStart(),
   },
 

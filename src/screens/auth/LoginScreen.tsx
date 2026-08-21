@@ -1,4 +1,12 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { BlurView } from "expo-blur";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -9,39 +17,27 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { AuthProgress } from "../../components/auth/AuthProgress";
-import { OtpBoxes } from "../../components/auth/OtpBoxes";
-import { PhoneField } from "../../components/auth/PhoneField";
-import { BrandMark } from "../../components/BrandMark";
-import { Icon } from "../../components/Icon";
-import { InputField } from "../../components/InputField";
-import { PrimaryButton } from "../../components/PrimaryButton";
-import { textAlignStart, useTranslation } from "../../i18n";
-import { pw } from "../../i18n/strings.password";
-import {
-  iconSize,
-  layout,
-  radius,
-  shadows,
-  spacing,
-  stitchType,
-  touchTarget,
-  usePalette,
-  withAlpha,
-  type Palette,
-} from "../../theme";
+
+import { authApi } from "../../api";
+import { toApiError } from "../../api/client";
 import { authErrorMessage } from "../../auth/auth-errors";
+import { useAuthStore } from "../../auth/auth.store";
 import {
   confirmPhoneCode,
   normalizeE164,
   requestPhoneCode,
   type PhoneConfirmation,
 } from "../../auth/firebase";
-import { authApi } from "../../api";
-import { toApiError } from "../../api/client";
-import { useAuthStore } from "../../auth/auth.store";
+import { AuthProgress } from "../../components/auth/AuthProgress";
+import { OtpBoxes } from "../../components/auth/OtpBoxes";
+import { PhoneField } from "../../components/auth/PhoneField";
+import { InputField } from "../../components/InputField";
+import { textAlignStart, useTranslation } from "../../i18n";
+import { pw } from "../../i18n/strings.password";
 import type { AuthStackParamList } from "../../navigation/types";
+import { alpha, RADIUS, SPACING, TOUCH_TARGET, typo } from "../../theme/tokens";
+import { useTokens, type Tokens } from "../../theme/useTokens";
+import { HEADER_HEIGHT, PillButton, StickyHeader } from "../../ui";
 
 const CODE_LENGTH = 6;
 const RESEND_SECONDS = 60;
@@ -49,9 +45,20 @@ const MIN_PASSWORD_LENGTH = 6;
 const MIN_PHONE_DIGITS = 8;
 const MAX_PASSWORD_LENGTH = 72;
 const SECONDS_PER_MINUTE = 60;
+const SAFE_BOTTOM_MIN = 32;
 
 /** Tailwind `max-w-md`, which is what Stitch centres these cards inside. */
 const MAX_CARD_WIDTH = 448;
+
+/**
+ * Glass-card opacity per scheme. Dark keeps the reference's 60%; light has to
+ * be near-opaque because a 60% white card on #fff8f8 has no visible edge and
+ * Android cannot tint the shadow that would imply one.
+ */
+const CARD_FILL_OPACITY = { dark: 0.6, light: 0.92 } as const;
+
+/** Selected-tab wash. 16% pink disappears on the light card fill. */
+const MODE_WASH = { dark: 0.16, light: 0.22 } as const;
 
 type Props = NativeStackScreenProps<AuthStackParamList, "Login">;
 
@@ -63,42 +70,35 @@ function formatClock(totalSeconds: number): string {
 }
 
 /**
- * Phone -> SMS code -> backend session.
+ * Phone -> SMS code -> backend session, on `src/theme/tokens.ts` and the shared
+ * UI kit. No colour, radius or type literal lives in this file.
  *
  * Firebase verifies the number, then POST /auth/firebase exchanges the ID token
- * for the backend JWTs, which go straight into secure storage. There is a SECOND
- * door to the SAME account, not a second account: once a password is set, POST
- * /auth/login accepts the same phone plus that password. Account CREATION is
- * still Firebase-only, because the server's local OTP routes are disabled.
+ * for the backend JWTs. There is a SECOND door to the SAME account, not a
+ * second account: once a password is set, POST /auth/login accepts the same
+ * phone plus that password. Account CREATION stays Firebase-only, because the
+ * server's local OTP routes are disabled.
  *
- * The screen holds no token and no user object; it hands the tokens to the auth
- * store and unmounts when the root tree switches to the signed-in stack.
- *
- * PHASE 2 - STITCH GEOMETRY, ONE COMPONENT, TWO SCREENS
+ * STITCH GEOMETRY, ONE COMPONENT, TWO SCREENS
  * The reference is two designs: `phone_number_entry` and `otp_verification`.
- * They are NOT two navigator routes here, and that is deliberate. The Firebase
- * ConfirmationResult is a live object with a method on it, and React Navigation
- * params must be serialisable - so a route split would force either a
- * non-serialisable param or Firebase state hoisted into a store, both to serve a
- * purely visual boundary. Instead each STEP renders its own layout, progress
- * position and header behaviour, while one component owns the handle.
+ * They are NOT two navigator routes, deliberately: the Firebase
+ * ConfirmationResult is a live object with a method on it, and navigation params
+ * must be serialisable. Each STEP renders its own layout, progress position and
+ * header behaviour, while one component owns the handle.
  *
- * `route.params.mode` decides which door opens, because the Welcome screen's two
- * buttons mean different things: registration must land on SMS, signing in on
- * the password form. Read as a lazy initial value only, so switching doors
- * afterwards is not undone by a re-render.
+ * `route.params.mode` decides which door opens, read as a lazy initial value so
+ * switching doors afterwards is not undone by a re-render.
  *
- * NOT BUILT, ON PURPOSE: Stitch layers a dimmed map under both screens. Mounting
- * a map here would request location permission before the driver even has an
- * account, and burn battery and map loads on the one screen that needs neither.
- * Recorded as a visual delta rather than quietly dropped.
+ * NOT BUILT, ON PURPOSE: Stitch layers a dimmed map under both screens.
+ * Mounting a map here would request location permission before the driver even
+ * has an account. Recorded as a visual delta rather than quietly dropped.
  */
 export function LoginScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
-  const palette = usePalette();
   const { t } = useTranslation();
-  const styles = useMemo(() => makeStyles(palette), [palette]);
   const signIn = useAuthStore((state) => state.signIn);
+  const tokens = useTokens();
+  const styles = useMemo(() => makeStyles(tokens), [tokens]);
 
   const [mode, setMode] = useState<"sms" | "password">(
     route.params?.mode ?? "sms",
@@ -137,9 +137,7 @@ export function LoginScreen({ navigation, route }: Props) {
     setBusy(true);
     try {
       // Validated locally first so an obviously wrong number does not burn one
-      // of the SMS attempts Firebase rate-limits per device. The normalised
-      // value is what gets sent AND what gets echoed on the next step, so the
-      // driver sees the number that was actually texted.
+      // of the SMS attempts Firebase rate-limits per device.
       const normalized = normalizeE164(phone);
       confirmationRef.current = await requestPhoneCode(normalized);
       if (!mountedRef.current) return;
@@ -175,11 +173,8 @@ export function LoginScreen({ navigation, route }: Props) {
   }, [code, signIn]);
 
   /**
-   * Returning driver, no SMS.
-   *
-   * Normalised with the same helper the Firebase flow uses, because the stored
-   * User.phone came from a Firebase token: sending "0555..." would look up a row
-   * that does not exist.
+   * Returning driver, no SMS. Normalised with the same helper the Firebase flow
+   * uses, because the stored User.phone came from a Firebase token.
    */
   const passwordSignIn = useCallback(async () => {
     setError(null);
@@ -224,8 +219,7 @@ export function LoginScreen({ navigation, route }: Props) {
   /**
    * On the code step, back means "wrong number" - it returns to the field and
    * drops the pending confirmation rather than leaving the flow. Only on the
-   * phone step does it pop to Welcome, and only if there is something to pop:
-   * a deep link straight to Login must not dead-end on a dead button.
+   * phone step does it pop to Welcome, and only if there is something to pop.
    */
   const onBack = useCallback(() => {
     if (step === "code") {
@@ -279,126 +273,146 @@ export function LoginScreen({ navigation, route }: Props) {
         contentContainerStyle={[
           styles.content,
           {
-            paddingTop: insets.top + touchTarget.stitchMin + spacing.xl,
-            paddingBottom: Math.max(insets.bottom, layout.safeAreaBottomMin),
+            paddingTop: insets.top + HEADER_HEIGHT + SPACING.xl,
+            paddingBottom: Math.max(insets.bottom, SAFE_BOTTOM_MIN),
           },
         ]}
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.centre}>
           {mode === "password" ? (
-            <View style={styles.card}>
-              <Text style={styles.titleSm}>{t("login.passwordTitle")}</Text>
-              <Text style={styles.subtitle}>
-                {t("login.passwordSubtitle")}
-              </Text>
-              {modeRow}
-              <PhoneField
-                value={phone}
-                onChangeText={setPhone}
-                editable={!busy}
-                placeholder={t("login.phonePlaceholder")}
-                accessibilityLabel={t("login.phoneLabel")}
-              />
-              <View style={styles.gap} />
-              <InputField
-                label={t("login.passwordLabel")}
-                placeholder={pw.login.passwordPlaceholder}
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-                autoCapitalize="none"
-                autoCorrect={false}
-                textContentType="password"
-                editable={!busy}
-                maxLength={MAX_PASSWORD_LENGTH}
-              />
-              {error ? <Text style={styles.error}>{error}</Text> : null}
-              <PrimaryButton
-                label={t("login.signIn")}
-                onPress={() => void passwordSignIn()}
-                loading={busy}
-                disabled={!passwordReady}
-                size="compact"
-                style={styles.action}
-              />
-              <Text style={styles.helper}>{pw.login.noPasswordHint}</Text>
+            <View style={[styles.cardWrap, tokens.shadowCard]}>
+              <BlurView
+                intensity={tokens.blur.overlay}
+                tint={tokens.blur.tint}
+                style={styles.card}
+              >
+                <Text style={styles.titleSm}>{t("login.passwordTitle")}</Text>
+                <Text style={styles.subtitle}>
+                  {t("login.passwordSubtitle")}
+                </Text>
+                {modeRow}
+                <PhoneField
+                  value={phone}
+                  onChangeText={setPhone}
+                  editable={!busy}
+                  placeholder={t("login.phonePlaceholder")}
+                  accessibilityLabel={t("login.phoneLabel")}
+                />
+                <View style={styles.gap} />
+                <InputField
+                  label={t("login.passwordLabel")}
+                  placeholder={pw.login.passwordPlaceholder}
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  textContentType="password"
+                  editable={!busy}
+                  maxLength={MAX_PASSWORD_LENGTH}
+                />
+                {error ? <Text style={styles.error}>{error}</Text> : null}
+                <PillButton
+                  label={t("login.signIn")}
+                  onPress={() => void passwordSignIn()}
+                  loading={busy}
+                  disabled={!passwordReady}
+                  style={styles.action}
+                />
+                <Text style={styles.helper}>{pw.login.noPasswordHint}</Text>
+              </BlurView>
             </View>
           ) : step === "phone" ? (
-            <View style={styles.card}>
-              {/* Absolute, so the card must clip - see styles.card. */}
-              <AuthProgress step={1} variant="bar" />
-              <Text style={styles.titleSm}>{t("login.phoneTitle")}</Text>
-              <Text style={styles.subtitle}>{t("login.phoneSubtitle")}</Text>
-              {modeRow}
-              <PhoneField
-                value={phone}
-                onChangeText={setPhone}
-                editable={!busy}
-                placeholder={t("login.phonePlaceholder")}
-                accessibilityLabel={t("login.phoneLabel")}
-                returnKeyType="send"
-                onSubmitEditing={() => {
-                  if (phoneReady && !busy) void sendCode();
-                }}
-              />
-              <Text style={styles.helper}>{t("login.phoneHelper")}</Text>
-              {error ? <Text style={styles.error}>{error}</Text> : null}
-              <PrimaryButton
-                label={t("login.sendCode")}
-                onPress={() => void sendCode()}
-                loading={busy}
-                disabled={!phoneReady}
-                size="compact"
-                style={styles.action}
-              />
+            <View style={[styles.cardWrap, tokens.shadowCard]}>
+              <BlurView
+                intensity={tokens.blur.overlay}
+                tint={tokens.blur.tint}
+                style={styles.card}
+              >
+                {/* Absolute, so the wrapper must clip - see styles.cardWrap. */}
+                <AuthProgress step={1} variant="bar" />
+                <Text style={styles.titleSm}>{t("login.phoneTitle")}</Text>
+                <Text style={styles.subtitle}>{t("login.phoneSubtitle")}</Text>
+                {modeRow}
+                <PhoneField
+                  value={phone}
+                  onChangeText={setPhone}
+                  editable={!busy}
+                  placeholder={t("login.phonePlaceholder")}
+                  accessibilityLabel={t("login.phoneLabel")}
+                  returnKeyType="send"
+                  onSubmitEditing={() => {
+                    if (phoneReady && !busy) void sendCode();
+                  }}
+                />
+                <Text style={styles.helper}>{t("login.phoneHelper")}</Text>
+                {error ? <Text style={styles.error}>{error}</Text> : null}
+                <PillButton
+                  label={t("login.sendCode")}
+                  onPress={() => void sendCode()}
+                  loading={busy}
+                  disabled={!phoneReady}
+                  trailingIcon="arrow-forward"
+                  style={styles.action}
+                />
+              </BlurView>
             </View>
           ) : (
             <>
               {/* Stitch puts the OTP indicator ABOVE the panel, and lights the
                   MIDDLE segment. */}
               <AuthProgress step={2} variant="dashes" style={styles.dashes} />
-              <View style={styles.card}>
-                <Text style={styles.titleLg}>{t("login.codeTitle")}</Text>
-                <Text style={styles.subtitleLg}>{t("login.codeSubtitle")}</Text>
-                {/* The number that was actually texted, pinned LTR. */}
-                <Text style={styles.echo}>{sentTo}</Text>
-                <OtpBoxes
-                  value={code}
-                  onChange={setCode}
-                  length={CODE_LENGTH}
-                  editable={!busy}
-                  autoFocus
-                  accessibilityLabel={t("login.codeLabel")}
-                  style={styles.boxes}
-                />
-                <View style={styles.resendRow}>
-                  <Text style={styles.resendAsk}>
-                    {t("login.resendQuestion")}
+              <View style={[styles.cardWrap, tokens.shadowCard]}>
+                <BlurView
+                  intensity={tokens.blur.overlay}
+                  tint={tokens.blur.tint}
+                  style={styles.card}
+                >
+                  <Text style={styles.titleLg}>{t("login.codeTitle")}</Text>
+                  <Text style={styles.subtitleLg}>
+                    {t("login.codeSubtitle")}
                   </Text>
-                  {secondsLeft > 0 ? (
-                    <Text style={styles.resendWait}>
-                      {t("login.resendIn", { time: formatClock(secondsLeft) })}
+                  {/* The number that was actually texted, pinned LTR. */}
+                  <Text style={styles.echo}>{sentTo}</Text>
+                  <OtpBoxes
+                    value={code}
+                    onChange={setCode}
+                    length={CODE_LENGTH}
+                    editable={!busy}
+                    autoFocus
+                    accessibilityLabel={t("login.codeLabel")}
+                    style={styles.boxes}
+                  />
+                  <View style={styles.resendRow}>
+                    <Text style={styles.resendAsk}>
+                      {t("login.resendQuestion")}
                     </Text>
-                  ) : (
-                    <Pressable
-                      onPress={() => void sendCode()}
-                      disabled={busy}
-                      hitSlop={12}
-                      accessibilityRole="button"
-                    >
-                      <Text style={styles.resendLink}>{t("login.resend")}</Text>
-                    </Pressable>
-                  )}
-                </View>
-                {error ? <Text style={styles.error}>{error}</Text> : null}
+                    {secondsLeft > 0 ? (
+                      <Text style={styles.resendWait}>
+                        {t("login.resendIn", { time: formatClock(secondsLeft) })}
+                      </Text>
+                    ) : (
+                      <Pressable
+                        onPress={() => void sendCode()}
+                        disabled={busy}
+                        hitSlop={12}
+                        accessibilityRole="button"
+                      >
+                        <Text style={styles.resendLink}>
+                          {t("login.resend")}
+                        </Text>
+                      </Pressable>
+                    )}
+                  </View>
+                  {error ? <Text style={styles.error}>{error}</Text> : null}
+                </BlurView>
               </View>
-              <PrimaryButton
+              <PillButton
                 label={t("login.verify")}
                 onPress={() => void verifyCode()}
                 loading={busy}
                 disabled={!codeReady}
-                size="compact"
                 style={styles.verify}
               />
             </>
@@ -406,48 +420,16 @@ export function LoginScreen({ navigation, route }: Props) {
         </View>
       </ScrollView>
 
-      {/*
-        Rendered LAST so it paints over the scrolling content, which is what
-        Stitch's fixed header does. Three children with space-between keeps the
-        wordmark optically centred without a transform.
-      */}
-      <View
-        style={[
-          styles.header,
-          {
-            paddingTop: insets.top,
-            height: insets.top + touchTarget.stitchMin,
-          },
-        ]}
-      >
-        {canGoBack ? (
-          <Pressable
-            onPress={onBack}
-            hitSlop={8}
-            style={styles.headerSlot}
-            accessibilityRole="button"
-            accessibilityLabel={t("common.back")}
-          >
-            {/*
-              Stitch draws `arrow_forward` here: under RTL the back affordance
-              points RIGHT. Icon resolves that from the layout direction, and
-              section 48 forbids rendering the ligature name as text.
-            */}
-            <Icon name="back" size={iconSize.lg} color={palette.primaryText} />
-          </Pressable>
-        ) : (
-          <View style={styles.headerSlot} />
-        )}
-        <BrandMark compact size={20} />
-        <View style={styles.headerSlot} />
-      </View>
+      {/* Rendered LAST so it paints over the scrolling content, like Stitch's
+          fixed header. */}
+      <StickyHeader onBackPress={canGoBack ? onBack : undefined} />
     </KeyboardAvoidingView>
   );
 }
 
-const makeStyles = (palette: Palette) =>
-  StyleSheet.create({
-    root: { flex: 1, backgroundColor: palette.background },
+function makeStyles(t: Tokens) {
+  return StyleSheet.create({
+    root: { flex: 1, backgroundColor: t.colors.background },
     /**
      * NOT REPRODUCED: Stitch's `mesh-gradient` body. The class name is in the
      * reference but its stops are not, and inventing a gradient is a redesign.
@@ -455,144 +437,128 @@ const makeStyles = (palette: Palette) =>
     content: {
       flexGrow: 1,
       justifyContent: "center",
-      paddingHorizontal: layout.containerPadding,
+      paddingHorizontal: SPACING.container,
     },
-    centre: {
-      width: "100%",
-      maxWidth: MAX_CARD_WIDTH,
-      alignSelf: "center",
-    },
-    header: {
-      position: "absolute",
-      top: 0,
-      // Symmetric physical insets: direction-neutral, deliberately not logical.
-      left: 0,
-      right: 0,
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      paddingHorizontal: layout.gutter,
-      // The app's stand-in for `backdrop-blur`: its alpha is already raised
-      // because Android has no backdrop blur.
-      backgroundColor: palette.overlay,
-      ...shadows.soft,
-    },
-    /** Stitch reserves a touch-target-wide slot on BOTH sides to centre the
-     *  wordmark, including where there is no button to put in it. */
-    headerSlot: {
-      width: touchTarget.stitchMin,
-      height: touchTarget.stitchMin,
-      alignItems: "center",
-      justifyContent: "center",
-    },
+    centre: { width: "100%", maxWidth: MAX_CARD_WIDTH, alignSelf: "center" },
     /**
      * `overflow: hidden` is REQUIRED, not cosmetic: AuthProgress's bar variant
      * is absolutely positioned at top 0 and its square ends would cross this
-     * radius without it.
+     * radius without it. The blur also needs a clipping parent to keep its
+     * corners.
      */
-    card: {
+    cardWrap: {
       width: "100%",
-      borderRadius: radius.card,
-      padding: spacing["2xl"],
-      backgroundColor: palette.overlay,
-      borderWidth: 1,
-      borderColor: withAlpha(palette.border, 0.3),
+      borderRadius: RADIUS.xl,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: alpha(t.colors.outlineVariant, 0.3),
       overflow: "hidden",
-      ...shadows.floating,
     },
-    dashes: { marginBottom: spacing["3xl"] },
+    card: {
+      padding: SPACING.xl,
+      backgroundColor: alpha(
+        t.colors.surfaceContainer,
+        CARD_FILL_OPACITY[t.mode],
+      ),
+    },
+    dashes: { marginBottom: SPACING.xxl },
     /** phone_number_entry heads with headline-lg-mobile. */
     titleSm: {
-      ...stitchType.headlineLgMobile,
-      color: palette.textPrimary,
+      ...typo("headlineLgMobile"),
+      color: t.colors.onSurface,
       textAlign: textAlignStart(),
-      marginBottom: spacing.sm,
+      marginBottom: SPACING.sm,
     },
     /** otp_verification heads a size larger, with headline-xl. */
     titleLg: {
-      ...stitchType.headlineXl,
-      color: palette.textPrimary,
+      ...typo("headlineXl"),
+      color: t.colors.onSurface,
       textAlign: textAlignStart(),
-      marginBottom: spacing.sm,
+      marginBottom: SPACING.sm,
     },
     subtitle: {
-      ...stitchType.bodyMd,
-      color: palette.textSecondary,
+      ...typo("bodyMd"),
+      color: t.colors.onSurfaceVariant,
       textAlign: textAlignStart(),
-      marginBottom: spacing["2xl"],
+      marginBottom: SPACING.xl,
     },
     subtitleLg: {
-      ...stitchType.bodyLg,
-      color: palette.textSecondary,
+      ...typo("bodyLg"),
+      color: t.colors.onSurfaceVariant,
       textAlign: textAlignStart(),
     },
     /**
      * A pinned Latin-content exception, same list as the brand wordmark and the
      * plate field: a leading "+" inside an Arabic paragraph can be reordered by
-     * the bidi algorithm and land at the wrong end, which would mean rendering
-     * the one string that proves we texted the right number incorrectly.
+     * the bidi algorithm and land at the wrong end.
      */
     echo: {
-      ...stitchType.titleMd,
-      color: palette.textPrimary,
+      ...typo("titleMd"),
+      color: t.colors.onSurface,
       textAlign: textAlignStart(),
       writingDirection: "ltr",
-      marginTop: spacing.xs,
+      marginTop: SPACING.xs,
     },
-    boxes: { marginTop: spacing.lg },
+    boxes: { marginTop: SPACING.lg },
     // Plain "row": mirrored by React Native, so it reads correctly in all three.
     modeRow: {
       flexDirection: "row",
-      gap: spacing.xs,
-      marginBottom: spacing.xl,
+      gap: SPACING.xs,
+      marginBottom: SPACING.lg,
     },
     mode: {
       flex: 1,
-      minHeight: touchTarget.stitchMin,
+      minHeight: TOUCH_TARGET,
       alignItems: "center",
       justifyContent: "center",
-      borderRadius: radius.md,
+      borderRadius: RADIUS.lg,
       borderWidth: 1,
-      borderColor: palette.border,
-      backgroundColor: palette.surfaceSunken,
+      borderColor: t.colors.outlineVariant,
+      backgroundColor: t.colors.surfaceContainerLow,
     },
+    /**
+     * Which door the driver is in. On light the reference's 16% pink is nearly
+     * invisible against the card, so the wash is stronger and the border uses
+     * the readable primary role instead of the brand pink.
+     */
     modeActive: {
-      borderColor: palette.primary,
-      backgroundColor: palette.primaryWash,
+      borderColor:
+        t.mode === "light" ? t.colors.primary : t.colors.primaryContainer,
+      backgroundColor: alpha(t.colors.primaryContainer, MODE_WASH[t.mode]),
     },
-    // Centred inside its own Pressable, so it needs no alignment of its own.
-    modeText: { ...stitchType.labelSm, color: palette.textSecondary },
-    modeTextOn: { color: palette.primaryText },
+    modeText: { ...typo("labelSm"), color: t.colors.onSurfaceVariant },
+    /** Weight change too: colour alone is not a reliable selected state. */
+    modeTextOn: { ...typo("labelMd"), color: t.colors.primary },
     resendRow: {
       flexDirection: "row",
       justifyContent: "center",
       alignItems: "center",
-      gap: spacing.sm,
-      marginTop: spacing.lg,
+      gap: SPACING.sm,
+      marginTop: SPACING.lg,
     },
-    resendAsk: { ...stitchType.labelMd, color: palette.textSecondary },
-    /** Brand LETTERING, so primaryText rather than the filled primary. */
-    resendLink: { ...stitchType.labelMd, color: palette.primaryText },
+    resendAsk: { ...typo("labelMd"), color: t.colors.onSurfaceVariant },
+    /** Brand LETTERING, so `primary` rather than the filled primary-container. */
+    resendLink: { ...typo("labelMd"), color: t.colors.primary },
     /** Stitch renders the waiting state as the same button, disabled. */
     resendWait: {
-      ...stitchType.labelMd,
-      color: palette.textMuted,
+      ...typo("labelMd"),
+      color: t.colors.onSurfaceVariant,
       writingDirection: "ltr",
     },
-    gap: { height: spacing.md },
+    gap: { height: SPACING.md },
     helper: {
-      ...stitchType.labelSm,
-      color: palette.textSecondary,
+      ...typo("labelSm"),
+      color: t.colors.onSurfaceVariant,
       textAlign: textAlignStart(),
-      marginTop: spacing.sm,
+      marginTop: SPACING.sm,
     },
     error: {
-      ...stitchType.labelSm,
-      color: palette.danger,
+      ...typo("labelSm"),
+      color: t.colors.error,
       textAlign: textAlignStart(),
-      marginTop: spacing.md,
+      marginTop: SPACING.md,
     },
-    action: { marginTop: spacing["2xl"] },
+    action: { marginTop: SPACING.xl },
     /** Stitch pins the confirm button BELOW the panel, after a 16px spacer. */
-    verify: { marginTop: spacing.lg },
+    verify: { marginTop: SPACING.lg },
   });
+}

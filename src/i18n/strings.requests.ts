@@ -91,6 +91,24 @@ export const requestStrings = {
   zoneNone: "بلا منطقة محددة",
   filterAllClasses: "كل الفئات",
 
+  /**
+   * ---------------- Stitch negotiation ----------------
+   * مطابق للصورتين screen_19 (ride_negotiation_offer) و screen_34
+   * (negotiation_waiting_state) في مرجع الـ39 صورة.
+   */
+  passengerOffer: "عرض الراكب",
+  quickAdd: "زيادة سريعة",
+  customOffer: "عرض مخصص…",
+  /** يُركَّب هكذا: `اقبل 850 DZD`. */
+  acceptFare: "اقبل",
+  counterOffer: "أرسل عرضًا مقابلًا",
+  estTime: "الزمن التقديري",
+  waitingTitle: "في انتظار رد الراكب…",
+  waitingBody: "الراكب يراجع عرضك المقابل الآن.",
+  yourOffer: "عرضك",
+  acceptOriginal: "اقبل السعر الأصلي",
+  cancelNegotiation: "إلغاء التفاوض",
+
   errors: {
     DRIVER_NOT_APPROVED: "حسابك غير معتمد بعد.",
     FARE_OFFER_DRIVER_UNAVAILABLE:

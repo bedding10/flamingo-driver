@@ -69,6 +69,30 @@ export type RideOffer = {
   distanceKm?: number | null;
   expiresInMs: number;
   passenger?: OfferPassenger | null;
+
+  /**
+   * NEGOTIATION - the four fields below are NOT emitted by MatchingService yet.
+   *
+   * They are declared, optional, because the offer card's counter-offer panel is
+   * built and gated on them: it appears only when the server starts sending
+   * `fareQuoteId` (and does not set `negotiable: false`). Until then the card
+   * shows its "bid from the requests list" footnote instead, because
+   * POST /driver/fare-offers is keyed on a fareQuoteId and there is nothing to
+   * post without one.
+   *
+   * Requested contract in SERVER_TODO.md section 3:
+   *  - fareQuoteId: the quote this dispatch came from, so the driver can bid on
+   *    the very request that was just pushed to him
+   *  - negotiable: mirrors VehicleType.allowsNegotiation for this ride's type
+   *  - negotiationMin / negotiationMax: the band from VehiclePricingRule, the
+   *    same one the server validates against. The app does NOT invent a band:
+   *    with these absent the driver types a free amount and the server's own
+   *    rejection is what he sees.
+   */
+  fareQuoteId?: string | null;
+  negotiable?: boolean | null;
+  negotiationMin?: number | null;
+  negotiationMax?: number | null;
 };
 
 export type Trip = {

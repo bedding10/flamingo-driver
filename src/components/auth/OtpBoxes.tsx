@@ -8,14 +8,10 @@ import {
   type TextInputKeyPressEventData,
   type ViewStyle,
 } from "react-native";
+
 import { rowNeverMirrored } from "../../i18n";
-import {
-  radius,
-  spacing,
-  stitchType,
-  usePalette,
-  type Palette,
-} from "../../theme";
+import { RADIUS, SPACING, typo } from "../../theme/tokens";
+import { useTokens, type Tokens } from "../../theme/useTokens";
 
 /** Stitch `w-12 h-14` per box, `gap-3` between them. */
 const BOX_WIDTH = 48;
@@ -34,19 +30,13 @@ type Props = {
 };
 
 /**
- * PHASE 2 - Stitch `otp_verification`: six single-character boxes.
+ * Stitch `otp_verification`: six single-character boxes, on tokens.
  *
  * WHY THIS IS NOT A STRAIGHT PORT OF STITCH'S SCRIPT
  * iOS one-time-code autofill and Android SMS autofill hand over the WHOLE code
  * at once, into whichever field is focused. Stitch's script only ever advances
- * one character, so a literal port would BREAK autofill on the single input a
- * driver uses most, and force six manual taps from a notification they can see.
- * So any multi-character string arriving in any box is DISTRIBUTED across the
- * remaining boxes. The geometry is Stitch's; the input handling is native.
- *
- * The value is kept packed - boxes fill from the leading edge and backspace
- * removes the last character - so `value` stays a plain digit string the parent
- * can length-check, instead of a sparse six-slot array.
+ * one character, so a literal port would BREAK autofill. Any multi-character
+ * string arriving in any box is DISTRIBUTED across the remaining boxes.
  */
 export function OtpBoxes({
   value,
@@ -57,9 +47,9 @@ export function OtpBoxes({
   accessibilityLabel,
   style,
 }: Props) {
-  const palette = usePalette();
-  const styles = useMemo(() => makeStyles(palette), [palette]);
   const inputs = useRef<Array<TextInput | null>>([]);
+  const tokens = useTokens();
+  const styles = useMemo(() => makeStyles(tokens), [tokens]);
 
   const focusAt = useCallback((index: number) => {
     inputs.current[index]?.focus();
@@ -106,11 +96,14 @@ export function OtpBoxes({
 
   /**
    * Backspace on an EMPTY box has to delete the previous character and step
-   * back. onChangeText never fires for it - the text did not change - so the key
-   * event is the only place this can be detected.
+   * back. onChangeText never fires for it, so the key event is the only place
+   * this can be detected.
    */
   const handleKeyPress = useCallback(
-    (index: number, event: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
+    (
+      index: number,
+      event: NativeSyntheticEvent<TextInputKeyPressEventData>,
+    ) => {
       if (event.nativeEvent.key !== "Backspace") return;
       if (value[index]) return;
       if (index === 0) return;
@@ -120,32 +113,34 @@ export function OtpBoxes({
     [focusAt, onChange, value],
   );
 
-  const renderBox = (index: number) => (
-    <TextInput
-      key={index}
-      ref={(node) => {
-        inputs.current[index] = node;
-      }}
-      value={value[index] ?? ""}
-      onChangeText={(text) => handleChange(index, text)}
-      onKeyPress={(event) => handleKeyPress(index, event)}
-      editable={editable}
-      autoFocus={autoFocus && index === 0}
-      style={styles.box}
-      keyboardType="number-pad"
-      maxLength={length}
-      textContentType={index === 0 ? "oneTimeCode" : "none"}
-      autoComplete={index === 0 ? "sms-otp" : "off"}
-      accessibilityLabel={index === 0 ? accessibilityLabel : undefined}
-      selectionColor={palette.primary}
-    />
-  );
+  const renderBox = (index: number) => {
+    const filled = Boolean(value[index]);
+    return (
+      <TextInput
+        key={index}
+        ref={(node) => {
+          inputs.current[index] = node;
+        }}
+        value={value[index] ?? ""}
+        onChangeText={(text) => handleChange(index, text)}
+        onKeyPress={(event) => handleKeyPress(index, event)}
+        editable={editable}
+        autoFocus={autoFocus && index === 0}
+        style={[styles.box, filled && styles.boxFilled]}
+        keyboardType="number-pad"
+        maxLength={length}
+        textContentType={index === 0 ? "oneTimeCode" : "none"}
+        autoComplete={index === 0 ? "sms-otp" : "off"}
+        accessibilityLabel={index === 0 ? accessibilityLabel : undefined}
+        selectionColor={tokens.colors.primaryContainer}
+      />
+    );
+  };
 
   return (
     /**
      * rowNeverMirrored(): digit positions are absolute, and Stitch pins this
-     * container to dir="ltr" for the same reason. Mirroring would put digit 1 on
-     * the right in Arabic while the code itself still reads left to right.
+     * container to dir="ltr" for the same reason.
      */
     <View style={[styles.row, style]}>
       {Array.from({ length }, (_, index) => renderBox(index))}
@@ -153,22 +148,23 @@ export function OtpBoxes({
   );
 }
 
-const makeStyles = (palette: Palette) =>
-  StyleSheet.create({
+function makeStyles(t: Tokens) {
+  return StyleSheet.create({
     row: {
       flexDirection: rowNeverMirrored(),
       justifyContent: "center",
-      gap: spacing.md,
+      gap: SPACING.md,
     },
     box: {
       width: BOX_WIDTH,
       height: BOX_HEIGHT,
-      borderRadius: radius.input,
+      borderRadius: RADIUS.lg,
       borderWidth: 1,
-      borderColor: palette.borderStrong,
-      backgroundColor: palette.surfaceSunken,
-      color: palette.textPrimary,
-      ...stitchType.headlineXl,
+      borderColor: t.colors.outline,
+      backgroundColor: t.colors.surface,
+      color: t.colors.onSurface,
+      ...typo("headlineXl"),
+      // A single centred glyph: the 44px line box would push it off centre.
       lineHeight: undefined,
       letterSpacing: 0,
       paddingVertical: 0,
@@ -176,4 +172,15 @@ const makeStyles = (palette: Palette) =>
       textAlign: "center",
       textAlignVertical: "center",
     },
+    /**
+     * Progress cue. Without it, an SMS autofill changes six digits with no
+     * change of state, and a partially typed code looks identical to an empty
+     * one at arm's length.
+     */
+    boxFilled: {
+      borderWidth: 2,
+      borderColor:
+        t.mode === "light" ? t.colors.primary : t.colors.primaryContainer,
+    },
   });
+}

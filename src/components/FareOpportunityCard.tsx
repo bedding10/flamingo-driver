@@ -1,379 +1,595 @@
+import { MaterialIcons } from "@expo/vector-icons";
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import type { FareOpportunity } from "../types/fareOffer";
-import { textAlignStart } from "../i18n";
+import {
+  Animated,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+
 import { requestStrings } from "../i18n/strings.requests";
 import {
-  radius,
-  spacing,
-  touchTarget,
-  typography,
-  usePalette,
-  withAlpha,
-  type Palette,
-} from "../theme";
-
-type Props = {
-  item: FareOpportunity;
-  /** True while this card's bid or withdrawal is in flight. */
-  busy: boolean;
-  onBid: (quoteId: string, amount: number) => void;
-  onWithdraw: (offerId: string) => void;
-};
-
-function money(amount: number, currency?: string | null): string {
-  const rounded = Math.round(amount);
-  return currency ? rounded + " " + currency : String(rounded);
-}
-
-function clock(ms: number): string {
-  const total = Math.max(0, Math.floor(ms / 1000));
-  const m = Math.floor(total / 60);
-  const s = total % 60;
-  return m + ":" + String(s).padStart(2, "0");
-}
+  alpha,
+  COLORS,
+  GLOW_PRIMARY,
+  ICON_SIZE,
+  RADIUS,
+  RANK_RING,
+  SEMANTIC,
+  SPACING,
+  TOUCH_TARGET,
+  typo,
+  type RankTier,
+} from "../theme/tokens";
+import type { FareOpportunity } from "../types/fareOffer";
+import { PillButton, RankAvatar, RouteTimeline } from "../ui";
 
 /**
- * One open bidding request.
+ * The negotiation surface, rebuilt from the owner's Stitch reference pack.
  *
- * The amount field is validated against the server's own band
- * ([minFare, maxFare] returned with the request) so the driver is not sent into
- * a guaranteed FARE_OFFER_OUT_OF_RANGE. The suggested fare is only a starting
- * value - nothing is computed on the client.
+ * It is ONE card with TWO states, because that is exactly how Stitch drew it:
+ *  - `ride_negotiation_offer` (screen_19): the passenger's price plus the
+ *    driver's counter tools.
+ *  - `negotiation_waiting_state` (screen_34): after a bid is PENDING. Stitch
+ *    drew it full screen; per the owner's rule it collapses into this card so
+ *    the driver keeps the list and the map behind it.
  *
- * PHASE 1 (R-11): five `"row-reverse"` rows and nine text styles pinned to
- * `textAlign: "right"` / `writingDirection: "rtl"`, plus one `textAlign: "left"`
- * which is the same bug mirrored. All of them are hand-written compensations
- * from before real RTL was enabled, and they now cancel React Native's own
- * mirroring. Rows are plain `"row"` and text resolves its own alignment.
+ * Nothing about the server contract changed:
+ *  - a counter-offer is POST /driver/fare-offers, and re-posting UPDATES the
+ *    existing PENDING bid, so "send" and "update" are the same call;
+ *  - the amount is validated against [minFare, maxFare] locally purely to avoid
+ *    a round trip that could only come back FARE_OFFER_OUT_OF_RANGE;
+ *  - "accept" is claimFareQuote: a direct accept that creates the trip, with no
+ *    second confirmation from the passenger;
+ *  - "cancel negotiation" is withdrawFareOffer on the driver's own offer id.
  *
- * The numeric bid input keeps `writingDirection: "ltr"` on purpose - it holds a
- * latin-digit amount and is centred.
+ * Deliberate deltas from the PNG: no map layer (this card sits in a list), no
+ * remote passenger photo from lh3.googleusercontent.com, and Android cannot
+ * tint an elevation shadow so the pink glow is iOS-only.
  */
-function FareOpportunityCardComponent({
+
+export type FareOpportunityCardProps = {
+  item: FareOpportunity;
+  /** True while this row has a request in flight. */
+  busy?: boolean;
+  /** Counter-offer / update: POST /driver/fare-offers. */
+  onBid: (quoteId: string, amount: number) => void;
+  /** Cancel negotiation: POST /driver/fare-offers/:id/withdraw. */
+  onWithdraw: (offerId: string) => void;
+  /** Direct accept at the passenger's own price: POST /driver/fare-offers/claim. */
+  onAccept?: (quoteId: string, amount?: number) => void;
+};
+
+/** The three quick counter chips Stitch shows above the custom field. */
+const QUICK_STEPS = [50, 100, 150] as const;
+
+/** m:ss, never negative. */
+function clock(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const minutes = Math.floor(total / 60);
+  const seconds = total % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+function money(value: number): string {
+  return Math.round(value).toLocaleString("en-US");
+}
+
+function FareOpportunityCardBase({
   item,
-  busy,
+  busy = false,
   onBid,
   onWithdraw,
-}: Props) {
-  const palette = usePalette();
-  const styles = useMemo(() => makeStyles(palette), [palette]);
+  onAccept,
+}: FareOpportunityCardProps) {
+  /** What the passenger is willing to pay, which is what Accept charges. */
+  const askedFare = item.proposedFare ?? item.suggestedFare;
+  const myOffer =
+    item.myOffer && item.myOffer.status === "PENDING" ? item.myOffer : null;
 
-  // Narrowed once into a local: this keeps the JSX free of non-null assertions,
-  // which `npm run lint` (--max-warnings=0) would flag.
-  const myOffer = item.myOffer;
-  const initial = myOffer?.amount ?? item.proposedFare ?? item.suggestedFare;
-  const [amount, setAmount] = useState(String(Math.round(initial)));
-
-  // A new bid accepted by the server (or a fresh poll) re-seeds the field, but
-  // only when the driver is not in the middle of typing their own number.
+  // ----- the amount field -------------------------------------------------
+  const [amount, setAmount] = useState(() => String(myOffer?.amount ?? askedFare));
+  // Polling refreshes this row every 15s. Re-seeding the field on every poll
+  // would eat the driver's keystrokes, so it stops as soon as they touch it.
   const editedRef = useRef(false);
   useEffect(() => {
     if (editedRef.current) return;
-    setAmount(String(Math.round(initial)));
-  }, [initial]);
+    setAmount(String(myOffer?.amount ?? askedFare));
+  }, [askedFare, myOffer?.amount]);
 
-  const deadline = useMemo(
-    () => new Date(item.expiresAt).getTime(),
-    [item.expiresAt],
-  );
-  const [remaining, setRemaining] = useState(deadline - Date.now());
-  useEffect(() => {
-    setRemaining(deadline - Date.now());
-    const timer = setInterval(() => setRemaining(deadline - Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, [deadline]);
-
-  const expired = remaining <= 0;
-  const parsed = Number(amount.replace(/[^0-9.]/g, ""));
-  const valid =
+  const parsed = Number(amount.replace(",", "."));
+  const inBand =
     Number.isFinite(parsed) &&
     parsed >= item.minFare &&
     parsed <= item.maxFare;
-  const pending = myOffer?.status === "PENDING";
 
-  return (
-    <View style={[styles.card, expired ? styles.cardExpired : null]}>
-      <View style={styles.headRow}>
-        <Text style={styles.passenger} numberOfLines={1}>
-          {item.passenger?.name ?? requestStrings.title}
-        </Text>
-        <Text style={[styles.timer, expired ? styles.timerOff : null]}>
-          {expired
+  // ----- the countdown ----------------------------------------------------
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const endsAt = useMemo(() => {
+    const source = myOffer?.expiresAt ?? item.expiresAt;
+    const parsedDate = new Date(source).getTime();
+    return Number.isFinite(parsedDate) ? parsedDate : 0;
+  }, [item.expiresAt, myOffer?.expiresAt]);
+
+  const remainingMs = endsAt - now;
+  const closed = endsAt > 0 && remainingMs <= 0;
+
+  // The bar shrinks against the longest window this card has actually seen,
+  // because the server does not send the original TTL.
+  const spanRef = useRef(Math.max(1, remainingMs));
+  if (remainingMs > spanRef.current) spanRef.current = remainingMs;
+  const progress = Math.max(0, Math.min(1, remainingMs / spanRef.current));
+
+  // ----- passenger --------------------------------------------------------
+  const passenger = item.passenger as unknown as {
+    name?: string | null;
+    fullName?: string | null;
+    photoUrl?: string | null;
+    rating?: number | null;
+    level?: string | null;
+  } | null;
+
+  const passengerName = passenger?.name ?? passenger?.fullName ?? null;
+  const rawTier = (passenger?.level ?? "").toUpperCase();
+  const tier = (rawTier in RANK_RING ? rawTier : null) as RankTier | null;
+
+  const etaMinutes =
+    item.durationSec != null ? Math.max(1, Math.round(item.durationSec / 60)) : null;
+  const currency = item.currency;
+
+  // ----- the pulsing ring on the waiting state ----------------------------
+  const pulse = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (!myOffer) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, {
+          toValue: 1,
+          duration: 900,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulse, {
+          toValue: 0,
+          duration: 900,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [myOffer, pulse]);
+
+  const ringStyle = {
+    opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.35, 1] }),
+    transform: [
+      {
+        scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.12] }),
+      },
+    ],
+  };
+
+  const commitAmount = (next: number) => {
+    editedRef.current = true;
+    setAmount(String(Math.min(item.maxFare, Math.round(next))));
+  };
+
+  // =======================================================================
+  // WAITING STATE - screen_34
+  // =======================================================================
+  if (myOffer) {
+    return (
+      <View style={styles.card}>
+        <View style={styles.waitingHead}>
+          <View style={styles.hourglassWrap}>
+            <Animated.View style={[styles.pulseRing, ringStyle]} />
+            <View style={styles.hourglass}>
+              <MaterialIcons
+                name="hourglass-empty"
+                size={ICON_SIZE.lg}
+                color={COLORS.primary}
+              />
+            </View>
+          </View>
+
+          <Text style={styles.waitingTitle}>
+            {passengerName
+              ? `${requestStrings.waitingTitle} (${passengerName})`
+              : requestStrings.waitingTitle}
+          </Text>
+          <Text style={styles.waitingBody}>{requestStrings.waitingBody}</Text>
+        </View>
+
+        {/* YOUR OFFER | EST. TIME, split by a vertical rule. */}
+        <View style={styles.splitCard}>
+          <View style={styles.splitCell}>
+            <Text style={styles.splitLabel}>{requestStrings.yourOffer}</Text>
+            <Text style={styles.splitValuePrimary}>
+              {money(myOffer.amount)} {currency}
+            </Text>
+          </View>
+          <View style={styles.splitRule} />
+          <View style={[styles.splitCell, styles.splitCellEnd]}>
+            <Text style={styles.splitLabel}>{requestStrings.estTime}</Text>
+            <Text style={styles.splitValue}>
+              {etaMinutes != null
+                ? `${etaMinutes} ${requestStrings.minutesSuffix}`
+                : "—"}
+            </Text>
+          </View>
+        </View>
+
+        <Text style={styles.countdownText}>
+          {closed
             ? requestStrings.closed
-            : requestStrings.closesIn + " " + clock(remaining)}
+            : `${requestStrings.closesIn} ${clock(remainingMs)}`}
         </Text>
-      </View>
 
-      <View style={styles.fareRow}>
-        <Text style={styles.fare}>
-          {money(item.proposedFare ?? item.suggestedFare, item.currency)}
-        </Text>
-        <View style={styles.metaCol}>
-          <Text style={styles.meta}>
-            {(item.proposedFare != null
-              ? requestStrings.passengerAsked
-              : requestStrings.suggested) +
-              " \u00b7 " +
-              requestStrings.range +
-              " " +
-              Math.round(item.minFare) +
-              " - " +
-              Math.round(item.maxFare)}
-          </Text>
-          <Text style={styles.meta}>
-            {[
-              item.distanceKm != null
-                ? item.distanceKm.toFixed(1) + " " + requestStrings.kmSuffix
-                : null,
-              item.durationSec != null
-                ? Math.round(item.durationSec / 60) +
-                  " " +
-                  requestStrings.minutesSuffix
-                : null,
-              item.commissionPct != null
-                ? requestStrings.commission + " " + item.commissionPct + "%"
-                : null,
-            ]
-              .filter(Boolean)
-              .join(" \u00b7 ")}
+        <View style={styles.stackedActions}>
+          {onAccept ? (
+            <PillButton
+              label={`${requestStrings.acceptOriginal} (${money(askedFare)} ${currency})`}
+              variant="secondary"
+              onPress={() => onAccept(item.id)}
+              disabled={busy || closed}
+              loading={busy}
+            />
+          ) : null}
+          <PillButton
+            label={requestStrings.cancelNegotiation}
+            variant="danger"
+            onPress={() => onWithdraw(myOffer.id)}
+            disabled={busy}
+          />
+        </View>
+      </View>
+    );
+  }
+
+  // =======================================================================
+  // OFFER STATE - screen_19
+  // =======================================================================
+  return (
+    <View style={styles.card}>
+      {/* Passenger header + est. time */}
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          <RankAvatar
+            uri={passenger?.photoUrl ?? null}
+            name={passengerName ?? undefined}
+            tier={tier}
+            rating={passenger?.rating ?? null}
+            size={48}
+          />
+          <View style={styles.headerText}>
+            <Text style={styles.name} numberOfLines={1}>
+              {passengerName ?? requestStrings.passengerAsked}
+            </Text>
+            <Text style={styles.headerMeta} numberOfLines={1}>
+              {item.driverDistanceKm != null
+                ? `${item.driverDistanceKm.toFixed(1)} ${requestStrings.kmSuffix} ${requestStrings.awayFromYou}`
+                : item.distanceKm != null
+                  ? `${item.distanceKm.toFixed(1)} ${requestStrings.kmSuffix}`
+                  : requestStrings.nearYou}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.headerRight}>
+          <Text style={styles.headerMeta}>{requestStrings.estTime}</Text>
+          <Text style={styles.eta}>
+            {etaMinutes != null
+              ? `${etaMinutes} ${requestStrings.minutesSuffix}`
+              : "—"}
           </Text>
         </View>
       </View>
 
-      <View style={styles.leg}>
-        <View style={[styles.dot, styles.dotPickup]} />
-        <View style={styles.legText}>
-          <Text style={styles.legLabel}>{requestStrings.pickup}</Text>
-          <Text style={styles.legValue} numberOfLines={2}>
-            {item.pickupAddress || requestStrings.unknownAddress}
-          </Text>
-        </View>
-      </View>
-
-      <View style={styles.leg}>
-        <View style={[styles.dot, styles.dotDrop]} />
-        <View style={styles.legText}>
-          <Text style={styles.legLabel}>{requestStrings.dropoff}</Text>
-          <Text style={styles.legValue} numberOfLines={2}>
-            {item.destAddress || requestStrings.unknownAddress}
-          </Text>
-        </View>
-      </View>
-
-      {item.passengerNote ? (
-        <Text style={styles.note} numberOfLines={3}>
-          {requestStrings.passengerNote + ": " + item.passengerNote}
-        </Text>
-      ) : null}
-
-      {myOffer && pending ? (
-        <Text style={styles.mine}>
-          {requestStrings.myOfferAmount +
-            " " +
-            money(myOffer.amount, myOffer.currency) +
-            " \u00b7 " +
-            requestStrings.myOfferPending}
-        </Text>
-      ) : null}
-
-      <View style={styles.amountRow}>
-        <Text style={styles.amountLabel}>{requestStrings.amountLabel}</Text>
-        <TextInput
-          value={amount}
-          onChangeText={(text) => {
-            editedRef.current = true;
-            setAmount(text.replace(/[^0-9.]/g, ""));
-          }}
-          keyboardType="numeric"
-          editable={!expired && !busy}
-          placeholder={requestStrings.amountPlaceholder}
-          placeholderTextColor={withAlpha(palette.textSecondary, 0.6)}
-          selectionColor={palette.primary}
-          style={styles.amountInput}
-          accessibilityLabel={requestStrings.amountLabel}
+      {/* Route */}
+      <View style={styles.routeBlock}>
+        <RouteTimeline
+          pickupLabel={requestStrings.pickup}
+          pickup={item.pickupAddress ?? requestStrings.unknownAddress}
+          destinationLabel={requestStrings.dropoff}
+          destination={item.destAddress ?? requestStrings.unknownAddress}
         />
       </View>
 
-      {!valid && !expired ? (
-        <Text style={styles.invalid}>{requestStrings.outOfRange}</Text>
+      {item.passengerNote ? (
+        <Text style={styles.note} numberOfLines={2}>
+          {requestStrings.passengerNote}: {item.passengerNote}
+        </Text>
       ) : null}
 
-      <View style={styles.actions}>
-        {myOffer && pending ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={requestStrings.withdraw}
-            disabled={busy}
-            onPress={() => onWithdraw(myOffer.id)}
-            style={({ pressed }) => [
-              styles.secondaryButton,
-              pressed ? styles.pressed : null,
-              busy ? styles.disabled : null,
-            ]}
-          >
-            <Text style={styles.secondaryLabel}>
-              {requestStrings.withdraw}
-            </Text>
-          </Pressable>
+      {/* Negotiation area on its own raised surface, as in Stitch. */}
+      <View style={styles.negotiation}>
+        <View style={styles.heroWrap}>
+          <Text style={styles.heroLabel}>{requestStrings.passengerOffer}</Text>
+          <View style={styles.heroRow}>
+            <Text style={styles.heroAmount}>{money(askedFare)}</Text>
+            <Text style={styles.heroCurrency}>{currency}</Text>
+          </View>
+          <Text style={styles.bandHint}>
+            {requestStrings.range}: {money(item.minFare)} – {money(item.maxFare)}{" "}
+            {currency}
+          </Text>
+        </View>
+
+        {/* Quick counters */}
+        <View style={styles.quickRow}>
+          {QUICK_STEPS.map((step) => (
+            <Pressable
+              key={step}
+              accessibilityRole="button"
+              disabled={busy || closed}
+              onPress={() => commitAmount(askedFare + step)}
+              style={({ pressed }) => [
+                styles.quickChip,
+                pressed ? styles.quickChipPressed : null,
+                askedFare + step > item.maxFare ? styles.quickChipMuted : null,
+              ]}
+            >
+              <Text style={styles.quickChipLabel}>+{step}</Text>
+            </Pressable>
+          ))}
+        </View>
+
+        {/* Custom amount, currency prefix outside the field like Stitch. */}
+        <View style={styles.inputRow}>
+          <Text style={styles.inputPrefix}>{currency}</Text>
+          <TextInput
+            value={amount}
+            onChangeText={(next) => {
+              editedRef.current = true;
+              setAmount(next.replace(/[^0-9.,]/g, ""));
+            }}
+            keyboardType="numeric"
+            editable={!busy && !closed}
+            placeholder={requestStrings.customOffer}
+            placeholderTextColor={alpha(COLORS.onSurfaceVariant, 0.5)}
+            style={styles.input}
+            // An amount is always LTR digits, in any interface language.
+            textAlign="left"
+          />
+        </View>
+
+        {!inBand && amount.length > 0 ? (
+          <Text style={styles.error}>{requestStrings.outOfRange}</Text>
         ) : null}
 
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={pending ? requestStrings.update : requestStrings.send}
-          disabled={busy || expired || !valid}
-          onPress={() => onBid(item.id, Math.round(parsed * 100) / 100)}
-          style={({ pressed }) => [
-            styles.primaryButton,
-            pressed ? styles.pressed : null,
-            busy || expired || !valid ? styles.disabled : null,
-          ]}
-        >
-          <Text style={styles.primaryLabel}>
-            {busy
-              ? requestStrings.sending
-              : pending
-                ? requestStrings.update
-                : requestStrings.send}
-          </Text>
-        </Pressable>
+        <View style={styles.stackedActions}>
+          {onAccept ? (
+            <PillButton
+              label={`${requestStrings.acceptFare} ${money(askedFare)} ${currency}`}
+              variant="primary"
+              trailingIcon="check-circle"
+              onPress={() => onAccept(item.id)}
+              disabled={busy || closed}
+              loading={busy}
+            />
+          ) : null}
+          <PillButton
+            label={busy ? requestStrings.sending : requestStrings.counterOffer}
+            variant="secondary"
+            onPress={() => onBid(item.id, Math.round(parsed * 100) / 100)}
+            disabled={busy || closed || !inBand}
+          />
+        </View>
+
+        {/* Shrinking countdown bar */}
+        <View style={styles.countdownTrack}>
+          <View style={[styles.countdownFill, { flex: progress }]} />
+          <View style={{ flex: 1 - progress }} />
+        </View>
+        <Text style={styles.countdownText}>
+          {closed
+            ? requestStrings.closed
+            : `${requestStrings.closesIn} ${clock(remainingMs)}`}
+        </Text>
       </View>
     </View>
   );
 }
 
-export const FareOpportunityCard = React.memo(FareOpportunityCardComponent);
+export const FareOpportunityCard = React.memo(FareOpportunityCardBase);
 
-const makeStyles = (palette: Palette) =>
-  StyleSheet.create({
-    card: {
-      backgroundColor: palette.surface,
-      borderRadius: radius.card,
-      borderWidth: 1,
-      borderColor: palette.border,
-      padding: spacing.lg,
-      gap: spacing.md,
-    },
-    cardExpired: { opacity: 0.55 },
+const HOURGLASS = 56;
 
-    // All rows below are plain "row": mirrored by React Native under RTL.
-    headRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      gap: spacing.sm,
-    },
-    passenger: {
-      ...typography.subtitle,
-      color: palette.textPrimary,
-      textAlign: textAlignStart(),
-      flexShrink: 1,
-    },
-    timer: { ...typography.caption, color: palette.primaryText },
-    timerOff: { color: palette.textSecondary },
+const styles = StyleSheet.create({
+  card: {
+    backgroundColor: COLORS.surfaceContainer,
+    borderRadius: RADIUS.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: COLORS.surfaceVariant,
+    overflow: "hidden",
+    paddingTop: SPACING.lg,
+  },
 
-    fareRow: {
-      flexDirection: "row",
-      // Logical: follows the layout direction already.
-      alignItems: "flex-end",
-      justifyContent: "space-between",
-      gap: spacing.md,
-    },
-    fare: { ...typography.numeric, color: palette.primaryText },
-    metaCol: { alignItems: "flex-start", gap: 2, flexShrink: 1 },
-    meta: {
-      ...typography.caption,
-      color: palette.textSecondary,
-      // Was hardcoded "left" - the same bug as "right", mirrored.
-      textAlign: textAlignStart(),
-    },
+  // ---- header
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: SPACING.md,
+    paddingHorizontal: SPACING.container,
+    paddingBottom: SPACING.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: alpha(COLORS.outlineVariant, 0.4),
+  },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.md,
+    flexShrink: 1,
+  },
+  headerText: { flexShrink: 1 },
+  name: { ...typo("titleMd"), color: COLORS.onSurface },
+  headerMeta: { ...typo("labelSm"), color: COLORS.onSurfaceVariant },
+  headerRight: { alignItems: "flex-end" },
+  eta: { ...typo("titleMd"), color: COLORS.primary },
 
-    leg: {
-      flexDirection: "row",
-      alignItems: "flex-start",
-      gap: spacing.md,
-    },
-    dot: { width: 10, height: 10, borderRadius: radius.pill, marginTop: 6 },
-    dotPickup: { backgroundColor: palette.online },
-    dotDrop: { backgroundColor: palette.danger },
-    legText: { flex: 1, gap: 2 },
-    legLabel: {
-      ...typography.caption,
-      color: palette.textSecondary,
-      textAlign: textAlignStart(),
-    },
-    legValue: {
-      ...typography.body,
-      color: palette.textPrimary,
-      textAlign: textAlignStart(),
-    },
+  // ---- route
+  routeBlock: {
+    paddingHorizontal: SPACING.container,
+    paddingVertical: SPACING.lg,
+  },
+  note: {
+    ...typo("labelSm"),
+    color: COLORS.onSurfaceVariant,
+    paddingHorizontal: SPACING.container,
+    paddingBottom: SPACING.md,
+  },
 
-    note: {
-      ...typography.caption,
-      color: palette.textSecondary,
-      textAlign: textAlignStart(),
-    },
-    mine: {
-      ...typography.caption,
-      color: palette.info,
-      textAlign: textAlignStart(),
-    },
+  // ---- negotiation block
+  negotiation: {
+    backgroundColor: COLORS.surfaceContainerHigh,
+    borderTopLeftRadius: RADIUS.xl,
+    borderTopRightRadius: RADIUS.xl,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: alpha(COLORS.outlineVariant, 0.4),
+    paddingHorizontal: SPACING.container,
+    paddingVertical: SPACING.xl,
+    gap: SPACING.lg,
+  },
+  heroWrap: { alignItems: "center", gap: SPACING.xs },
+  heroLabel: {
+    ...typo("labelMd"),
+    color: COLORS.onSurfaceVariant,
+    letterSpacing: 1,
+  },
+  heroRow: { flexDirection: "row", alignItems: "flex-end", gap: SPACING.xs },
+  heroAmount: { ...typo("headlineXl"), color: COLORS.onSurface },
+  heroCurrency: {
+    ...typo("titleMd"),
+    color: COLORS.onSurfaceVariant,
+    marginBottom: SPACING.xs,
+  },
+  bandHint: { ...typo("labelSm"), color: COLORS.onSurfaceVariant },
 
-    amountRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing.md,
-    },
-    amountLabel: {
-      ...typography.caption,
-      color: palette.textSecondary,
-      textAlign: textAlignStart(),
-    },
-    amountInput: {
-      flex: 1,
-      minHeight: touchTarget.normal,
-      borderRadius: radius.md,
-      backgroundColor: palette.surfaceSunken,
-      borderWidth: 1,
-      borderColor: palette.border,
-      paddingHorizontal: spacing.lg,
-      color: palette.textPrimary,
-      ...typography.numeric,
-      // DELIBERATE: a latin-digit DZD amount, centred. Pinned LTR so an RTL
-      // layout cannot present the number back to front.
-      textAlign: "center",
-      writingDirection: "ltr",
-    },
-    invalid: {
-      ...typography.caption,
-      color: palette.warning,
-      textAlign: textAlignStart(),
-    },
+  // ---- quick chips
+  quickRow: { flexDirection: "row", gap: SPACING.sm },
+  quickChip: {
+    flex: 1,
+    height: TOUCH_TARGET,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    borderColor: COLORS.surfaceVariant,
+    backgroundColor: COLORS.surface,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  quickChipPressed: { borderColor: alpha(COLORS.primary, 0.5) },
+  quickChipMuted: { opacity: 0.45 },
+  quickChipLabel: { ...typo("labelMd"), color: COLORS.onSurface },
 
-    actions: { flexDirection: "row", gap: spacing.md },
-    primaryButton: {
-      flex: 2,
-      height: touchTarget.critical,
-      borderRadius: radius.pill,
-      backgroundColor: palette.primary,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    primaryLabel: { ...typography.subtitle, color: palette.onPrimary },
-    secondaryButton: {
-      flex: 1,
-      height: touchTarget.critical,
-      borderRadius: radius.pill,
-      borderWidth: 1,
-      borderColor: palette.border,
-      backgroundColor: palette.surfaceSunken,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    secondaryLabel: {
-      ...typography.subtitle,
-      color: palette.textSecondary,
-    },
-    pressed: { opacity: 0.85 },
-    disabled: { opacity: 0.5 },
-  });
+  // ---- custom input
+  inputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    height: 56,
+    borderRadius: RADIUS.xl,
+    borderWidth: 1,
+    borderColor: COLORS.surfaceVariant,
+    backgroundColor: COLORS.surface,
+    paddingHorizontal: SPACING.lg,
+    gap: SPACING.md,
+  },
+  inputPrefix: { ...typo("labelMd"), color: COLORS.onSurfaceVariant },
+  input: {
+    flex: 1,
+    ...typo("bodyLg"),
+    color: COLORS.onSurface,
+    // An amount must never mirror, whatever the interface direction is.
+    writingDirection: "ltr",
+  },
+  error: { ...typo("labelSm"), color: COLORS.error },
+
+  stackedActions: { gap: SPACING.md },
+
+  // ---- countdown
+  countdownTrack: {
+    flexDirection: "row",
+    height: 4,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.surface,
+    overflow: "hidden",
+  },
+  countdownFill: { backgroundColor: COLORS.primary },
+  countdownText: {
+    ...typo("labelSm"),
+    color: COLORS.onSurfaceVariant,
+    textAlign: "center",
+  },
+
+  // ---- waiting state
+  waitingHead: {
+    alignItems: "center",
+    gap: SPACING.sm,
+    paddingHorizontal: SPACING.container,
+    paddingBottom: SPACING.lg,
+  },
+  hourglassWrap: {
+    width: HOURGLASS + 24,
+    height: HOURGLASS + 24,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pulseRing: {
+    position: "absolute",
+    width: HOURGLASS + 24,
+    height: HOURGLASS + 24,
+    borderRadius: RADIUS.full,
+    borderWidth: 4,
+    borderColor: alpha(COLORS.primary, 0.25),
+  },
+  hourglass: {
+    width: HOURGLASS,
+    height: HOURGLASS,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.surfaceContainerHigh,
+    alignItems: "center",
+    justifyContent: "center",
+    ...GLOW_PRIMARY,
+  },
+  waitingTitle: {
+    ...typo("titleMd"),
+    color: COLORS.onSurface,
+    textAlign: "center",
+  },
+  waitingBody: {
+    ...typo("bodyMd"),
+    color: COLORS.onSurfaceVariant,
+    textAlign: "center",
+  },
+  splitCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginHorizontal: SPACING.container,
+    padding: SPACING.lg,
+    borderRadius: RADIUS.xl,
+    borderWidth: 1,
+    borderColor: alpha(COLORS.primary, 0.2),
+    backgroundColor: COLORS.surface,
+  },
+  splitCell: { flex: 1, gap: 2 },
+  splitCellEnd: { alignItems: "flex-end" },
+  splitRule: {
+    width: StyleSheet.hairlineWidth,
+    height: 40,
+    backgroundColor: COLORS.surfaceVariant,
+    marginHorizontal: SPACING.md,
+  },
+  splitLabel: {
+    ...typo("labelSm"),
+    color: COLORS.onSurfaceVariant,
+    letterSpacing: 1,
+  },
+  splitValue: { ...typo("titleMd"), color: COLORS.onSurface },
+  splitValuePrimary: { ...typo("headlineLgMobile"), color: COLORS.primary },
+});
