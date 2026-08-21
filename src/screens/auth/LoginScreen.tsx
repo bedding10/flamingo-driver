@@ -1,6 +1,12 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { BlurView } from "expo-blur";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -28,18 +34,10 @@ import { PhoneField } from "../../components/auth/PhoneField";
 import { InputField } from "../../components/InputField";
 import { textAlignStart, useTranslation } from "../../i18n";
 import { pw } from "../../i18n/strings.password";
-import {
-  alpha,
-  BLUR,
-  COLORS,
-  RADIUS,
-  SHADOW_CARD,
-  SPACING,
-  TOUCH_TARGET,
-  typo,
-} from "../../theme/tokens";
-import { HEADER_HEIGHT, PillButton, StickyHeader } from "../../ui";
 import type { AuthStackParamList } from "../../navigation/types";
+import { alpha, RADIUS, SPACING, TOUCH_TARGET, typo } from "../../theme/tokens";
+import { useTokens, type Tokens } from "../../theme/useTokens";
+import { HEADER_HEIGHT, PillButton, StickyHeader } from "../../ui";
 
 const CODE_LENGTH = 6;
 const RESEND_SECONDS = 60;
@@ -51,6 +49,16 @@ const SAFE_BOTTOM_MIN = 32;
 
 /** Tailwind `max-w-md`, which is what Stitch centres these cards inside. */
 const MAX_CARD_WIDTH = 448;
+
+/**
+ * Glass-card opacity per scheme. Dark keeps the reference's 60%; light has to
+ * be near-opaque because a 60% white card on #fff8f8 has no visible edge and
+ * Android cannot tint the shadow that would imply one.
+ */
+const CARD_FILL_OPACITY = { dark: 0.6, light: 0.92 } as const;
+
+/** Selected-tab wash. 16% pink disappears on the light card fill. */
+const MODE_WASH = { dark: 0.16, light: 0.22 } as const;
 
 type Props = NativeStackScreenProps<AuthStackParamList, "Login">;
 
@@ -89,6 +97,8 @@ export function LoginScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
   const signIn = useAuthStore((state) => state.signIn);
+  const tokens = useTokens();
+  const styles = useMemo(() => makeStyles(tokens), [tokens]);
 
   const [mode, setMode] = useState<"sms" | "password">(
     route.params?.mode ?? "sms",
@@ -271,10 +281,10 @@ export function LoginScreen({ navigation, route }: Props) {
       >
         <View style={styles.centre}>
           {mode === "password" ? (
-            <View style={[styles.cardWrap, SHADOW_CARD]}>
+            <View style={[styles.cardWrap, tokens.shadowCard]}>
               <BlurView
-                intensity={BLUR.overlay}
-                tint={BLUR.tint}
+                intensity={tokens.blur.overlay}
+                tint={tokens.blur.tint}
                 style={styles.card}
               >
                 <Text style={styles.titleSm}>{t("login.passwordTitle")}</Text>
@@ -314,10 +324,10 @@ export function LoginScreen({ navigation, route }: Props) {
               </BlurView>
             </View>
           ) : step === "phone" ? (
-            <View style={[styles.cardWrap, SHADOW_CARD]}>
+            <View style={[styles.cardWrap, tokens.shadowCard]}>
               <BlurView
-                intensity={BLUR.overlay}
-                tint={BLUR.tint}
+                intensity={tokens.blur.overlay}
+                tint={tokens.blur.tint}
                 style={styles.card}
               >
                 {/* Absolute, so the wrapper must clip - see styles.cardWrap. */}
@@ -353,10 +363,10 @@ export function LoginScreen({ navigation, route }: Props) {
               {/* Stitch puts the OTP indicator ABOVE the panel, and lights the
                   MIDDLE segment. */}
               <AuthProgress step={2} variant="dashes" style={styles.dashes} />
-              <View style={[styles.cardWrap, SHADOW_CARD]}>
+              <View style={[styles.cardWrap, tokens.shadowCard]}>
                 <BlurView
-                  intensity={BLUR.overlay}
-                  tint={BLUR.tint}
+                  intensity={tokens.blur.overlay}
+                  tint={tokens.blur.tint}
                   style={styles.card}
                 >
                   <Text style={styles.titleLg}>{t("login.codeTitle")}</Text>
@@ -417,121 +427,138 @@ export function LoginScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.background },
-  /**
-   * NOT REPRODUCED: Stitch's `mesh-gradient` body. The class name is in the
-   * reference but its stops are not, and inventing a gradient is a redesign.
-   */
-  content: {
-    flexGrow: 1,
-    justifyContent: "center",
-    paddingHorizontal: SPACING.container,
-  },
-  centre: { width: "100%", maxWidth: MAX_CARD_WIDTH, alignSelf: "center" },
-  /**
-   * `overflow: hidden` is REQUIRED, not cosmetic: AuthProgress's bar variant is
-   * absolutely positioned at top 0 and its square ends would cross this radius
-   * without it. The blur also needs a clipping parent to keep its corners.
-   */
-  cardWrap: {
-    width: "100%",
-    borderRadius: RADIUS.xl,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: alpha(COLORS.outlineVariant, 0.3),
-    overflow: "hidden",
-  },
-  card: {
-    padding: SPACING.xl,
-    backgroundColor: alpha(COLORS.surfaceContainer, 0.6),
-  },
-  dashes: { marginBottom: SPACING.xxl },
-  /** phone_number_entry heads with headline-lg-mobile. */
-  titleSm: {
-    ...typo("headlineLgMobile"),
-    color: COLORS.onSurface,
-    textAlign: textAlignStart(),
-    marginBottom: SPACING.sm,
-  },
-  /** otp_verification heads a size larger, with headline-xl. */
-  titleLg: {
-    ...typo("headlineXl"),
-    color: COLORS.onSurface,
-    textAlign: textAlignStart(),
-    marginBottom: SPACING.sm,
-  },
-  subtitle: {
-    ...typo("bodyMd"),
-    color: COLORS.onSurfaceVariant,
-    textAlign: textAlignStart(),
-    marginBottom: SPACING.xl,
-  },
-  subtitleLg: {
-    ...typo("bodyLg"),
-    color: COLORS.onSurfaceVariant,
-    textAlign: textAlignStart(),
-  },
-  /**
-   * A pinned Latin-content exception, same list as the brand wordmark and the
-   * plate field: a leading "+" inside an Arabic paragraph can be reordered by
-   * the bidi algorithm and land at the wrong end.
-   */
-  echo: {
-    ...typo("titleMd"),
-    color: COLORS.onSurface,
-    textAlign: textAlignStart(),
-    writingDirection: "ltr",
-    marginTop: SPACING.xs,
-  },
-  boxes: { marginTop: SPACING.lg },
-  // Plain "row": mirrored by React Native, so it reads correctly in all three.
-  modeRow: { flexDirection: "row", gap: SPACING.xs, marginBottom: SPACING.lg },
-  mode: {
-    flex: 1,
-    minHeight: TOUCH_TARGET,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: RADIUS.lg,
-    borderWidth: 1,
-    borderColor: COLORS.outlineVariant,
-    backgroundColor: COLORS.surfaceContainerLow,
-  },
-  modeActive: {
-    borderColor: COLORS.primaryContainer,
-    backgroundColor: alpha(COLORS.primaryContainer, 0.16),
-  },
-  modeText: { ...typo("labelSm"), color: COLORS.onSurfaceVariant },
-  modeTextOn: { color: COLORS.primary },
-  resendRow: {
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: SPACING.sm,
-    marginTop: SPACING.lg,
-  },
-  resendAsk: { ...typo("labelMd"), color: COLORS.onSurfaceVariant },
-  /** Brand LETTERING, so `primary` rather than the filled primary-container. */
-  resendLink: { ...typo("labelMd"), color: COLORS.primary },
-  /** Stitch renders the waiting state as the same button, disabled. */
-  resendWait: {
-    ...typo("labelMd"),
-    color: COLORS.onSurfaceVariant,
-    writingDirection: "ltr",
-  },
-  gap: { height: SPACING.md },
-  helper: {
-    ...typo("labelSm"),
-    color: COLORS.onSurfaceVariant,
-    textAlign: textAlignStart(),
-    marginTop: SPACING.sm,
-  },
-  error: {
-    ...typo("labelSm"),
-    color: COLORS.error,
-    textAlign: textAlignStart(),
-    marginTop: SPACING.md,
-  },
-  action: { marginTop: SPACING.xl },
-  /** Stitch pins the confirm button BELOW the panel, after a 16px spacer. */
-  verify: { marginTop: SPACING.lg },
-});
+function makeStyles(t: Tokens) {
+  return StyleSheet.create({
+    root: { flex: 1, backgroundColor: t.colors.background },
+    /**
+     * NOT REPRODUCED: Stitch's `mesh-gradient` body. The class name is in the
+     * reference but its stops are not, and inventing a gradient is a redesign.
+     */
+    content: {
+      flexGrow: 1,
+      justifyContent: "center",
+      paddingHorizontal: SPACING.container,
+    },
+    centre: { width: "100%", maxWidth: MAX_CARD_WIDTH, alignSelf: "center" },
+    /**
+     * `overflow: hidden` is REQUIRED, not cosmetic: AuthProgress's bar variant
+     * is absolutely positioned at top 0 and its square ends would cross this
+     * radius without it. The blur also needs a clipping parent to keep its
+     * corners.
+     */
+    cardWrap: {
+      width: "100%",
+      borderRadius: RADIUS.xl,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: alpha(t.colors.outlineVariant, 0.3),
+      overflow: "hidden",
+    },
+    card: {
+      padding: SPACING.xl,
+      backgroundColor: alpha(
+        t.colors.surfaceContainer,
+        CARD_FILL_OPACITY[t.mode],
+      ),
+    },
+    dashes: { marginBottom: SPACING.xxl },
+    /** phone_number_entry heads with headline-lg-mobile. */
+    titleSm: {
+      ...typo("headlineLgMobile"),
+      color: t.colors.onSurface,
+      textAlign: textAlignStart(),
+      marginBottom: SPACING.sm,
+    },
+    /** otp_verification heads a size larger, with headline-xl. */
+    titleLg: {
+      ...typo("headlineXl"),
+      color: t.colors.onSurface,
+      textAlign: textAlignStart(),
+      marginBottom: SPACING.sm,
+    },
+    subtitle: {
+      ...typo("bodyMd"),
+      color: t.colors.onSurfaceVariant,
+      textAlign: textAlignStart(),
+      marginBottom: SPACING.xl,
+    },
+    subtitleLg: {
+      ...typo("bodyLg"),
+      color: t.colors.onSurfaceVariant,
+      textAlign: textAlignStart(),
+    },
+    /**
+     * A pinned Latin-content exception, same list as the brand wordmark and the
+     * plate field: a leading "+" inside an Arabic paragraph can be reordered by
+     * the bidi algorithm and land at the wrong end.
+     */
+    echo: {
+      ...typo("titleMd"),
+      color: t.colors.onSurface,
+      textAlign: textAlignStart(),
+      writingDirection: "ltr",
+      marginTop: SPACING.xs,
+    },
+    boxes: { marginTop: SPACING.lg },
+    // Plain "row": mirrored by React Native, so it reads correctly in all three.
+    modeRow: {
+      flexDirection: "row",
+      gap: SPACING.xs,
+      marginBottom: SPACING.lg,
+    },
+    mode: {
+      flex: 1,
+      minHeight: TOUCH_TARGET,
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: RADIUS.lg,
+      borderWidth: 1,
+      borderColor: t.colors.outlineVariant,
+      backgroundColor: t.colors.surfaceContainerLow,
+    },
+    /**
+     * Which door the driver is in. On light the reference's 16% pink is nearly
+     * invisible against the card, so the wash is stronger and the border uses
+     * the readable primary role instead of the brand pink.
+     */
+    modeActive: {
+      borderColor:
+        t.mode === "light" ? t.colors.primary : t.colors.primaryContainer,
+      backgroundColor: alpha(t.colors.primaryContainer, MODE_WASH[t.mode]),
+    },
+    modeText: { ...typo("labelSm"), color: t.colors.onSurfaceVariant },
+    /** Weight change too: colour alone is not a reliable selected state. */
+    modeTextOn: { ...typo("labelMd"), color: t.colors.primary },
+    resendRow: {
+      flexDirection: "row",
+      justifyContent: "center",
+      alignItems: "center",
+      gap: SPACING.sm,
+      marginTop: SPACING.lg,
+    },
+    resendAsk: { ...typo("labelMd"), color: t.colors.onSurfaceVariant },
+    /** Brand LETTERING, so `primary` rather than the filled primary-container. */
+    resendLink: { ...typo("labelMd"), color: t.colors.primary },
+    /** Stitch renders the waiting state as the same button, disabled. */
+    resendWait: {
+      ...typo("labelMd"),
+      color: t.colors.onSurfaceVariant,
+      writingDirection: "ltr",
+    },
+    gap: { height: SPACING.md },
+    helper: {
+      ...typo("labelSm"),
+      color: t.colors.onSurfaceVariant,
+      textAlign: textAlignStart(),
+      marginTop: SPACING.sm,
+    },
+    error: {
+      ...typo("labelSm"),
+      color: t.colors.error,
+      textAlign: textAlignStart(),
+      marginTop: SPACING.md,
+    },
+    action: { marginTop: SPACING.xl },
+    /** Stitch pins the confirm button BELOW the panel, after a 16px spacer. */
+    verify: { marginTop: SPACING.lg },
+  });
+}
