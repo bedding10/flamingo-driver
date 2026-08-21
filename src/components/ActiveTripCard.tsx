@@ -14,6 +14,7 @@ import {
   SPACING,
   TOUCH_TARGET,
   typo,
+  type RankTier,
 } from "../theme/tokens";
 import type { Trip, TripStatus } from "../types/trip";
 import { RankAvatar } from "../ui";
@@ -161,9 +162,9 @@ function ActiveTripCardComponent({
       <View style={styles.contactRow}>
         <RankAvatar
           size={44}
-          avatarUrl={trip.passenger?.avatarUrl}
-          tier={trip.passenger?.profileLevel}
-          fallback={trip.passenger?.name ?? null}
+          uri={trip.passenger?.avatarUrl ?? null}
+          name={trip.passenger?.name ?? undefined}
+          tier={(trip.passenger?.profileLevel ?? null) as RankTier | null}
           rating={trip.passenger?.rating ?? null}
         />
         <View style={styles.passengerBlock}>
