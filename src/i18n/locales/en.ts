@@ -85,20 +85,37 @@ export const en = {
     signIn: "Sign in",
   },
 
+  /**
+   * PHASE 2 - Stitch `phone_number_entry` and `otp_verification`.
+   *
+   * `phonePlaceholder` has NO leading zero on purpose. Stitch puts a fixed
+   * `+213` block beside the field, so the field holds the national number, and
+   * `normalizeE164` maps a bare "555123456" to "+213555123456" through its last
+   * branch exactly as it maps "0555123456" through the trunk branch. Both forms
+   * work; the placeholder shows the one the layout implies.
+   *
+   * `resendIn` and `stepOf` take variables rather than being concatenated from
+   * fragments, because a number wedged between two translated fragments cannot
+   * be ordered correctly in three languages.
+   */
   login: {
     role: "For drivers",
-    phoneTitle: "Sign in",
-    phoneSubtitle: "Enter the phone number registered with the company",
+    phoneTitle: "Phone number",
+    phoneSubtitle:
+      "Enter your phone number and we'll send you a verification code",
     phoneLabel: "Phone number",
-    phonePlaceholder: "0555 55 55 55",
-    sendCode: "Send verification code",
-    codeTitle: "Verification code",
-    codeSubtitle: "Enter the 6-digit code sent to",
-    codeLabel: "Code",
+    phonePlaceholder: "555 123 456",
+    phoneHelper: "We'll verify this number with a short text message.",
+    sendCode: "Send code",
+    codeTitle: "Verify code",
+    codeSubtitle: "We sent a verification code to",
+    codeLabel: "Verification code",
     verify: "Verify and continue",
     changeNumber: "Change number",
     resend: "Resend code",
-    resendIn: "Resend in",
+    resendQuestion: "Didn't get the code?",
+    resendIn: "Resend code in {time}",
+    stepOf: "Step {current} of {total}",
     passwordTitle: "Password",
     passwordLabel: "Password",
     passwordSubtitle: "Enter your flaminGO password",

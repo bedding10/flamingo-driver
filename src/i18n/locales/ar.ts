@@ -82,20 +82,28 @@ export const ar: Dictionary = {
     signIn: "تسجيل الدخول",
   },
 
+  /**
+   * PHASE 2 - Stitch `phone_number_entry` and `otp_verification`. Arabic is the
+   * language these two screens were authored in, so these values are the
+   * reference wording itself rather than a translation of the English.
+   */
   login: {
     role: "للسائقين",
-    phoneTitle: "تسجيل الدخول",
-    phoneSubtitle: "أدخل رقم هاتفك المسجّل لدى الشركة",
+    phoneTitle: "رقم الهاتف",
+    phoneSubtitle: "أدخل رقم هاتفك لنرسل لك رمز التحقق",
     phoneLabel: "رقم الهاتف",
-    phonePlaceholder: "0555 55 55 55",
-    sendCode: "إرسال رمز التحقق",
-    codeTitle: "رمز التحقق",
-    codeSubtitle: "أدخل الرمز المكوّن من 6 أرقام المُرسل إلى",
-    codeLabel: "الرمز",
+    phonePlaceholder: "555 123 456",
+    phoneHelper: "سنتحقق من هذا الرقم عبر رسالة نصية قصيرة.",
+    sendCode: "إرسال الرمز",
+    codeTitle: "التحقق من الرمز",
+    codeSubtitle: "تم إرسال رمز التحقق إلى",
+    codeLabel: "رمز التحقق",
     verify: "تأكيد ودخول",
     changeNumber: "تغيير الرقم",
     resend: "إعادة إرسال الرمز",
-    resendIn: "إعادة الإرسال بعد",
+    resendQuestion: "لم تستلم الرمز؟",
+    resendIn: "إعادة إرسال الرمز خلال {time}",
+    stepOf: "الخطوة {current} من {total}",
     passwordTitle: "كلمة المرور",
     passwordLabel: "كلمة المرور",
     passwordSubtitle: "أدخل كلمة المرور الخاصة بحسابك",
