@@ -1,7 +1,7 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import {
   Animated,
   Easing,
@@ -15,31 +15,33 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuthStore } from "../../auth/auth.store";
 import { useDriverProfile } from "../../hooks/useDriverProfile";
 import { strings } from "../../i18n/strings";
+import type { OnboardingStackParamList } from "../../navigation/types";
 import { useDriverStore } from "../../stores/driver.store";
-import {
-  alpha,
-  COLORS,
-  ICON_SIZE,
-  MOTION,
-  RADIUS,
-  SEMANTIC,
-  SHADOW_CARD,
-  SPACING,
-  typo,
-} from "../../theme/tokens";
+import { alpha, MOTION, RADIUS, SPACING, typo } from "../../theme/tokens";
+import { useTokens, type Tokens } from "../../theme/useTokens";
 import {
   missingRequiredDocuments,
   type DriverProfile,
   type DriverStatus,
 } from "../../types/driver";
 import { HEADER_HEIGHT, PillButton, StickyHeader } from "../../ui";
-import type { OnboardingStackParamList } from "../../navigation/types";
 
 type Navigation = NativeStackNavigationProp<OnboardingStackParamList>;
 
 /** Stitch draws the illustration plate at `w-64 h-64` and its rows at 40px. */
 const PLATE = 240;
 const ROW_ICON = 40;
+const PLATE_GLYPH = 96;
+
+/**
+ * How strong the state-circle washes are.
+ *
+ * The reference's 20% works on a dark surface. On #fbeaec a 20% emerald is
+ * almost invisible, which collapses the difference between a cleared row and a
+ * pending one - the single most important distinction on this screen.
+ */
+const WASH = { dark: 0.2, light: 0.16 } as const;
+const PLATE_GLOW = { dark: 0.1, light: 0.08 } as const;
 
 type RowState = "done" | "progress";
 
@@ -82,6 +84,8 @@ export function PendingApprovalScreen() {
   const signOut = useAuthStore((state) => state.signOut);
   const query = useDriverProfile();
   const cachedProfile = useDriverStore((state) => state.profile);
+  const tokens = useTokens();
+  const styles = useMemo(() => makeStyles(tokens), [tokens]);
 
   const profile = query.data ?? cachedProfile;
   const status = profile?.status ?? null;
@@ -131,11 +135,11 @@ export function PendingApprovalScreen() {
         {/* Haloed plate. The glow is a translucent circle, not a blur filter. */}
         <View style={styles.plateWrap}>
           <View style={styles.plateGlow} pointerEvents="none" />
-          <View style={[styles.plate, SHADOW_CARD]}>
+          <View style={[styles.plate, tokens.shadowCard]}>
             <MaterialIcons
               name="hourglass-top"
-              size={96}
-              color={COLORS.primary}
+              size={PLATE_GLYPH}
+              color={tokens.colors.primary}
             />
           </View>
         </View>
@@ -144,7 +148,7 @@ export function PendingApprovalScreen() {
         <Text style={styles.title}>{copy.title}</Text>
         <Text style={styles.body}>{copy.body}</Text>
 
-        <View style={[styles.card, SHADOW_CARD]}>
+        <View style={[styles.card, tokens.shadowCard]}>
           {rows.map((row, index) => (
             <View key={row.key}>
               {index > 0 ? <View style={styles.divider} /> : null}
@@ -158,9 +162,11 @@ export function PendingApprovalScreen() {
                 >
                   <MaterialIcons
                     name={row.state === "done" ? "check-circle" : row.icon}
-                    size={ICON_SIZE.lg}
+                    size={tokens.iconSize.lg}
                     color={
-                      row.state === "done" ? SEMANTIC.success : COLORS.primary
+                      row.state === "done"
+                        ? tokens.semantic.success
+                        : tokens.colors.primary
                     }
                   />
                 </Animated.View>
@@ -217,7 +223,8 @@ function checklistRows(
   const vehicle = profile?.vehicle;
   const vehicleReady = Boolean(vehicle && vehicle.model && vehicle.plate);
   const documentsReady =
-    Boolean(profile) && missingRequiredDocuments(profile?.documents).length === 0;
+    Boolean(profile) &&
+    missingRequiredDocuments(profile?.documents).length === 0;
 
   return [
     {
@@ -268,75 +275,80 @@ function messageFor(status: DriverStatus | null) {
   }
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.background },
-  content: {
-    flexGrow: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: SPACING.container,
-  },
-  plateWrap: {
-    width: PLATE,
-    height: PLATE,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: SPACING.xl,
-  },
-  plateGlow: {
-    position: "absolute",
-    width: PLATE,
-    height: PLATE,
-    borderRadius: RADIUS.full,
-    backgroundColor: alpha(COLORS.primary, 0.1),
-  },
-  plate: {
-    width: PLATE * 0.75,
-    height: PLATE * 0.75,
-    borderRadius: RADIUS.full,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: COLORS.surfaceContainer,
-    borderWidth: 1,
-    borderColor: COLORS.surfaceBright,
-  },
-  title: {
-    ...typo("headlineLgMobile"),
-    color: COLORS.onSurface,
-    textAlign: "center",
-  },
-  body: {
-    ...typo("bodyMd"),
-    color: COLORS.onSurfaceVariant,
-    textAlign: "center",
-    marginTop: SPACING.md,
-    marginBottom: SPACING.xxl,
-  },
-  /** Stitch `bg-surface-container rounded-2xl p-6 border-surface-variant/30`. */
-  card: {
-    alignSelf: "stretch",
-    borderRadius: RADIUS.card,
-    backgroundColor: COLORS.surfaceContainer,
-    borderWidth: 1,
-    borderColor: alpha(COLORS.surfaceVariant, 0.3),
-    padding: SPACING.xl,
-  },
-  // Plain "row": React Native mirrors it, so the state circle leads in Arabic.
-  row: { flexDirection: "row", alignItems: "center", gap: SPACING.lg },
-  rowIcon: {
-    width: ROW_ICON,
-    height: ROW_ICON,
-    borderRadius: RADIUS.full,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  rowIconDone: { backgroundColor: alpha(SEMANTIC.success, 0.2) },
-  rowIconOn: { backgroundColor: alpha(COLORS.primary, 0.2) },
-  rowLabel: { ...typo("titleMd"), color: COLORS.onSurface, flexShrink: 1 },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: alpha(COLORS.surfaceVariant, 0.5),
-    marginVertical: SPACING.lg,
-  },
-  actions: { alignSelf: "stretch", gap: SPACING.md, marginTop: SPACING.xxl },
-});
+function makeStyles(t: Tokens) {
+  return StyleSheet.create({
+    root: { flex: 1, backgroundColor: t.colors.background },
+    content: {
+      flexGrow: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: SPACING.container,
+    },
+    plateWrap: {
+      width: PLATE,
+      height: PLATE,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: SPACING.xl,
+    },
+    plateGlow: {
+      position: "absolute",
+      width: PLATE,
+      height: PLATE,
+      borderRadius: RADIUS.full,
+      backgroundColor: alpha(t.colors.primary, PLATE_GLOW[t.mode]),
+    },
+    plate: {
+      width: PLATE * 0.75,
+      height: PLATE * 0.75,
+      borderRadius: RADIUS.full,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: t.colors.surfaceContainer,
+      borderWidth: 1,
+      // surface-bright equals the background on light: no visible edge.
+      borderColor: t.colors.outlineVariant,
+    },
+    title: {
+      ...typo("headlineLgMobile"),
+      color: t.colors.onSurface,
+      textAlign: "center",
+    },
+    body: {
+      ...typo("bodyMd"),
+      color: t.colors.onSurfaceVariant,
+      textAlign: "center",
+      marginTop: SPACING.md,
+      marginBottom: SPACING.xxl,
+    },
+    /** Stitch `bg-surface-container rounded-2xl p-6 border-surface-variant/30`. */
+    card: {
+      alignSelf: "stretch",
+      borderRadius: RADIUS.card,
+      backgroundColor: t.colors.surfaceContainer,
+      borderWidth: 1,
+      borderColor: alpha(t.colors.surfaceVariant, 0.3),
+      padding: SPACING.xl,
+    },
+    // Plain "row": React Native mirrors it, so the state circle leads in Arabic.
+    row: { flexDirection: "row", alignItems: "center", gap: SPACING.lg },
+    rowIcon: {
+      width: ROW_ICON,
+      height: ROW_ICON,
+      borderRadius: RADIUS.full,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    rowIconDone: {
+      backgroundColor: alpha(t.semantic.success, WASH[t.mode]),
+    },
+    rowIconOn: { backgroundColor: alpha(t.colors.primary, WASH[t.mode]) },
+    rowLabel: { ...typo("titleMd"), color: t.colors.onSurface, flexShrink: 1 },
+    divider: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: alpha(t.colors.surfaceVariant, 0.5),
+      marginVertical: SPACING.lg,
+    },
+    actions: { alignSelf: "stretch", gap: SPACING.md, marginTop: SPACING.xxl },
+  });
+}
