@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
@@ -6,7 +6,14 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { PrimaryButton } from "../../components/PrimaryButton";
 import { StatusPill } from "../../components/StatusPill";
 import { strings } from "../../i18n/strings";
-import { colors, radius, spacing, typography, withAlpha } from "../../theme";
+import {
+  radius,
+  spacing,
+  typography,
+  usePalette,
+  withAlpha,
+  type Palette,
+} from "../../theme";
 import { useAuthStore } from "../../auth/auth.store";
 import { useDriverProfile } from "../../hooks/useDriverProfile";
 import { useDriverStore } from "../../stores/driver.store";
@@ -37,11 +44,20 @@ type Navigation = NativeStackNavigationProp<OnboardingStackParamList>;
  * direction. Removed. `title` and `body` keep `textAlign: "center"`, which is
  * correct in both directions because centre has no side to mirror.
  *
- * STILL OUTSTANDING (PHASE 2): reads the legacy flat `colors` bag rather than
- * the palette, so it is dark-only and ignores light mode.
+ * PHASE 2: migrated off the legacy flat `colors` bag onto the palette. The
+ * status badge keeps its warning wash, but the wash is now derived from
+ * `palette.warning`, which is the light or dark counterpart of Stitch's #F59E0B
+ * rather than one fixed dark-mode value.
+ *
+ * STILL OUTSTANDING (PHASE 2, visual rebuild): Stitch renders this as
+ * application_under_review (screenshot 16) with a review timeline and a
+ * document checklist card, and driver_approved_success (screenshot 21) as the
+ * cleared state. This screen is still the PHASE 1 stacked-button layout.
  */
 export function PendingApprovalScreen() {
   const insets = useSafeAreaInsets();
+  const palette = usePalette();
+  const styles = useMemo(() => makeStyles(palette), [palette]);
   const navigation = useNavigation<Navigation>();
   const signOut = useAuthStore((state) => state.signOut);
   const query = useDriverProfile();
@@ -167,53 +183,62 @@ function messageFor(status: DriverStatus | null) {
   }
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.ink },
-  content: {
-    flexGrow: 1,
-    paddingHorizontal: spacing.xl,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  brand: { ...typography.display, color: colors.gold, marginBottom: spacing.xl },
-  badge: {
-    alignItems: "center",
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.xl,
-    borderRadius: radius.pill,
-    backgroundColor: withAlpha(colors.warning, 0.14),
-    borderWidth: 1,
-    borderColor: withAlpha(colors.warning, 0.5),
-    marginBottom: spacing.xl,
-  },
-  badgeLabel: {
-    ...typography.caption,
-    color: colors.textOnDarkSecondary,
-  },
-  badgeValue: {
-    ...typography.label,
-    color: colors.warning,
-    letterSpacing: 1,
-    marginTop: 2,
-  },
-  // Centre does not mirror, so these two are correct in both directions.
-  title: {
-    ...typography.title,
-    color: colors.textOnDark,
-    textAlign: "center",
-  },
-  body: {
-    ...typography.body,
-    color: colors.textOnDarkSecondary,
-    textAlign: "center",
-    marginTop: spacing.md,
-  },
-  checklist: { alignSelf: "stretch", alignItems: "center", marginTop: spacing.lg },
-  checklistTitle: {
-    ...typography.caption,
-    color: colors.textOnDarkSecondary,
-  },
-  checklistRow: { marginTop: spacing.sm },
-  action: { marginTop: spacing["3xl"], alignSelf: "stretch" },
-  secondaryAction: { marginTop: spacing.md, alignSelf: "stretch" },
-});
+const makeStyles = (palette: Palette) =>
+  StyleSheet.create({
+    root: { flex: 1, backgroundColor: palette.background },
+    content: {
+      flexGrow: 1,
+      paddingHorizontal: spacing.xl,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    brand: {
+      ...typography.display,
+      color: palette.primaryText,
+      marginBottom: spacing.xl,
+    },
+    badge: {
+      alignItems: "center",
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.xl,
+      borderRadius: radius.pill,
+      backgroundColor: withAlpha(palette.warning, 0.14),
+      borderWidth: 1,
+      borderColor: withAlpha(palette.warning, 0.5),
+      marginBottom: spacing.xl,
+    },
+    badgeLabel: {
+      ...typography.caption,
+      color: palette.textSecondary,
+    },
+    badgeValue: {
+      ...typography.label,
+      color: palette.warning,
+      letterSpacing: 1,
+      marginTop: 2,
+    },
+    // Centre does not mirror, so these two are correct in both directions.
+    title: {
+      ...typography.title,
+      color: palette.textPrimary,
+      textAlign: "center",
+    },
+    body: {
+      ...typography.body,
+      color: palette.textSecondary,
+      textAlign: "center",
+      marginTop: spacing.md,
+    },
+    checklist: {
+      alignSelf: "stretch",
+      alignItems: "center",
+      marginTop: spacing.lg,
+    },
+    checklistTitle: {
+      ...typography.caption,
+      color: palette.textSecondary,
+    },
+    checklistRow: { marginTop: spacing.sm },
+    action: { marginTop: spacing["3xl"], alignSelf: "stretch" },
+    secondaryAction: { marginTop: spacing.md, alignSelf: "stretch" },
+  });

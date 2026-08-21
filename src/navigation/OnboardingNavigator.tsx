@@ -4,7 +4,7 @@ import { PendingApprovalScreen } from "../screens/onboarding/PendingApprovalScre
 import { ProfileScreen } from "../screens/onboarding/ProfileScreen";
 import { DocumentsScreen } from "../screens/onboarding/DocumentsScreen";
 import { strings } from "../i18n/strings";
-import { colors } from "../theme";
+import { usePalette } from "../theme";
 import type { OnboardingStackParamList } from "./types";
 
 const Stack = createNativeStackNavigator<OnboardingStackParamList>();
@@ -19,16 +19,34 @@ const Stack = createNativeStackNavigator<OnboardingStackParamList>();
  * Headers are shown here (unlike the rest of the app) because these are pushed
  * detail screens and the driver needs a way back that does not depend on the
  * Android hardware button alone.
+ *
+ * PHASE 2: the header was painted with the legacy flat `colors` bag, so it
+ * stayed dark in light mode even after the screens beneath it stopped doing
+ * that. It reads the palette now. The Stitch header treatment - surface at 80%
+ * with a blur, brand wordmark centred, back chevron in brand pink - is not
+ * applied here: that is a geometry change and belongs to the visual rebuild of
+ * this flow, not to a colour migration.
+ *
+ * STILL OUTSTANDING: the three titles below come from the legacy `strings` bag.
+ * The PHASE 1 locales have no `profile` slice, so migrating them means adding
+ * keys to three locale files; tracked as debt rather than half-migrated here.
+ *
+ * STILL OUTSTANDING (structural): vehicle information currently lives inside
+ * ProfileScreen, which the driver reaches before Documents. Sections 13 and 62
+ * require documents -> vehicle information. Splitting that out is the next task
+ * in this phase.
  */
 export function OnboardingNavigator() {
+  const palette = usePalette();
+
   return (
     <Stack.Navigator
       screenOptions={{
-        headerStyle: { backgroundColor: colors.ink },
-        headerTintColor: colors.gold,
-        headerTitleStyle: { color: colors.textOnDark },
+        headerStyle: { backgroundColor: palette.background },
+        headerTintColor: palette.primaryText,
+        headerTitleStyle: { color: palette.textPrimary },
         headerShadowVisible: false,
-        contentStyle: { backgroundColor: colors.ink },
+        contentStyle: { backgroundColor: palette.background },
       }}
     >
       <Stack.Screen

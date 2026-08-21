@@ -22,6 +22,13 @@ import { useDriverStore } from "../stores/driver.store";
  * PHASE 1 (Stitch): this file was one of two still painting `colors.ink`
  * directly, so its failure state stayed dark in light mode. It now reads the
  * palette like every other screen.
+ *
+ * PHASE 2 (R-11 residual): the PHASE 1 direction audit was scoped to
+ * `src/components/` and `src/screens/`. This file renders UI but lives under
+ * `src/navigation/`, so it was never checked - and `message` carried a bare
+ * `writingDirection: "rtl"` beside `textAlign: "center"`. Centre has no side to
+ * mirror, so that override bought nothing in Arabic while fighting the
+ * inherited direction in French and English. Removed.
  */
 export function ApprovalGate({ children }: { children: React.ReactNode }) {
   const query = useDriverProfile();
@@ -63,11 +70,11 @@ const makeStyles = (palette: Palette) =>
       justifyContent: "center",
       paddingHorizontal: spacing.xl,
     },
+    // Centre is correct in every direction; it has no side to mirror.
     message: {
       ...typography.body,
       color: palette.textSecondary,
       textAlign: "center",
-      writingDirection: "rtl",
     },
     action: { marginTop: spacing.xl, alignSelf: "stretch" },
   });

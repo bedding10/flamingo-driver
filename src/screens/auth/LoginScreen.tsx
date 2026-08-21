@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -14,7 +14,13 @@ import { PrimaryButton } from "../../components/PrimaryButton";
 import { textAlignStart } from "../../i18n";
 import { strings } from "../../i18n/strings";
 import { pw } from "../../i18n/strings.password";
-import { colors, radius, spacing, typography, withAlpha } from "../../theme";
+import {
+  radius,
+  spacing,
+  typography,
+  usePalette,
+  type Palette,
+} from "../../theme";
 import { authErrorMessage } from "../../auth/auth-errors";
 import {
   confirmPhoneCode,
@@ -39,7 +45,7 @@ const MIN_PASSWORD_LENGTH = 6;
  * PHASE 1 adds a SECOND door to the SAME account, not a second account: once the
  * driver has set a password from the profile screen, POST /auth/login accepts
  * the same phone number plus that password and returns the same kind of tokens.
- * Account CREATION still happens only through Firebase — the local OTP routes
+ * Account CREATION still happens only through Firebase - the local OTP routes
  * stay disabled, and an account with no password simply fails this path.
  *
  * The screen holds no token and no user object; it hands the tokens to the auth
@@ -50,12 +56,24 @@ const MIN_PASSWORD_LENGTH = 6;
  * `modeText`, `link` and `timer` carried a bare `writingDirection: "rtl"` with
  * no alignment at all. All of that predates real RTL and now double-flips.
  *
- * STILL OUTSTANDING (PHASE 2): this screen reads the legacy flat `colors` bag
- * rather than the palette, so it is dark-only and ignores light mode. PHASE 2
- * rebuilds this flow against the Stitch auth screens and will migrate it.
+ * PHASE 2: migrated off the legacy flat `colors` bag onto the palette, so the
+ * screen finally answers to light mode instead of painting a near-black
+ * background under dark-mode text. Brand pink for TEXT resolves through
+ * `primaryText`, not `primary`: palettes.ts records that #FF4D8D on white fails
+ * contrast at body sizes, so the filled pink stays the brand hex in both themes
+ * while pink lettering darkens in light mode.
+ *
+ * STILL OUTSTANDING (PHASE 2, visual rebuild): Stitch splits this into three
+ * screens - phone_number_entry, otp_verification and a welcome screen - each on
+ * a glass panel over a dimmed map, with a three-segment progress bar, a fixed
+ * +213 country box beside an LTR national-number field, and six single-character
+ * OTP boxes rather than one six-digit input. None of that geometry is built yet.
+ * This commit changed colour roles only.
  */
 export function LoginScreen() {
   const insets = useSafeAreaInsets();
+  const palette = usePalette();
+  const styles = useMemo(() => makeStyles(palette), [palette]);
   const signIn = useAuthStore((state) => state.signIn);
 
   const [mode, setMode] = useState<"sms" | "password">("sms");
@@ -127,7 +145,7 @@ export function LoginScreen() {
   }, [code, signIn]);
 
   /**
-   * PHASE 1 — returning driver, no SMS.
+   * PHASE 1 - returning driver, no SMS.
    *
    * The number is normalised to E.164 with the same helper the Firebase flow
    * uses, because the stored User.phone came from a Firebase token: sending
@@ -348,98 +366,104 @@ export function LoginScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.ink },
-  content: {
-    flexGrow: 1,
-    paddingHorizontal: spacing.xl,
-    justifyContent: "center",
-  },
-  header: { alignItems: "center", marginBottom: spacing["3xl"] },
-  brand: { ...typography.display, color: colors.gold },
-  role: {
-    ...typography.label,
-    color: colors.textOnDarkSecondary,
-    letterSpacing: 3,
-    marginTop: spacing.xs,
-  },
-  // Plain "row": mirrored by React Native under RTL.
-  modeRow: {
-    flexDirection: "row",
-    gap: spacing.xs,
-    marginBottom: spacing.xl,
-  },
-  mode: {
-    flex: 1,
-    minHeight: 44,
-    justifyContent: "center",
-    alignItems: "center",
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.divider,
-    backgroundColor: withAlpha(colors.offWhite, 0.06),
-  },
-  modeActive: {
-    borderColor: colors.gold,
-    backgroundColor: withAlpha(colors.gold, 0.16),
-  },
-  // Centred inside its own Pressable, so it needs no alignment of its own.
-  modeText: {
-    ...typography.caption,
-    color: colors.textOnDarkSecondary,
-  },
-  modeTextActive: { color: colors.gold },
-  card: { width: "100%" },
-  spacer: { height: spacing.md },
-  title: {
-    ...typography.title,
-    color: colors.textOnDark,
-    textAlign: textAlignStart(),
-  },
-  subtitle: {
-    ...typography.body,
-    color: colors.textOnDarkSecondary,
-    textAlign: textAlignStart(),
-    marginTop: spacing.xs,
-    marginBottom: spacing.xl,
-  },
-  /**
-   * Deliberately LTR, and one of the pinned Latin-content exceptions: this
-   * echoes the number the driver just typed, normalised to E.164. A leading
-   * "+" inside an Arabic paragraph can be reordered by the bidi algorithm and
-   * land at the wrong end, so the one string that proves we are texting the
-   * right phone would be the string we render wrong. Centre plus explicit LTR.
-   */
-  phoneEcho: {
-    ...typography.numeric,
-    color: colors.gold,
-    textAlign: "center",
-    writingDirection: "ltr",
-    marginBottom: spacing.lg,
-  },
-  error: {
-    ...typography.caption,
-    color: colors.danger,
-    textAlign: textAlignStart(),
-    marginTop: spacing.md,
-  },
-  footNote: {
-    ...typography.caption,
-    color: colors.textOnDarkSecondary,
-    textAlign: textAlignStart(),
-    marginTop: spacing.md,
-  },
-  action: { marginTop: spacing.xl },
-  // Already correct: plain "row" with space-between mirrors on its own.
-  footer: {
-    marginTop: spacing.xl,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  link: { ...typography.label, color: colors.gold },
-  timer: {
-    ...typography.caption,
-    color: colors.textOnDarkSecondary,
-  },
-});
+const makeStyles = (palette: Palette) =>
+  StyleSheet.create({
+    root: { flex: 1, backgroundColor: palette.background },
+    content: {
+      flexGrow: 1,
+      paddingHorizontal: spacing.xl,
+      justifyContent: "center",
+    },
+    header: { alignItems: "center", marginBottom: spacing["3xl"] },
+    // Brand lettering, so `primaryText` rather than the filled `primary`.
+    brand: { ...typography.display, color: palette.primaryText },
+    role: {
+      ...typography.label,
+      color: palette.textSecondary,
+      letterSpacing: 3,
+      marginTop: spacing.xs,
+    },
+    // Plain "row": mirrored by React Native under RTL.
+    modeRow: {
+      flexDirection: "row",
+      gap: spacing.xs,
+      marginBottom: spacing.xl,
+    },
+    mode: {
+      flex: 1,
+      minHeight: 44,
+      justifyContent: "center",
+      alignItems: "center",
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: palette.border,
+      // Was withAlpha(offWhite, 0.06), which is invisible on a light
+      // background. `surfaceSunken` is the inset-well role and reads in both.
+      backgroundColor: palette.surfaceSunken,
+    },
+    modeActive: {
+      borderColor: palette.primary,
+      // primaryWash IS withAlpha(primaryContainer, 0.16) - the same value the
+      // hand-written version used, now named for what it means.
+      backgroundColor: palette.primaryWash,
+    },
+    // Centred inside its own Pressable, so it needs no alignment of its own.
+    modeText: {
+      ...typography.caption,
+      color: palette.textSecondary,
+    },
+    modeTextActive: { color: palette.primaryText },
+    card: { width: "100%" },
+    spacer: { height: spacing.md },
+    title: {
+      ...typography.title,
+      color: palette.textPrimary,
+      textAlign: textAlignStart(),
+    },
+    subtitle: {
+      ...typography.body,
+      color: palette.textSecondary,
+      textAlign: textAlignStart(),
+      marginTop: spacing.xs,
+      marginBottom: spacing.xl,
+    },
+    /**
+     * Deliberately LTR, and one of the pinned Latin-content exceptions: this
+     * echoes the number the driver just typed, normalised to E.164. A leading
+     * "+" inside an Arabic paragraph can be reordered by the bidi algorithm and
+     * land at the wrong end, so the one string that proves we are texting the
+     * right phone would be the string we render wrong. Centre plus explicit LTR.
+     */
+    phoneEcho: {
+      ...typography.numeric,
+      color: palette.primaryText,
+      textAlign: "center",
+      writingDirection: "ltr",
+      marginBottom: spacing.lg,
+    },
+    error: {
+      ...typography.caption,
+      color: palette.danger,
+      textAlign: textAlignStart(),
+      marginTop: spacing.md,
+    },
+    footNote: {
+      ...typography.caption,
+      color: palette.textSecondary,
+      textAlign: textAlignStart(),
+      marginTop: spacing.md,
+    },
+    action: { marginTop: spacing.xl },
+    // Already correct: plain "row" with space-between mirrors on its own.
+    footer: {
+      marginTop: spacing.xl,
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
+    link: { ...typography.label, color: palette.primaryText },
+    timer: {
+      ...typography.caption,
+      color: palette.textSecondary,
+    },
+  });
