@@ -150,7 +150,6 @@ export function OtpBoxes({
           autoComplete={index === 0 ? "sms-otp" : "off"}
           accessibilityLabel={index === 0 ? accessibilityLabel : undefined}
           selectionColor={palette.primary}
-          textAlign="center"
         />
       ))}
     </View>
@@ -183,6 +182,12 @@ const makeStyles = (palette: Palette) =>
       letterSpacing: 0,
       paddingVertical: 0,
       paddingHorizontal: 0,
+      /**
+       * Centring lives HERE and not on a `textAlign` prop: it is certain to be
+       * valid in a TextStyle, and there is no compiler here to confirm whether
+       * TextInputProps declares it.
+       */
+      textAlign: "center",
       textAlignVertical: "center",
     },
   });
