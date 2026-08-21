@@ -40,6 +40,19 @@ const LEVEL_LABELS: Record<string, string> = {
 };
 
 /**
+ * Copy for the progression group. Kept local on purpose: src/i18n/strings.ts
+ * must not be rewritten, and these three lines are used nowhere else.
+ */
+const COPY = {
+  sectionProgress:
+    "\u0627\u0644\u062a\u0631\u0642\u064a\u0629 \u0648\u0627\u0644\u0635\u062f\u0627\u0631\u0629",
+  tiers:
+    "\u0627\u0644\u0637\u0628\u0642\u0627\u062a \u0648\u0627\u0644\u0635\u062f\u0627\u0631\u0629",
+  tiersHint:
+    "\u0637\u0628\u0642\u062a\u0643 \u0648\u0646\u0642\u0627\u0637\u0643 \u0648\u062a\u0631\u062a\u064a\u0628\u0643 \u0641\u064a \u0645\u062f\u064a\u0646\u062a\u0643 \u0648\u0627\u0644\u062c\u0632\u0627\u0626\u0631",
+} as const;
+
+/**
  * The driver menu.
  *
  * One profile hero at the top, then quiet section titles over compact list rows
@@ -191,6 +204,17 @@ export function MenuScreen() {
           hint={menu75Strings.documentsHint}
           last
           onPress={() => navigation.navigate("Documents")}
+        />
+      </Section>
+
+      {/* ---- progression --------------------------------------------------- */}
+      <Section title={COPY.sectionProgress}>
+        <Row
+          icon="star"
+          label={COPY.tiers}
+          hint={COPY.tiersHint}
+          last
+          onPress={() => navigation.navigate("Tiers")}
         />
       </Section>
 
