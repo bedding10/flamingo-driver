@@ -4,9 +4,8 @@
  */
 export type AuthStackParamList = {
   /**
-   * PHASE 2 - Stitch `welcome_onboarding`, the first screen an unregistered
-   * driver sees. Declared FIRST in AuthNavigator so it is the initial route:
-   * section 12 makes Welcome step 1 of onboarding.
+   * Stitch `welcome_onboarding`, the first screen an unregistered driver sees.
+   * Declared FIRST in AuthNavigator so it is the initial route.
    */
   Welcome: undefined;
   /**
@@ -26,9 +25,9 @@ export type AuthStackParamList = {
  * able to complete the file that is being reviewed, which is why Profile,
  * Documents and Vehicle live here and not only behind the approval gate.
  *
- * PHASE 2: the order below is the order sections 13 and 62 mandate -
- * BASIC PROFILE -> DOCUMENTS -> VEHICLE INFORMATION. Vehicle used to be the
- * second half of the Profile form, which made that order impossible to express.
+ * The order below is the onboarding order: BASIC PROFILE (photo, full name,
+ * account password) -> DOCUMENTS -> VEHICLE INFORMATION. A driver who has just
+ * verified an OTP lands on Profile, not on Pending.
  */
 export type OnboardingStackParamList = {
   Pending: undefined;
@@ -39,44 +38,37 @@ export type OnboardingStackParamList = {
 
 export type DriverStackParamList = {
   Home: undefined;
-  /**
-   * PHASE 5 - the driver menu. It replaces the old behaviour where the map's
-   * hamburger jumped straight into the profile form, which left the wallet and
-   * the requests list with no entry point.
-   */
+  /** The driver menu: wallet, requests, documents, vehicle, support. */
   Menu: undefined;
-  /** PHASE 5 - ledger balance, earnings aggregates and withdrawal request. */
+  /** Ledger balance and earnings aggregates. */
   Wallet: undefined;
   Profile: undefined;
   Documents: undefined;
   /**
-   * PHASE 2 - the active vehicle. Registered here as well as in the onboarding
-   * stack because an APPROVED driver still has to fix a plate or correct the
-   * comfort list; without this route, moving the fields out of Profile would
-   * have removed vehicle editing from the app entirely.
+   * The active vehicle. Registered here as well as in the onboarding stack
+   * because an APPROVED driver still has to fix a plate or correct the comfort
+   * list.
    */
   Vehicle: undefined;
   /**
-   * PHASE 3 - open bidding requests (FareQuote / FareOffer). No params: the
-   * list is always the driver's own eligible requests, decided server side.
+   * Open bidding requests (FareQuote / FareOffer) - the driver side of price
+   * negotiation with the passenger. No params: the list is always the driver's
+   * own eligible requests, decided server side.
    */
   Requests: undefined;
   /**
-   * PHASE 6 - the stored notification inbox (GET /notifications/me). It is also
-   * where a tapped push lands when its payload is not a trip message, so an
-   * unrecognised notification still leads somewhere useful.
+   * The stored notification inbox (GET /notifications/me). It is also where a
+   * tapped push lands when its payload is not a trip message.
    */
   Notifications: undefined;
-  /** PHASE 6 - support tickets: open one and list the driver's own. */
+  /** Support tickets: open one and list the driver's own. */
   Support: undefined;
   /**
-   * PHASE 6 - a single support thread. The id is a param so a ticket can be
-   * opened straight after creating it, before any list refetch has landed.
+   * A single support thread. The id is a param so a ticket can be opened
+   * straight after creating it, before any list refetch has landed.
    */
   Ticket: { ticketId: string };
-  /** PHASE 6 - emergency contacts and the driver's own SOS reports. */
-  Safety: undefined;
-  /** PHASE 7 - terms, privacy and the installed build identity. */
+  /** Terms, privacy and the installed build identity. */
   Legal: undefined;
   /**
    * Trip chat. tripId is required rather than read from the trip store so a
@@ -85,3 +77,8 @@ export type DriverStackParamList = {
    */
   TripChat: { tripId: string };
 };
+
+// SOS REMOVED: there is no longer a `Safety` route. The emergency screen, the
+// trip-card SOS button, safetyApi and emergencyApi were all removed by request.
+// Anything that re-introduces an emergency flow needs a new route added here on
+// purpose rather than a stale one lying around.

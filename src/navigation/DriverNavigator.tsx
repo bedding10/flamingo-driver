@@ -8,7 +8,6 @@ import { WalletScreen } from "../screens/wallet/WalletScreen";
 import { NotificationsScreen } from "../screens/notifications/NotificationsScreen";
 import { SupportScreen } from "../screens/support/SupportScreen";
 import { TicketScreen } from "../screens/support/TicketScreen";
-import { SafetyScreen } from "../screens/safety/SafetyScreen";
 import { LegalScreen } from "../screens/legal/LegalScreen";
 import { ProfileScreen } from "../screens/onboarding/ProfileScreen";
 import { DocumentsScreen } from "../screens/onboarding/DocumentsScreen";
@@ -31,7 +30,6 @@ import { requestStrings } from "../i18n/strings.requests";
 import { menuStrings, walletStrings } from "../i18n/strings.menu";
 import {
   notificationStrings,
-  safetyStrings,
   supportStrings,
 } from "../i18n/strings.support";
 import { legalStrings } from "../i18n/strings.phase7";
@@ -45,8 +43,8 @@ const Stack = createNativeStackNavigator<DriverStackParamList>();
  *
  * These are the only routes that show the bottom navigation. Everything else
  * (wallet, profile, documents, vehicle, support, a ticket, a chat) is reached
- * THROUGH one of these three and is a detail view, per section 16 and section 46
- * - so the bar would be covering content those screens do not reserve space for.
+ * THROUGH one of these three and is a detail view - so the bar would be
+ * covering content those screens do not reserve space for.
  */
 const SECTION_ROUTES = ["Home", "Requests", "Menu"] as const;
 
@@ -67,32 +65,23 @@ function isSectionRoute(routeName: string | undefined): boolean {
  *
  * The gate wraps the navigator rather than living inside a screen, so no
  * signed-in route can be reached by a driver who is not APPROVED - including
- * routes added in later phases.
+ * routes added later.
  *
  * Profile, Documents and Vehicle are reachable here too: an approved driver
  * still needs to replace an expiring insurance paper or fix a plate, and the
  * same screens serve both cases instead of being duplicated.
  *
- * PHASE 2: Vehicle is new here. The vehicle fields moved out of ProfileScreen so
- * the onboarding order could follow sections 13 and 62 (documents before vehicle
- * information). Registering the route in THIS stack is what keeps that a
- * reordering rather than a deletion - without it, an approved driver would have
- * had no way to edit the car at all.
+ * SOS REMOVED: the `Safety` screen is gone from this stack with the rest of the
+ * SOS system, and so is its title string import.
  *
  * The toast host is mounted ONCE here, above the navigator, so a toast survives
  * a navigation and never belongs to a single screen.
  *
- * PHASE 1 (Stitch): the header was hardcoded to the old charcoal with a gold
- * tint, which meant every pushed screen kept a dark header in light mode and
- * kept a banned gold accent. Header, tint and content background now come from
- * the palette, and the tint is the brand pink.
- *
- * PHASE 1 (R-8) - WHY THE BAR IS HERE AND NOT IN A SCREEN
- * It used to be rendered inside DriverHomeScreen with `active="map"` hardcoded,
- * so it appeared on one of its own three sections and disappeared the moment
- * the driver opened Requests or Menu. Mounted here, as a sibling of the stack
- * exactly like ToastHost, it persists across all three and the active item is
- * derived from the live route instead of being asserted by a prop.
+ * WHY THE TAB BAR IS HERE AND NOT IN A SCREEN: it used to be rendered inside
+ * DriverHomeScreen with `active="map"` hardcoded, so it appeared on one of its
+ * own three sections and disappeared the moment the driver opened Requests or
+ * Menu. Mounted here, as a sibling of the stack exactly like ToastHost, it
+ * persists across all three and the active item is derived from the live route.
  *
  * It is still NOT a tab navigator, for the original and still-valid reason: the
  * home screen owns the GPS subscription, the socket listeners and the trip
@@ -148,8 +137,7 @@ export function DriverNavigator() {
   /**
    * Space the two list sections must leave free so their last row is not stuck
    * under the floating bar. Applied through the navigator's contentStyle rather
-   * than inside the screens, so adding the persistent bar cannot change what is
-   * on those screens.
+   * than inside the screens.
    */
   const sectionContentStyle = useMemo(
     () => ({
@@ -163,24 +151,21 @@ export function DriverNavigator() {
    * The centre item is not a link to itself: on the map it recentres the
    * camera, everywhere else it returns to the map.
    */
-  const onSelectTab = useCallback(
-    (tab: DriverTab) => {
-      if (tab === "requests") {
-        navigateWhenReady("Requests");
-        return;
-      }
-      if (tab === "menu") {
-        navigateWhenReady("Menu");
-        return;
-      }
-      if (navigationRef.getCurrentRoute()?.name === "Home") {
-        requestRecenter();
-        return;
-      }
-      navigateWhenReady("Home");
-    },
-    [],
-  );
+  const onSelectTab = useCallback((tab: DriverTab) => {
+    if (tab === "requests") {
+      navigateWhenReady("Requests");
+      return;
+    }
+    if (tab === "menu") {
+      navigateWhenReady("Menu");
+      return;
+    }
+    if (navigationRef.getCurrentRoute()?.name === "Home") {
+      requestRecenter();
+      return;
+    }
+    navigateWhenReady("Home");
+  }, []);
 
   const labels = useMemo(
     () => ({
@@ -240,11 +225,6 @@ export function DriverNavigator() {
             options={{ headerShown: true, title: supportStrings.threadTitle }}
           />
           <Stack.Screen
-            name="Safety"
-            component={SafetyScreen}
-            options={{ headerShown: true, title: safetyStrings.title }}
-          />
-          <Stack.Screen
             name="Legal"
             component={LegalScreen}
             options={{ headerShown: true, title: legalStrings.title }}
@@ -260,9 +240,9 @@ export function DriverNavigator() {
             options={{ headerShown: true, title: strings.documents.title }}
           />
           {/*
-            PHASE 2 - the active vehicle, split out of the profile form. The
-            driver reaches it from the Menu's vehicle row; the onboarding stack
-            has its own copy of the route for a driver still under review.
+            The active vehicle, split out of the profile form. The driver reaches
+            it from the Menu's vehicle row; the onboarding stack has its own copy
+            of the route for a driver still under review.
           */}
           <Stack.Screen
             name="Vehicle"
