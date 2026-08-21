@@ -8,13 +8,18 @@ export type AuthStackParamList = {
 
 /**
  * Reachable while the account is not APPROVED. A driver in review must still be
- * able to complete the file that is being reviewed, which is why Profile and
- * Documents live here and not only behind the approval gate.
+ * able to complete the file that is being reviewed, which is why Profile,
+ * Documents and Vehicle live here and not only behind the approval gate.
+ *
+ * PHASE 2: the order below is the order sections 13 and 62 mandate -
+ * BASIC PROFILE -> DOCUMENTS -> VEHICLE INFORMATION. Vehicle used to be the
+ * second half of the Profile form, which made that order impossible to express.
  */
 export type OnboardingStackParamList = {
   Pending: undefined;
   Profile: undefined;
   Documents: undefined;
+  Vehicle: undefined;
 };
 
 export type DriverStackParamList = {
@@ -29,6 +34,13 @@ export type DriverStackParamList = {
   Wallet: undefined;
   Profile: undefined;
   Documents: undefined;
+  /**
+   * PHASE 2 - the active vehicle. Registered here as well as in the onboarding
+   * stack because an APPROVED driver still has to fix a plate or correct the
+   * comfort list; without this route, moving the fields out of Profile would
+   * have removed vehicle editing from the app entirely.
+   */
+  Vehicle: undefined;
   /**
    * PHASE 3 - open bidding requests (FareQuote / FareOffer). No params: the
    * list is always the driver's own eligible requests, decided server side.

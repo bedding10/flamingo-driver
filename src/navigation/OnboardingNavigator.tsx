@@ -3,6 +3,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { PendingApprovalScreen } from "../screens/onboarding/PendingApprovalScreen";
 import { ProfileScreen } from "../screens/onboarding/ProfileScreen";
 import { DocumentsScreen } from "../screens/onboarding/DocumentsScreen";
+import { VehicleScreen } from "../screens/onboarding/VehicleScreen";
 import { strings } from "../i18n/strings";
 import { usePalette } from "../theme";
 import type { OnboardingStackParamList } from "./types";
@@ -12,9 +13,14 @@ const Stack = createNativeStackNavigator<OnboardingStackParamList>();
 /**
  * What a driver who is not APPROVED can reach.
  *
- * Only the file under review: status, profile, documents. No map, no
+ * Only the file under review: status, profile, documents, vehicle. No map, no
  * availability, no trips - the server would refuse those anyway, and offering
  * them would be a promise the backend does not keep.
+ *
+ * The screens are declared in the order sections 13 and 62 mandate:
+ * BASIC PROFILE -> DOCUMENTS -> VEHICLE INFORMATION. Vehicle was the second
+ * half of the Profile form until PHASE 2, which put vehicle information BEFORE
+ * documents and contradicted both sections.
  *
  * Headers are shown here (unlike the rest of the app) because these are pushed
  * detail screens and the driver needs a way back that does not depend on the
@@ -27,14 +33,9 @@ const Stack = createNativeStackNavigator<OnboardingStackParamList>();
  * applied here: that is a geometry change and belongs to the visual rebuild of
  * this flow, not to a colour migration.
  *
- * STILL OUTSTANDING: the three titles below come from the legacy `strings` bag.
- * The PHASE 1 locales have no `profile` slice, so migrating them means adding
- * keys to three locale files; tracked as debt rather than half-migrated here.
- *
- * STILL OUTSTANDING (structural): vehicle information currently lives inside
- * ProfileScreen, which the driver reaches before Documents. Sections 13 and 62
- * require documents -> vehicle information. Splitting that out is the next task
- * in this phase.
+ * STILL OUTSTANDING: the titles below come from the legacy `strings` bag. The
+ * PHASE 1 locales have no `profile` slice, so migrating them means adding keys
+ * to three locale files; tracked as debt rather than half-migrated here.
  */
 export function OnboardingNavigator() {
   const palette = usePalette();
@@ -63,6 +64,14 @@ export function OnboardingNavigator() {
         name="Documents"
         component={DocumentsScreen}
         options={{ title: strings.documents.title, headerBackTitle: strings.common.back }}
+      />
+      <Stack.Screen
+        name="Vehicle"
+        component={VehicleScreen}
+        options={{
+          title: strings.profile.vehicleSection,
+          headerBackTitle: strings.common.back,
+        }}
       />
     </Stack.Navigator>
   );
