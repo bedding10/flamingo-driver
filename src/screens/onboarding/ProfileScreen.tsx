@@ -25,15 +25,8 @@ import {
 import { useCities, useWilayas } from "../../hooks/useGeography";
 import { textAlignStart } from "../../i18n";
 import { strings } from "../../i18n/strings";
-import {
-  alpha,
-  COLORS,
-  RADIUS,
-  SEMANTIC,
-  SHADOW_CARD,
-  SPACING,
-  typo,
-} from "../../theme/tokens";
+import { alpha, RADIUS, SPACING, typo } from "../../theme/tokens";
+import { useTokens, type Tokens } from "../../theme/useTokens";
 import type { UpdateDriverProfileInput } from "../../types/driver";
 import { HEADER_HEIGHT, PillButton, StatCard, StickyHeader } from "../../ui";
 
@@ -45,6 +38,13 @@ const MAX_CARD_WIDTH = 448;
 const AVATAR = 112;
 
 const CHIP_MIN_HEIGHT = 56;
+
+/**
+ * A 16% pink wash reads clearly on #101415 but almost disappears on the light
+ * #fff8f8 card, so the light scheme gets a stronger fill. The selected chip
+ * also keeps a tinted label, so selection is never signalled by colour alone.
+ */
+const CHIP_WASH = { dark: 0.16, light: 0.22 } as const;
 
 // Display labels only: the level itself is decided by the backend from
 // COMPLETED trips, and no threshold is introduced here.
@@ -71,15 +71,14 @@ const LEVEL_LABELS: Record<string, string> = {
  * data. Only cityId is sent, because the server derives the wilaya from the
  * city, so a client cannot claim a cheaper wilaya to influence pricing.
  *
- * The profile photo is NOT part of this form and has no Save button of its own
- * here: it travels through the document upload flow, a different contract with a
- * different failure mode.
- *
  * REBUILT ON THE REFERENCE: one rounded-24 card carrying the 1-of-3 progress
  * bar, the avatar well, the fields and the pill action - not the previous stack
  * of section cards. The reference's plain city <select> is a chip grid here,
  * because the option list comes from the geography endpoints at runtime and a
  * native picker cannot show a wilaya number beside its Arabic name.
+ *
+ * THEME: reads every colour through useTokens(), so the screen follows the
+ * dark/light switch. Per-scheme literals live in CHIP_WASH and in makeStyles.
  *
  * STILL ON THE OLD PALETTE, TRACKED: InputField, ReadOnlyRow,
  * ProfilePhotoPicker and PasswordSetupCard. They are shared with the vehicle,
@@ -91,6 +90,8 @@ export function ProfileScreen() {
   const navigation = useNavigation();
   const { data: profile } = useDriverProfile();
   const mutation = useUpdateDriverProfile();
+  const t = useTokens();
+  const styles = useMemo(() => makeStyles(t), [t]);
 
   const [name, setName] = useState(profile?.name ?? "");
   const [error, setError] = useState<string | null>(null);
@@ -170,7 +171,7 @@ export function ProfileScreen() {
       >
         {/* `overflow: hidden` is required: the progress bar is absolutely
             positioned at top 0 and its square ends would cross this radius. */}
-        <View style={[styles.card, SHADOW_CARD]}>
+        <View style={[styles.card, t.shadowCard]}>
           <AuthProgress step={1} variant="bar" />
 
           <Text style={styles.title}>{strings.profile.title}</Text>
@@ -195,19 +196,19 @@ export function ProfileScreen() {
           {/* Plain "row": React Native mirrors it under RTL. */}
           <View style={styles.statsRow}>
             <StatCard
-              label={strings.profile.ratingLabel}
+              caption={strings.profile.ratingLabel}
               value={profile ? profile.rating.toFixed(1) : "\u2014"}
               icon="star"
-              flex={1}
+              style={styles.stat}
             />
             <StatCard
-              label={strings.profile.tripsLabel}
+              caption={strings.profile.tripsLabel}
               value={
                 profile
                   ? String(profile.completedTripsCount ?? profile.totalTrips)
                   : "\u2014"
               }
-              flex={1}
+              style={styles.stat}
             />
           </View>
 
@@ -216,14 +217,14 @@ export function ProfileScreen() {
           {profile?.nextLevel && profile?.nextLevelAt ? (
             <View style={styles.statsRow}>
               <StatCard
-                label={strings.level.progress}
+                caption={strings.level.progress}
                 value={`${profile.completedTripsCount ?? 0} / ${profile.nextLevelAt}`}
-                flex={1}
+                style={styles.stat}
               />
               <StatCard
-                label={strings.level.nextLevel}
+                caption={strings.level.nextLevel}
                 value={LEVEL_LABELS[profile.nextLevel] ?? profile.nextLevel}
-                flex={1}
+                style={styles.stat}
               />
             </View>
           ) : null}
@@ -252,7 +253,7 @@ export function ProfileScreen() {
             <Text style={styles.pickerHint}>{strings.profile.wilayaHint}</Text>
             {wilayasQuery.isLoading && (
               <View style={styles.pickerStatus}>
-                <ActivityIndicator size="small" color={COLORS.primary} />
+                <ActivityIndicator size="small" color={t.colors.primary} />
                 <Text style={styles.pickerHint}>
                   {strings.profile.wilayaLoading}
                 </Text>
@@ -272,6 +273,8 @@ export function ProfileScreen() {
                 return (
                   <Pressable
                     key={w.id}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
                     onPress={() => {
                       setWilayaId(w.id);
                       // Changing wilaya invalidates the chosen city.
@@ -305,7 +308,7 @@ export function ProfileScreen() {
             )}
             {wilayaId && citiesQuery.isLoading && (
               <View style={styles.pickerStatus}>
-                <ActivityIndicator size="small" color={COLORS.primary} />
+                <ActivityIndicator size="small" color={t.colors.primary} />
                 <Text style={styles.pickerHint}>
                   {strings.profile.cityLoading}
                 </Text>
@@ -320,6 +323,8 @@ export function ProfileScreen() {
                 return (
                   <Pressable
                     key={c.id}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
                     onPress={() => setCityId(c.id)}
                     style={[styles.chip, selected && styles.chipSelected]}
                   >
@@ -365,77 +370,98 @@ export function ProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.background },
-  content: {
-    paddingHorizontal: SPACING.gutter,
-    alignItems: "center",
-  },
-  card: {
-    width: "100%",
-    maxWidth: MAX_CARD_WIDTH,
-    borderRadius: RADIUS.card,
-    backgroundColor: COLORS.surfaceContainer,
-    borderWidth: 1,
-    borderColor: alpha(COLORS.surfaceVariant, 0.3),
-    padding: SPACING.xl,
-    paddingTop: SPACING.xxl,
-    gap: SPACING.lg,
-    overflow: "hidden",
-  },
-  title: {
-    ...typo("headlineLgMobile"),
-    color: COLORS.onSurface,
-    textAlign: "center",
-  },
-  avatarBlock: { alignItems: "center", gap: SPACING.sm },
-  levelText: { ...typo("labelMd"), color: COLORS.primary, textAlign: "center" },
-  statsRow: { flexDirection: "row", gap: SPACING.md },
-  pickerBlock: { gap: SPACING.xs },
-  pickerLabel: {
-    ...typo("labelMd"),
-    color: COLORS.onSurface,
-    textAlign: textAlignStart(),
-  },
-  pickerHint: {
-    ...typo("labelSm"),
-    color: COLORS.onSurfaceVariant,
-    textAlign: textAlignStart(),
-  },
-  pickerStatus: { flexDirection: "row", alignItems: "center", gap: SPACING.xs },
-  chipWrap: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: SPACING.xs,
-    marginTop: SPACING.xs,
-  },
-  chip: {
-    // Driver touch floor, not a normal chip size: picking a wilaya usually
-    // happens in the car, and a mis-tap means the wrong city.
-    minHeight: CHIP_MIN_HEIGHT,
-    justifyContent: "center",
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.xs,
-    borderRadius: RADIUS.lg,
-    borderWidth: 1,
-    borderColor: COLORS.outlineVariant,
-    backgroundColor: COLORS.surface,
-  },
-  chipSelected: {
-    borderColor: COLORS.primaryContainer,
-    backgroundColor: alpha(COLORS.primaryContainer, 0.16),
-  },
-  chipText: { ...typo("labelSm"), color: COLORS.onSurfaceVariant },
-  chipTextSelected: { color: COLORS.primary },
-  error: {
-    ...typo("labelMd"),
-    color: COLORS.error,
-    textAlign: textAlignStart(),
-  },
-  success: {
-    ...typo("labelMd"),
-    color: SEMANTIC.success,
-    textAlign: textAlignStart(),
-  },
-  save: { marginTop: SPACING.sm },
-});
+function makeStyles(t: Tokens) {
+  const light = t.mode === "light";
+  return StyleSheet.create({
+    root: { flex: 1, backgroundColor: t.colors.background },
+    content: {
+      paddingHorizontal: SPACING.gutter,
+      alignItems: "center",
+    },
+    card: {
+      width: "100%",
+      maxWidth: MAX_CARD_WIDTH,
+      borderRadius: RADIUS.card,
+      backgroundColor: t.colors.surfaceContainer,
+      borderWidth: 1,
+      // A 30% surface-variant hairline is invisible against the light card;
+      // outlineVariant is the role that actually reads in both schemes.
+      borderColor: light
+        ? t.colors.outlineVariant
+        : alpha(t.colors.surfaceVariant, 0.3),
+      padding: SPACING.xl,
+      paddingTop: SPACING.xxl,
+      gap: SPACING.lg,
+      overflow: "hidden",
+    },
+    title: {
+      ...typo("headlineLgMobile"),
+      color: t.colors.onSurface,
+      textAlign: "center",
+    },
+    avatarBlock: { alignItems: "center", gap: SPACING.sm },
+    levelText: {
+      ...typo("labelMd"),
+      color: t.colors.primary,
+      textAlign: "center",
+    },
+    statsRow: { flexDirection: "row", gap: SPACING.md },
+    stat: { flex: 1 },
+    pickerBlock: { gap: SPACING.xs },
+    pickerLabel: {
+      ...typo("labelMd"),
+      color: t.colors.onSurface,
+      textAlign: textAlignStart(),
+    },
+    pickerHint: {
+      ...typo("labelSm"),
+      color: t.colors.onSurfaceVariant,
+      textAlign: textAlignStart(),
+    },
+    pickerStatus: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: SPACING.xs,
+    },
+    chipWrap: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: SPACING.xs,
+      marginTop: SPACING.xs,
+    },
+    chip: {
+      // Driver touch floor, not a normal chip size: picking a wilaya usually
+      // happens in the car, and a mis-tap means the wrong city.
+      minHeight: CHIP_MIN_HEIGHT,
+      justifyContent: "center",
+      paddingHorizontal: SPACING.md,
+      paddingVertical: SPACING.xs,
+      borderRadius: RADIUS.lg,
+      borderWidth: 1,
+      borderColor: t.colors.outlineVariant,
+      backgroundColor: t.colors.surface,
+    },
+    chipSelected: {
+      // #ff4d8d as a BORDER fails contrast on the light card, so the light
+      // scheme borders with the primary role instead.
+      borderColor: light ? t.colors.primary : t.colors.primaryContainer,
+      backgroundColor: alpha(
+        t.colors.primaryContainer,
+        CHIP_WASH[light ? "light" : "dark"],
+      ),
+    },
+    chipText: { ...typo("labelSm"), color: t.colors.onSurfaceVariant },
+    chipTextSelected: { color: t.colors.primary },
+    error: {
+      ...typo("labelMd"),
+      color: t.colors.error,
+      textAlign: textAlignStart(),
+    },
+    success: {
+      ...typo("labelMd"),
+      color: t.semantic.success,
+      textAlign: textAlignStart(),
+    },
+    save: { marginTop: SPACING.sm },
+  });
+}
