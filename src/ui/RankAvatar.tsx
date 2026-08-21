@@ -1,22 +1,18 @@
 import { MaterialIcons } from "@expo/vector-icons";
-import React from "react";
+import React, { useMemo } from "react";
 import { Image, StyleSheet, Text, View } from "react-native";
 
-import {
-  COLORS,
-  ICON_SIZE,
-  RADIUS,
-  RANK_RING,
-  RankTier,
-  SEMANTIC,
-  typo,
-} from "../theme/tokens";
+import { RADIUS, RANK_RING, RankTier, typo } from "../theme/tokens";
+import { useTokens, type Tokens } from "../theme/useTokens";
 
 /**
  * Component 4 - Avatar with rank ring.
  * The ring colour comes from the passenger's ACTUAL tier in the existing
  * Bronze -> Legendary frame system. The reference shows gold and silver only
  * because those two riders are Gold and Silver tier.
+ *
+ * THEME: the ring is theme independent by design; the disc, the initial and
+ * the rating chip are not - they sat on the surface, and the surface flips.
  */
 export type RankAvatarProps = {
   uri?: string | null;
@@ -34,7 +30,10 @@ export function RankAvatar({
   rating,
   size = 56,
 }: RankAvatarProps) {
-  const ring = tier ? RANK_RING[tier] : COLORS.outlineVariant;
+  const t = useTokens();
+  const styles = useMemo(() => makeStyles(t), [t]);
+
+  const ring = tier ? RANK_RING[tier] : t.colors.outlineVariant;
   const initial = (name ?? "?").trim().charAt(0).toUpperCase();
 
   return (
@@ -79,8 +78,8 @@ export function RankAvatar({
         <View style={styles.badge}>
           <MaterialIcons
             name="star"
-            size={ICON_SIZE.xs}
-            color={SEMANTIC.star}
+            size={t.iconSize.xs}
+            color={t.semantic.star}
           />
           <Text style={styles.badgeText}>{rating.toFixed(1)}</Text>
         </View>
@@ -89,32 +88,38 @@ export function RankAvatar({
   );
 }
 
-const styles = StyleSheet.create({
-  ring: {
-    borderWidth: 2,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: COLORS.surface,
-  },
-  fallback: {
-    backgroundColor: COLORS.surfaceContainerHigh,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  initial: { ...typo("titleMd"), color: COLORS.onSurfaceVariant },
-  badge: {
-    position: "absolute",
-    bottom: -8,
-    right: -6,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 2,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: RADIUS.full,
-    backgroundColor: COLORS.surfaceContainer,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: COLORS.surfaceVariant,
-  },
-  badgeText: { ...typo("labelSm"), color: COLORS.onSurface, fontWeight: "600" },
-});
+function makeStyles(t: Tokens) {
+  return StyleSheet.create({
+    ring: {
+      borderWidth: 2,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: t.colors.surface,
+    },
+    fallback: {
+      backgroundColor: t.colors.surfaceContainerHigh,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    initial: { ...typo("titleMd"), color: t.colors.onSurfaceVariant },
+    badge: {
+      position: "absolute",
+      bottom: -8,
+      right: -6,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 2,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: RADIUS.full,
+      backgroundColor: t.colors.surfaceContainer,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: t.colors.surfaceVariant,
+    },
+    badgeText: {
+      ...typo("labelSm"),
+      color: t.colors.onSurface,
+      fontWeight: "600",
+    },
+  });
+}
