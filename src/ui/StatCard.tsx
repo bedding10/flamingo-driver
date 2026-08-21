@@ -1,21 +1,17 @@
 import { MaterialIcons } from "@expo/vector-icons";
-import React from "react";
+import React, { useMemo } from "react";
 import { StyleProp, StyleSheet, Text, View, ViewStyle } from "react-native";
 
-import {
-  alpha,
-  COLORS,
-  ICON_SIZE,
-  RADIUS,
-  SEMANTIC,
-  SPACING,
-  typo,
-} from "../theme/tokens";
+import { alpha, RADIUS, SPACING, typo } from "../theme/tokens";
+import { useTokens, type Tokens } from "../theme/useTokens";
 
 /**
  * Component 6 - Stat card.
  * rounded-xl, surface-container-low, bordered, uppercase label-sm caption and a
  * large bold value: green for money, primary-tinted icon + value for time.
+ *
+ * THEME: the money green comes from the per-mode semantic palette - the dark
+ * #10B981 fails contrast on a near-white card.
  */
 export type StatCardProps = {
   caption: string;
@@ -35,6 +31,9 @@ export function StatCard({
   hint,
   style,
 }: StatCardProps) {
+  const t = useTokens();
+  const styles = useMemo(() => makeStyles(t), [t]);
+
   if (tone === "time" || icon) {
     return (
       <View style={[styles.card, styles.rowCard, style]}>
@@ -42,8 +41,8 @@ export function StatCard({
           <View style={styles.iconBubble}>
             <MaterialIcons
               name={icon}
-              size={ICON_SIZE.lg}
-              color={COLORS.primary}
+              size={t.iconSize.lg}
+              color={t.colors.primary}
             />
           </View>
         ) : null}
@@ -61,7 +60,7 @@ export function StatCard({
       <Text
         style={[
           styles.value,
-          tone === "money" && { color: SEMANTIC.success },
+          tone === "money" && { color: t.semantic.success },
         ]}
       >
         {value}
@@ -71,32 +70,34 @@ export function StatCard({
   );
 }
 
-const styles = StyleSheet.create({
-  card: {
-    flex: 1,
-    backgroundColor: COLORS.surfaceContainerLow,
-    borderRadius: RADIUS.xl,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: COLORS.surfaceVariant,
-    padding: SPACING.md,
-    justifyContent: "center",
-  },
-  rowCard: { flexDirection: "row", alignItems: "center", gap: SPACING.md },
-  rowText: { flexShrink: 1 },
-  iconBubble: {
-    padding: SPACING.sm,
-    borderRadius: RADIUS.full,
-    backgroundColor: alpha(COLORS.primary, 0.1),
-  },
-  caption: {
-    ...typo("labelSm"),
-    color: COLORS.onSurfaceVariant,
-    letterSpacing: 0.6,
-  },
-  value: {
-    ...typo("headlineLgMobile"),
-    color: COLORS.onSurface,
-    marginTop: SPACING.xs,
-  },
-  rowValue: { ...typo("titleMd"), color: COLORS.onSurface },
-});
+function makeStyles(t: Tokens) {
+  return StyleSheet.create({
+    card: {
+      flex: 1,
+      backgroundColor: t.colors.surfaceContainerLow,
+      borderRadius: RADIUS.xl,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: t.colors.surfaceVariant,
+      padding: SPACING.md,
+      justifyContent: "center",
+    },
+    rowCard: { flexDirection: "row", alignItems: "center", gap: SPACING.md },
+    rowText: { flexShrink: 1 },
+    iconBubble: {
+      padding: SPACING.sm,
+      borderRadius: RADIUS.full,
+      backgroundColor: alpha(t.colors.primary, 0.1),
+    },
+    caption: {
+      ...typo("labelSm"),
+      color: t.colors.onSurfaceVariant,
+      letterSpacing: 0.6,
+    },
+    value: {
+      ...typo("headlineLgMobile"),
+      color: t.colors.onSurface,
+      marginTop: SPACING.xs,
+    },
+    rowValue: { ...typo("titleMd"), color: t.colors.onSurface },
+  });
+}
