@@ -12,6 +12,7 @@ import { SafetyScreen } from "../screens/safety/SafetyScreen";
 import { LegalScreen } from "../screens/legal/LegalScreen";
 import { ProfileScreen } from "../screens/onboarding/ProfileScreen";
 import { DocumentsScreen } from "../screens/onboarding/DocumentsScreen";
+import { VehicleScreen } from "../screens/onboarding/VehicleScreen";
 import { RequestsScreen } from "../screens/requests/RequestsScreen";
 import { TripChatScreen } from "../screens/trip/TripChatScreen";
 import { ApprovalGate } from "./ApprovalGate";
@@ -43,9 +44,9 @@ const Stack = createNativeStackNavigator<DriverStackParamList>();
  * The three sections of the driver app, in Stitch's order.
  *
  * These are the only routes that show the bottom navigation. Everything else
- * (wallet, profile, documents, support, a ticket, a chat) is reached THROUGH one
- * of these three and is a detail view, per section 16 and section 46 - so the
- * bar would be covering content those screens do not reserve space for.
+ * (wallet, profile, documents, vehicle, support, a ticket, a chat) is reached
+ * THROUGH one of these three and is a detail view, per section 16 and section 46
+ * - so the bar would be covering content those screens do not reserve space for.
  */
 const SECTION_ROUTES = ["Home", "Requests", "Menu"] as const;
 
@@ -68,9 +69,15 @@ function isSectionRoute(routeName: string | undefined): boolean {
  * signed-in route can be reached by a driver who is not APPROVED - including
  * routes added in later phases.
  *
- * Profile and Documents are reachable here too: an approved driver still needs
- * to replace an expiring insurance paper or fix a plate, and the same two
- * screens serve both cases instead of being duplicated.
+ * Profile, Documents and Vehicle are reachable here too: an approved driver
+ * still needs to replace an expiring insurance paper or fix a plate, and the
+ * same screens serve both cases instead of being duplicated.
+ *
+ * PHASE 2: Vehicle is new here. The vehicle fields moved out of ProfileScreen so
+ * the onboarding order could follow sections 13 and 62 (documents before vehicle
+ * information). Registering the route in THIS stack is what keeps that a
+ * reordering rather than a deletion - without it, an approved driver would have
+ * had no way to edit the car at all.
  *
  * The toast host is mounted ONCE here, above the navigator, so a toast survives
  * a navigation and never belongs to a single screen.
@@ -251,6 +258,16 @@ export function DriverNavigator() {
             name="Documents"
             component={DocumentsScreen}
             options={{ headerShown: true, title: strings.documents.title }}
+          />
+          {/*
+            PHASE 2 - the active vehicle, split out of the profile form. The
+            driver reaches it from the Menu's vehicle row; the onboarding stack
+            has its own copy of the route for a driver still under review.
+          */}
+          <Stack.Screen
+            name="Vehicle"
+            component={VehicleScreen}
+            options={{ headerShown: true, title: strings.profile.vehicleSection }}
           />
           {/*
             Trip chat sits behind the same approval gate as everything else: a

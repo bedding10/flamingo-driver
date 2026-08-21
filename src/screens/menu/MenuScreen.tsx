@@ -52,15 +52,20 @@ const LEVEL_LABELS: Record<string, string> = {
  * Each row is an icon, a title, a one-line subtitle and a forward chevron.
  * Sign-out is a row too, in red, not a button bolted to the bottom.
  *
- * Honest omissions, unchanged from PHASE 7 because they are backend facts, not
- * design choices:
+ * Honest omissions, unchanged because they are backend facts, not design
+ * choices:
  *  - rating COUNT: GET /driver/me returns `rating` and `totalTrips` with no
  *    number of ratings. Printing totalTrips next to the stars would claim every
  *    trip was rated, which is false. The stat is simply absent until the
  *    backend sends it (registered as a PHASE 8 backend requirement).
- *  - VEHICLE: /vehicles is staff-only on the server and the driver edits the
- *    car inside the profile form, so "my vehicle" leads there rather than to a
- *    screen that could not save anything.
+ *  - VEHICLE: /vehicles is STAFF-only on the server, so the car is edited
+ *    through the car* fields on PATCH /driver/me rather than through a vehicle
+ *    endpoint this app is allowed to call. That constraint has not changed.
+ *    PHASE 2: what HAS changed is where the row leads. It used to point at
+ *    Profile, because the vehicle fields were the second half of the profile
+ *    form. They are their own screen now, so it points at Vehicle - and if this
+ *    row had been left pointing at Profile, tapping "my vehicle" would have
+ *    landed on a screen with no vehicle fields on it.
  *
  * PHASE 1 (R-11): `heroStats`, `heroStat` and the list `row` were all
  * `"row-reverse"`, and six text styles were pinned right. Every destination in
@@ -225,7 +230,7 @@ export function MenuScreen() {
           label={menu75Strings.vehicle}
           hint={menu75Strings.vehicleHint}
           last
-          onPress={() => navigation.navigate("Profile")}
+          onPress={() => navigation.navigate("Vehicle")}
         />
       </Section>
 

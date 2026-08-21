@@ -32,8 +32,8 @@ type Navigation = NativeStackNavigationProp<OnboardingStackParamList>;
  * This is a hard gate on driving, not on the app: the server returns 403 for
  * POST /driver/me/availability unless the status is APPROVED, so an ONLINE button
  * here could only produce a failure the driver cannot fix. What the driver CAN do
- * is finish the file that is being reviewed, so this screen leads to the profile
- * and the documents and states exactly what is still missing.
+ * is finish the file that is being reviewed, so this screen leads to the profile,
+ * the documents and the vehicle, and states exactly what is still missing.
  *
  * The profile comes from the shared query, so opening this screen costs no extra
  * request and the status updates as soon as an operator approves the account.
@@ -48,6 +48,12 @@ type Navigation = NativeStackNavigationProp<OnboardingStackParamList>;
  * status badge keeps its warning wash, but the wash is now derived from
  * `palette.warning`, which is the light or dark counterpart of Stitch's #F59E0B
  * rather than one fixed dark-mode value.
+ *
+ * PHASE 2: the destinations are ordered Profile -> Documents -> Vehicle, which
+ * is the order sections 13 and 62 mandate. Vehicle is a separate button because
+ * it is now a separate screen; before the split it was the second half of the
+ * profile form, and a driver whose car was missing was sent to "complete your
+ * profile".
  *
  * STILL OUTSTANDING (PHASE 2, visual rebuild): Stitch renders this as
  * application_under_review (screenshot 16) with a review timeline and a
@@ -102,6 +108,8 @@ export function PendingApprovalScreen() {
         )}
       </View>
 
+      {/* Ordered per sections 13 and 62: profile, then documents, then the
+          vehicle. */}
       <PrimaryButton
         label={strings.approval.openProfile}
         onPress={() => navigation.navigate("Profile")}
@@ -110,6 +118,11 @@ export function PendingApprovalScreen() {
       <PrimaryButton
         label={strings.approval.openDocuments}
         onPress={() => navigation.navigate("Documents")}
+        style={styles.secondaryAction}
+      />
+      <PrimaryButton
+        label={strings.profile.vehicleSection}
+        onPress={() => navigation.navigate("Vehicle")}
         style={styles.secondaryAction}
       />
       <PrimaryButton
@@ -140,6 +153,10 @@ export function PendingApprovalScreen() {
  * A document counts as missing when it was never sent, was rejected, or has
  * expired. A PENDING one is not missing: it is waiting for an operator, and
  * asking for it again would only create duplicates.
+ *
+ * PHASE 2: a missing car is labelled with the vehicle section, not with
+ * "complete your profile". The vehicle has its own screen now, so the old label
+ * would have pointed the driver at the wrong one.
  */
 function missingItems(profile: DriverProfile | null | undefined) {
   if (!profile) return [];
@@ -147,7 +164,7 @@ function missingItems(profile: DriverProfile | null | undefined) {
 
   const vehicle = profile.vehicle;
   if (!vehicle || !vehicle.model || !vehicle.plate) {
-    items.push({ key: "vehicle", label: strings.approval.checklistProfile });
+    items.push({ key: "vehicle", label: strings.profile.vehicleSection });
   }
 
   if (missingRequiredDocuments(profile.documents).length) {
