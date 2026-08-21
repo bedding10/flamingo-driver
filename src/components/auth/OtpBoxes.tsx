@@ -1,4 +1,4 @@
-import React, { useCallback, useRef } from "react";
+import React, { useCallback, useMemo, useRef } from "react";
 import {
   StyleSheet,
   TextInput,
@@ -10,7 +10,8 @@ import {
 } from "react-native";
 
 import { rowNeverMirrored } from "../../i18n";
-import { COLORS, RADIUS, SPACING, typo } from "../../theme/tokens";
+import { RADIUS, SPACING, typo } from "../../theme/tokens";
+import { useTokens, type Tokens } from "../../theme/useTokens";
 
 /** Stitch `w-12 h-14` per box, `gap-3` between them. */
 const BOX_WIDTH = 48;
@@ -47,6 +48,8 @@ export function OtpBoxes({
   style,
 }: Props) {
   const inputs = useRef<Array<TextInput | null>>([]);
+  const tokens = useTokens();
+  const styles = useMemo(() => makeStyles(tokens), [tokens]);
 
   const focusAt = useCallback((index: number) => {
     inputs.current[index]?.focus();
@@ -97,7 +100,10 @@ export function OtpBoxes({
    * this can be detected.
    */
   const handleKeyPress = useCallback(
-    (index: number, event: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
+    (
+      index: number,
+      event: NativeSyntheticEvent<TextInputKeyPressEventData>,
+    ) => {
       if (event.nativeEvent.key !== "Backspace") return;
       if (value[index]) return;
       if (index === 0) return;
@@ -107,26 +113,29 @@ export function OtpBoxes({
     [focusAt, onChange, value],
   );
 
-  const renderBox = (index: number) => (
-    <TextInput
-      key={index}
-      ref={(node) => {
-        inputs.current[index] = node;
-      }}
-      value={value[index] ?? ""}
-      onChangeText={(text) => handleChange(index, text)}
-      onKeyPress={(event) => handleKeyPress(index, event)}
-      editable={editable}
-      autoFocus={autoFocus && index === 0}
-      style={styles.box}
-      keyboardType="number-pad"
-      maxLength={length}
-      textContentType={index === 0 ? "oneTimeCode" : "none"}
-      autoComplete={index === 0 ? "sms-otp" : "off"}
-      accessibilityLabel={index === 0 ? accessibilityLabel : undefined}
-      selectionColor={COLORS.primaryContainer}
-    />
-  );
+  const renderBox = (index: number) => {
+    const filled = Boolean(value[index]);
+    return (
+      <TextInput
+        key={index}
+        ref={(node) => {
+          inputs.current[index] = node;
+        }}
+        value={value[index] ?? ""}
+        onChangeText={(text) => handleChange(index, text)}
+        onKeyPress={(event) => handleKeyPress(index, event)}
+        editable={editable}
+        autoFocus={autoFocus && index === 0}
+        style={[styles.box, filled && styles.boxFilled]}
+        keyboardType="number-pad"
+        maxLength={length}
+        textContentType={index === 0 ? "oneTimeCode" : "none"}
+        autoComplete={index === 0 ? "sms-otp" : "off"}
+        accessibilityLabel={index === 0 ? accessibilityLabel : undefined}
+        selectionColor={tokens.colors.primaryContainer}
+      />
+    );
+  };
 
   return (
     /**
@@ -139,27 +148,39 @@ export function OtpBoxes({
   );
 }
 
-const styles = StyleSheet.create({
-  row: {
-    flexDirection: rowNeverMirrored(),
-    justifyContent: "center",
-    gap: SPACING.md,
-  },
-  box: {
-    width: BOX_WIDTH,
-    height: BOX_HEIGHT,
-    borderRadius: RADIUS.lg,
-    borderWidth: 1,
-    borderColor: COLORS.outline,
-    backgroundColor: COLORS.surface,
-    color: COLORS.onSurface,
-    ...typo("headlineXl"),
-    // A single centred glyph: the 44px line box would push it off centre.
-    lineHeight: undefined,
-    letterSpacing: 0,
-    paddingVertical: 0,
-    paddingHorizontal: 0,
-    textAlign: "center",
-    textAlignVertical: "center",
-  },
-});
+function makeStyles(t: Tokens) {
+  return StyleSheet.create({
+    row: {
+      flexDirection: rowNeverMirrored(),
+      justifyContent: "center",
+      gap: SPACING.md,
+    },
+    box: {
+      width: BOX_WIDTH,
+      height: BOX_HEIGHT,
+      borderRadius: RADIUS.lg,
+      borderWidth: 1,
+      borderColor: t.colors.outline,
+      backgroundColor: t.colors.surface,
+      color: t.colors.onSurface,
+      ...typo("headlineXl"),
+      // A single centred glyph: the 44px line box would push it off centre.
+      lineHeight: undefined,
+      letterSpacing: 0,
+      paddingVertical: 0,
+      paddingHorizontal: 0,
+      textAlign: "center",
+      textAlignVertical: "center",
+    },
+    /**
+     * Progress cue. Without it, an SMS autofill changes six digits with no
+     * change of state, and a partially typed code looks identical to an empty
+     * one at arm's length.
+     */
+    boxFilled: {
+      borderWidth: 2,
+      borderColor:
+        t.mode === "light" ? t.colors.primary : t.colors.primaryContainer,
+    },
+  });
+}
