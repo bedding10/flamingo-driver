@@ -120,6 +120,27 @@ export function OtpBoxes({
     [focusAt, onChange, value],
   );
 
+  const renderBox = (index: number) => (
+    <TextInput
+      key={index}
+      ref={(node) => {
+        inputs.current[index] = node;
+      }}
+      value={value[index] ?? ""}
+      onChangeText={(text) => handleChange(index, text)}
+      onKeyPress={(event) => handleKeyPress(index, event)}
+      editable={editable}
+      autoFocus={autoFocus && index === 0}
+      style={styles.box}
+      keyboardType="number-pad"
+      maxLength={length}
+      textContentType={index === 0 ? "oneTimeCode" : "none"}
+      autoComplete={index === 0 ? "sms-otp" : "off"}
+      accessibilityLabel={index === 0 ? accessibilityLabel : undefined}
+      selectionColor={palette.primary}
+    />
+  );
+
   return (
     /**
      * rowNeverMirrored(): digit positions are absolute, and Stitch pins this
@@ -127,31 +148,7 @@ export function OtpBoxes({
      * the right in Arabic while the code itself still reads left to right.
      */
     <View style={[styles.row, style]}>
-      {Array.from({ length }, (_unused, index) => (
-        <TextInput
-          key={index}
-          ref={(node) => {
-            inputs.current[index] = node;
-          }}
-          value={value[index] ?? ""}
-          onChangeText={(text) => handleChange(index, text)}
-          onKeyPress={(event) => handleKeyPress(index, event)}
-          editable={editable}
-          autoFocus={autoFocus && index === 0}
-          style={styles.box}
-          keyboardType="number-pad"
-          /**
-           * maxLength is the FULL length, not 1: capping every box at one
-           * character is exactly what would truncate an autofilled code down to
-           * its first digit. The controlled value keeps one digit on screen.
-           */
-          maxLength={length}
-          textContentType={index === 0 ? "oneTimeCode" : "none"}
-          autoComplete={index === 0 ? "sms-otp" : "off"}
-          accessibilityLabel={index === 0 ? accessibilityLabel : undefined}
-          selectionColor={palette.primary}
-        />
-      ))}
+      {Array.from({ length }, (_, index) => renderBox(index))}
     </View>
   );
 }
@@ -172,21 +169,10 @@ const makeStyles = (palette: Palette) =>
       backgroundColor: palette.surfaceSunken,
       color: palette.textPrimary,
       ...stitchType.headlineXl,
-      /**
-       * The headline-xl token carries -0.72 tracking and a 44px line box. Both
-       * are wrong for ONE centred character in a 56px well: the tracking shifts
-       * the glyph off centre and the fixed line box fights vertical centring on
-       * Android.
-       */
       lineHeight: undefined,
       letterSpacing: 0,
       paddingVertical: 0,
       paddingHorizontal: 0,
-      /**
-       * Centring lives HERE and not on a `textAlign` prop: it is certain to be
-       * valid in a TextStyle, and there is no compiler here to confirm whether
-       * TextInputProps declares it.
-       */
       textAlign: "center",
       textAlignVertical: "center",
     },
