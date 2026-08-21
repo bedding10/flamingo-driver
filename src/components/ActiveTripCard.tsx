@@ -1,21 +1,22 @@
-import React, { useMemo } from "react";
+import { MaterialIcons } from "@expo/vector-icons";
+import React from "react";
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
-import type { Trip, TripStatus } from "../types/trip";
+
 import { textAlignStart } from "../i18n";
 import { strings } from "../i18n/strings";
-import { ProfileAvatar } from "./ProfileAvatar";
-import { Icon } from "./Icon";
 import {
-  colors,
-  radius,
-  spacing,
-  touchTarget,
-  typography,
-  usePalette,
-  withAlpha,
-  shadows,
-  type Palette,
-} from "../theme";
+  alpha,
+  COLORS,
+  ICON_SIZE,
+  RADIUS,
+  SEMANTIC,
+  SHADOW_SHEET,
+  SPACING,
+  TOUCH_TARGET,
+  typo,
+} from "../theme/tokens";
+import type { Trip, TripStatus } from "../types/trip";
+import { RankAvatar } from "../ui";
 
 type Props = {
   trip: Trip;
@@ -25,22 +26,23 @@ type Props = {
   bottomInset: number;
   onAdvance: () => void;
   onCancel: () => void;
-  /** Raises a safety report on the server for the running trip. */
-  onSos: () => void;
   /** Opens the trip chat with the passenger. */
   onChat: () => void;
   /**
-   * PHASE 4 - dials the passenger. Passed only when the server actually
-   * authorised a number for this trip; absent otherwise, and the card then
-   * keeps saying the number is hidden.
+   * Dials the passenger. Passed only when the server actually authorised a
+   * number for this trip; absent otherwise, and the button is then not drawn at
+   * all rather than drawn dead.
    */
   onCall?: () => void;
   /** Passenger messages this driver has not opened yet. */
   unreadCount?: number;
 };
 
-// Phase 11 - display labels only. The level itself is decided by the backend;
-// this card never compares a trip count against a threshold.
+/** Icon-only contact buttons, per the request: two circles, no labels. */
+const CONTACT_BUTTON = 48;
+
+// Display labels only. The level itself is decided by the backend; this card
+// never compares a trip count against a threshold.
 const LEVEL_LABELS: Record<string, string> = {
   BRONZE: strings.level.bronze,
   SILVER: strings.level.silver,
@@ -64,20 +66,24 @@ function actionLabel(next: TripStatus | null): string | null {
 }
 
 /**
- * The card shown while a ride is running.
+ * The card shown while a ride is running - Stitch `active_trip`.
  *
  * The address on display is always the one that matters next: before pickup it
  * is where the passenger waits, after pickup it is where they are going. Two
  * addresses at once is how a driver reads the wrong one at a junction.
  *
- * PHASE 7.5 CLOSURE: colours only. The state machine, the confirmations and
- * the position of the SOS button are exactly as PHASE 6 left them.
+ * SOS REMOVED: the emergency button, its confirmation and the `onSos` prop are
+ * gone by request, together with the rest of the SOS system. The trip state
+ * machine and both confirmations (complete, cancel) are untouched.
  *
- * PHASE 1 (R-11): six `"row-reverse"` rows and six text styles pinned with
- * `textAlign: "right"` / `writingDirection: "rtl"`. All of them predate real
- * RTL and now cancel React Native's own mirroring. Rows are plain `"row"` and
- * the text resolves its own alignment. Nothing about the trip state machine,
- * the confirmations or the SOS behaviour was touched.
+ * CONTACT: calling and messaging are now two equal circular icon buttons with
+ * no text, sitting side by side at the end of the passenger row. The call
+ * button appears only when `onCall` was passed, which the screen does only
+ * after GET /trip-communication/:tripId returned canCall AND a number - the
+ * card still holds no phone number of its own, since /driver/me/trips keeps
+ * returning the passenger phone masked.
+ *
+ * Every row is plain `"row"`: React Native mirrors it under RTL.
  */
 function ActiveTripCardComponent({
   trip,
@@ -87,14 +93,10 @@ function ActiveTripCardComponent({
   bottomInset,
   onAdvance,
   onCancel,
-  onSos,
   onChat,
   onCall,
   unreadCount = 0,
 }: Props) {
-  const palette = usePalette();
-  const styles = useMemo(() => makeStyles(palette), [palette]);
-
   const status = trip.status;
   const heading = statusLabel(status);
   const primary = actionLabel(nextStatus);
@@ -128,23 +130,10 @@ function ActiveTripCardComponent({
     ]);
   };
 
-  // SOS confirms first for the same reason Complete and Cancel do: a stray tap
-  // must not raise a false alarm that support then has to chase. It is
-  // deliberately NOT disabled while `pending` - a driver in danger cannot be
-  // made to wait for an unrelated status call to come back.
-  const confirmSos = () => {
-    Alert.alert(strings.safety.confirmTitle, strings.safety.confirmBody, [
-      { text: strings.safety.back, style: "cancel" },
-      {
-        text: strings.safety.confirmSend,
-        style: "destructive",
-        onPress: onSos,
-      },
-    ]);
-  };
-
   return (
-    <View style={[styles.sheet, { paddingBottom: bottomInset + spacing.xl }]}>
+    <View style={[styles.sheet, { paddingBottom: bottomInset + SPACING.xl }]}>
+      <View style={styles.handle} />
+
       <View style={styles.headRow}>
         <Text style={styles.heading}>{heading}</Text>
         {trip.fare != null ? (
@@ -168,30 +157,18 @@ function ActiveTripCardComponent({
         </View>
       </View>
 
-      {/*
-        Passenger identity line and the two ways to reach them, on one row.
-
-        PHASE 4: the call button appears here only when `onCall` was passed,
-        which the screen does only after GET /trip-communication/:tripId returned
-        canCall AND a number. The card still holds no phone number of its own -
-        /driver/me/trips keeps returning the passenger phone masked through
-        maskPhone(), and "phoneHidden" is shown exactly when the server refused
-        to reveal it (phoneMode HIDDEN, or a trip that is no longer callable).
-      */}
+      {/* Passenger identity, then the two icon-only ways to reach them. */}
       <View style={styles.contactRow}>
-        {/* Phase 11 - passenger photo inside the level frame, then name and
-            "LEVEL \u00b7 N trips". Both values ride along with the trip payload,
-            so drawing this costs no extra request. */}
-        <ProfileAvatar
-          avatarUrl={trip.passenger?.avatarUrl}
-          frameUrl={trip.passenger?.profileFrameUrl}
+        <RankAvatar
           size={44}
+          avatarUrl={trip.passenger?.avatarUrl}
+          tier={trip.passenger?.profileLevel}
           fallback={trip.passenger?.name ?? null}
+          rating={trip.passenger?.rating ?? null}
         />
         <View style={styles.passengerBlock}>
           <Text style={styles.passenger} numberOfLines={1}>
-            {(trip.passenger?.name || strings.offer.passengerFallback) +
-              (onCall ? "" : " \u00b7 " + strings.trip.phoneHidden)}
+            {trip.passenger?.name || strings.offer.passengerFallback}
           </Text>
           {trip.passenger?.profileLevel ? (
             <Text style={styles.passengerLevel} numberOfLines={1}>
@@ -210,11 +187,15 @@ function ActiveTripCardComponent({
             accessibilityLabel={strings.chat.call}
             onPress={onCall}
             style={({ pressed }) => [
-              styles.callButton,
+              styles.contactButton,
               pressed ? styles.pressed : null,
             ]}
           >
-            <Icon name="support" size={20} color={palette.primaryText} />
+            <MaterialIcons
+              name="call"
+              size={ICON_SIZE.lg}
+              color={COLORS.primary}
+            />
           </Pressable>
         ) : null}
 
@@ -223,11 +204,15 @@ function ActiveTripCardComponent({
           accessibilityLabel={strings.chat.openChat}
           onPress={onChat}
           style={({ pressed }) => [
-            styles.chatButton,
+            styles.contactButton,
             pressed ? styles.pressed : null,
           ]}
         >
-          <Text style={styles.chatLabel}>{strings.chat.openChat}</Text>
+          <MaterialIcons
+            name="chat-bubble"
+            size={ICON_SIZE.lg}
+            color={COLORS.primary}
+          />
           {unreadCount > 0 ? (
             <View style={styles.badge}>
               <Text style={styles.badgeText}>
@@ -271,182 +256,135 @@ function ActiveTripCardComponent({
           </Pressable>
         ) : null}
       </View>
-
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={strings.safety.sos}
-        onPress={confirmSos}
-        style={({ pressed }) => [
-          styles.sosButton,
-          pressed ? styles.pressed : null,
-        ]}
-      >
-        <Text style={styles.sosLabel}>{strings.safety.sos}</Text>
-      </Pressable>
     </View>
   );
 }
 
 export const ActiveTripCard = React.memo(ActiveTripCardComponent);
 
-const makeStyles = (palette: Palette) =>
-  StyleSheet.create({
-    sheet: {
-      position: "absolute",
-      // Symmetric: identical on both sides, so there is nothing to mirror.
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: palette.surface,
-      borderTopLeftRadius: radius.sheet,
-      borderTopRightRadius: radius.sheet,
-      borderTopWidth: 1,
-      borderColor: palette.border,
-      paddingHorizontal: spacing.xl,
-      paddingTop: spacing.xl,
-      gap: spacing.md,
-      ...shadows.floating,
-    },
-    // Every row below is plain "row": mirrored by React Native under RTL.
-    headRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-    },
-    heading: {
-      ...typography.subtitle,
-      color: palette.textPrimary,
-      textAlign: textAlignStart(),
-    },
-    fare: { ...typography.subtitle, color: palette.primaryText },
+const styles = StyleSheet.create({
+  sheet: {
+    position: "absolute",
+    // Symmetric: identical on both sides, so there is nothing to mirror.
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: COLORS.surfaceContainer,
+    borderTopLeftRadius: RADIUS.card,
+    borderTopRightRadius: RADIUS.card,
+    borderTopWidth: 1,
+    borderColor: COLORS.surfaceVariant,
+    paddingHorizontal: SPACING.container,
+    paddingTop: SPACING.md,
+    gap: SPACING.md,
+    ...SHADOW_SHEET,
+  },
+  handle: {
+    alignSelf: "center",
+    width: 48,
+    height: 6,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.surfaceVariant,
+    marginBottom: SPACING.sm,
+  },
+  headRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  heading: {
+    ...typo("titleMd"),
+    color: COLORS.onSurface,
+    textAlign: textAlignStart(),
+  },
+  /** Money is green, per the design system's fare colour. */
+  fare: { ...typo("titleMd"), color: SEMANTIC.success },
 
-    leg: {
-      flexDirection: "row",
-      alignItems: "flex-start",
-      gap: spacing.md,
-    },
-    dot: { width: 10, height: 10, borderRadius: radius.pill, marginTop: 6 },
-    dotPickup: { backgroundColor: palette.online },
-    /**
-     * Kept on the legacy flat token deliberately. Moving this to a palette role
-     * would change colour SEMANTICS, not direction, and picking the right role
-     * for a destination dot is a PHASE 5 decision, not an RTL fix.
-     *
-     * Note also that the old claim that this is shared with the map polyline is
-     * stale: DriverMap draws its legs from primaryContainer and success. Both
-     * belong to the same PHASE 5 cleanup.
-     */
-    dotDrop: { backgroundColor: colors.coral },
-    legText: { flex: 1, gap: 2 },
-    legLabel: {
-      ...typography.caption,
-      color: palette.textSecondary,
-      textAlign: textAlignStart(),
-    },
-    legValue: {
-      ...typography.body,
-      color: palette.textPrimary,
-      textAlign: textAlignStart(),
-    },
+  leg: { flexDirection: "row", alignItems: "flex-start", gap: SPACING.md },
+  dot: { width: 10, height: 10, borderRadius: RADIUS.full, marginTop: 6 },
+  dotPickup: { backgroundColor: SEMANTIC.success },
+  /** Destination markers are the tertiary light blue in this design system. */
+  dotDrop: { backgroundColor: COLORS.tertiary },
+  legText: { flex: 1, gap: 2 },
+  legLabel: {
+    ...typo("labelSm"),
+    color: COLORS.onSurfaceVariant,
+    textAlign: textAlignStart(),
+  },
+  legValue: {
+    ...typo("bodyMd"),
+    color: COLORS.onSurface,
+    textAlign: textAlignStart(),
+  },
 
-    contactRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      gap: spacing.md,
-    },
-    passengerBlock: { flex: 1, gap: 2 },
-    passengerLevel: {
-      ...typography.caption,
-      color: palette.primaryText,
-      textAlign: textAlignStart(),
-    },
-    passenger: {
-      flex: 1,
-      ...typography.caption,
-      color: palette.textSecondary,
-      textAlign: textAlignStart(),
-    },
-    // Calling is secondary to messaging, so it is a round icon button that
-    // never competes with the filled primary action.
-    callButton: {
-      width: touchTarget.normal - 8,
-      height: touchTarget.normal - 8,
-      borderRadius: radius.pill,
-      alignItems: "center",
-      justifyContent: "center",
-      borderWidth: 1,
-      borderColor: withAlpha(palette.primary, 0.5),
-      backgroundColor: palette.primaryWash,
-    },
-    chatButton: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing.sm,
-      minHeight: touchTarget.normal - 12,
-      paddingHorizontal: spacing.lg,
-      borderRadius: radius.pill,
-      borderWidth: 1,
-      borderColor: withAlpha(palette.primary, 0.5),
-      backgroundColor: palette.primaryWash,
-    },
-    chatLabel: { ...typography.label, color: palette.primaryText },
-    badge: {
-      minWidth: 20,
-      height: 20,
-      paddingHorizontal: 5,
-      borderRadius: radius.pill,
-      backgroundColor: palette.primary,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    badgeText: {
-      ...typography.caption,
-      color: palette.onPrimary,
-      lineHeight: 16,
-    },
-    error: {
-      ...typography.caption,
-      color: palette.danger,
-      textAlign: textAlignStart(),
-    },
+  contactRow: { flexDirection: "row", alignItems: "center", gap: SPACING.md },
+  passengerBlock: { flex: 1, gap: 2 },
+  passenger: {
+    ...typo("labelMd"),
+    color: COLORS.onSurface,
+    textAlign: textAlignStart(),
+  },
+  passengerLevel: {
+    ...typo("labelSm"),
+    color: COLORS.primary,
+    textAlign: textAlignStart(),
+  },
+  /** Both contact buttons are identical: neither outranks the other. */
+  contactButton: {
+    width: CONTACT_BUTTON,
+    height: CONTACT_BUTTON,
+    borderRadius: RADIUS.full,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: alpha(COLORS.primaryContainer, 0.5),
+    backgroundColor: alpha(COLORS.primaryContainer, 0.16),
+  },
+  badge: {
+    position: "absolute",
+    top: -2,
+    right: -2,
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: 5,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.primaryContainer,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  badgeText: {
+    ...typo("labelSm"),
+    color: COLORS.onPrimaryContainer,
+    lineHeight: 16,
+  },
+  error: {
+    ...typo("labelSm"),
+    color: COLORS.error,
+    textAlign: textAlignStart(),
+  },
 
-    actions: { flexDirection: "row", gap: spacing.md },
-    primaryButton: {
-      flex: 2,
-      height: touchTarget.critical,
-      borderRadius: radius.pill,
-      backgroundColor: palette.primary,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    primaryLabel: { ...typography.subtitle, color: palette.onPrimary },
-    cancelButton: {
-      flex: 1,
-      height: touchTarget.critical,
-      borderRadius: radius.pill,
-      borderWidth: 1,
-      borderColor: withAlpha(palette.danger, 0.5),
-      backgroundColor: withAlpha(palette.danger, 0.1),
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    cancelLabel: { ...typography.label, color: palette.danger },
+  actions: { flexDirection: "row", gap: SPACING.md },
+  primaryButton: {
+    flex: 2,
+    minHeight: TOUCH_TARGET + 8,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.primaryContainer,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  primaryLabel: { ...typo("labelMd"), color: COLORS.onPrimaryContainer },
+  cancelButton: {
+    flex: 1,
+    minHeight: TOUCH_TARGET + 8,
+    borderRadius: RADIUS.full,
+    borderWidth: 1.5,
+    borderColor: alpha(COLORS.error, 0.5),
+    backgroundColor: alpha(COLORS.error, 0.1),
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cancelLabel: { ...typo("labelMd"), color: COLORS.error },
 
-    // Full width and on its own row: the driver must find it without aiming,
-    // but outlined rather than filled so it never competes with the primary
-    // action for an unaimed thumb.
-    sosButton: {
-      height: touchTarget.normal,
-      borderRadius: radius.pill,
-      borderWidth: 1.5,
-      borderColor: palette.danger,
-      backgroundColor: withAlpha(palette.danger, 0.08),
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    sosLabel: { ...typography.label, color: palette.danger },
-
-    pressed: { opacity: 0.85 },
-    disabled: { opacity: 0.5 },
-  });
+  pressed: { opacity: 0.85 },
+  disabled: { opacity: 0.5 },
+});
