@@ -13,6 +13,7 @@ import { ProfileScreen } from "../screens/onboarding/ProfileScreen";
 import { DocumentsScreen } from "../screens/onboarding/DocumentsScreen";
 import { VehicleScreen } from "../screens/onboarding/VehicleScreen";
 import { RequestsScreen } from "../screens/requests/RequestsScreen";
+import { TiersScreen } from "../screens/tiers/TiersScreen";
 import { TripChatScreen } from "../screens/trip/TripChatScreen";
 import { ApprovalGate } from "./ApprovalGate";
 import { navigationRef, navigateWhenReady } from "./navigation-ref";
@@ -39,11 +40,19 @@ import type { DriverStackParamList } from "./types";
 const Stack = createNativeStackNavigator<DriverStackParamList>();
 
 /**
+ * Header title for the tiers / leaderboard route. Kept here (and in MenuScreen)
+ * instead of src/i18n/strings.ts: that catalogue must not be rewritten, and one
+ * title does not justify a new string file.
+ */
+const TIERS_TITLE =
+  "\u0627\u0644\u0637\u0628\u0642\u0627\u062a \u0648\u0627\u0644\u0635\u062f\u0627\u0631\u0629";
+
+/**
  * The three sections of the driver app, in Stitch's order.
  *
  * These are the only routes that show the bottom navigation. Everything else
- * (wallet, profile, documents, vehicle, support, a ticket, a chat) is reached
- * THROUGH one of these three and is a detail view - so the bar would be
+ * (wallet, profile, documents, vehicle, tiers, support, a ticket, a chat) is
+ * reached THROUGH one of these three and is a detail view - so the bar would be
  * covering content those screens do not reserve space for.
  */
 const SECTION_ROUTES = ["Home", "Requests", "Menu"] as const;
@@ -208,6 +217,16 @@ export function DriverNavigator() {
             name="Wallet"
             component={WalletScreen}
             options={{ headerShown: true, title: walletStrings.title }}
+          />
+          {/*
+            Tier progression and the city / country ranking. A detail route: it
+            is opened from the menu and has its own sticky header, so the bottom
+            bar stays hidden here.
+          */}
+          <Stack.Screen
+            name="Tiers"
+            component={TiersScreen}
+            options={{ headerShown: false, title: TIERS_TITLE }}
           />
           <Stack.Screen
             name="Notifications"
