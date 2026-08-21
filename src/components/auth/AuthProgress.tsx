@@ -1,7 +1,8 @@
-import React, { useMemo } from "react";
+import React from "react";
 import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
+
 import { useTranslation } from "../../i18n";
-import { radius, spacing, usePalette, type Palette } from "../../theme";
+import { COLORS, RADIUS, SPACING } from "../../theme/tokens";
 
 /** Stitch: `h-1` bar on the phone screen, `h-1.5 w-8` dashes on the OTP one. */
 const BAR_HEIGHT = 4;
@@ -16,25 +17,20 @@ type Props = {
   step: number;
   total?: number;
   /**
-   * Stitch genuinely draws this indicator TWO ways: `phone_number_entry` pins a
+   * Stitch draws this indicator TWO ways: `phone_number_entry` pins a
    * full-width hairline bar to the top edge of the card, `otp_verification`
-   * centres three rounded dashes above the heading. Both are reproduced rather
-   * than unified into one treatment - unifying them would be a redesign, and
-   * the reference is the reference.
+   * centres three rounded dashes above the heading. Both are reproduced.
    */
   variant?: "bar" | "dashes";
   style?: StyleProp<ViewStyle>;
 };
 
 /**
- * PHASE 2 - the three-step indicator on the Stitch auth screens.
+ * The three-step indicator on the Stitch auth screens, on tokens.
  *
  * The ACTIVE segment is the current step only, not a cumulative fill: Stitch
- * lights segment 1 on the phone screen and the MIDDLE segment on the OTP screen,
- * leaving the others neutral. It is a position indicator, not a gauge.
- *
- * A bar of coloured rectangles carries no information to a screen reader, so the
- * same fact is exposed as a progressbar role with a translated label.
+ * lights segment 1 on the phone screen and the MIDDLE segment on the OTP
+ * screen. It is a position indicator, not a gauge.
  */
 export function AuthProgress({
   step,
@@ -42,9 +38,7 @@ export function AuthProgress({
   variant = "bar",
   style,
 }: Props) {
-  const palette = usePalette();
   const { t } = useTranslation();
-  const styles = useMemo(() => makeStyles(palette), [palette]);
 
   return (
     <View
@@ -66,36 +60,29 @@ export function AuthProgress({
   );
 }
 
-const makeStyles = (palette: Palette) =>
-  StyleSheet.create({
-    /**
-     * Stitch `absolute top-0 left-0 right-0`. The physical insets are symmetric,
-     * so they are direction-neutral and deliberately not converted to
-     * start/end. NOTE: the card that holds this must clip its content, or these
-     * square ends will cross its corner radius.
-     */
-    bar: {
-      position: "absolute",
-      top: 0,
-      left: 0,
-      right: 0,
-      height: BAR_HEIGHT,
-      // Plain "row": React Native mirrors it, so step 1 sits at the leading edge.
-      flexDirection: "row",
-      gap: spacing.sm,
-    },
-    segment: { flex: 1, height: BAR_HEIGHT },
-    dashes: {
-      flexDirection: "row",
-      justifyContent: "center",
-      gap: spacing.sm,
-    },
-    dash: {
-      height: DASH_HEIGHT,
-      width: DASH_WIDTH,
-      borderRadius: radius.pill,
-    },
-    /** A filled brand surface, so `primary` rather than the text-safe variant. */
-    on: { backgroundColor: palette.primary },
-    off: { backgroundColor: palette.surfaceVariant },
-  });
+const styles = StyleSheet.create({
+  /**
+   * Stitch `absolute top-0 left-0 right-0`. NOTE: the card that holds this must
+   * clip its content, or these square ends cross its corner radius.
+   */
+  bar: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: BAR_HEIGHT,
+    // Plain "row": RN mirrors it, so step 1 sits at the leading edge.
+    flexDirection: "row",
+    gap: SPACING.sm,
+  },
+  segment: { flex: 1, height: BAR_HEIGHT },
+  dashes: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: SPACING.sm,
+  },
+  dash: { height: DASH_HEIGHT, width: DASH_WIDTH, borderRadius: RADIUS.full },
+  /** A filled brand surface, so primary-container. */
+  on: { backgroundColor: COLORS.primaryContainer },
+  off: { backgroundColor: COLORS.surfaceVariant },
+});

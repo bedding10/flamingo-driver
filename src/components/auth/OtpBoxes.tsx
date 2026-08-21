@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef } from "react";
+import React, { useCallback, useRef } from "react";
 import {
   StyleSheet,
   TextInput,
@@ -8,14 +8,9 @@ import {
   type TextInputKeyPressEventData,
   type ViewStyle,
 } from "react-native";
+
 import { rowNeverMirrored } from "../../i18n";
-import {
-  radius,
-  spacing,
-  stitchType,
-  usePalette,
-  type Palette,
-} from "../../theme";
+import { COLORS, RADIUS, SPACING, typo } from "../../theme/tokens";
 
 /** Stitch `w-12 h-14` per box, `gap-3` between them. */
 const BOX_WIDTH = 48;
@@ -34,19 +29,13 @@ type Props = {
 };
 
 /**
- * PHASE 2 - Stitch `otp_verification`: six single-character boxes.
+ * Stitch `otp_verification`: six single-character boxes, on tokens.
  *
  * WHY THIS IS NOT A STRAIGHT PORT OF STITCH'S SCRIPT
  * iOS one-time-code autofill and Android SMS autofill hand over the WHOLE code
  * at once, into whichever field is focused. Stitch's script only ever advances
- * one character, so a literal port would BREAK autofill on the single input a
- * driver uses most, and force six manual taps from a notification they can see.
- * So any multi-character string arriving in any box is DISTRIBUTED across the
- * remaining boxes. The geometry is Stitch's; the input handling is native.
- *
- * The value is kept packed - boxes fill from the leading edge and backspace
- * removes the last character - so `value` stays a plain digit string the parent
- * can length-check, instead of a sparse six-slot array.
+ * one character, so a literal port would BREAK autofill. Any multi-character
+ * string arriving in any box is DISTRIBUTED across the remaining boxes.
  */
 export function OtpBoxes({
   value,
@@ -57,8 +46,6 @@ export function OtpBoxes({
   accessibilityLabel,
   style,
 }: Props) {
-  const palette = usePalette();
-  const styles = useMemo(() => makeStyles(palette), [palette]);
   const inputs = useRef<Array<TextInput | null>>([]);
 
   const focusAt = useCallback((index: number) => {
@@ -106,8 +93,8 @@ export function OtpBoxes({
 
   /**
    * Backspace on an EMPTY box has to delete the previous character and step
-   * back. onChangeText never fires for it - the text did not change - so the key
-   * event is the only place this can be detected.
+   * back. onChangeText never fires for it, so the key event is the only place
+   * this can be detected.
    */
   const handleKeyPress = useCallback(
     (index: number, event: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
@@ -137,15 +124,14 @@ export function OtpBoxes({
       textContentType={index === 0 ? "oneTimeCode" : "none"}
       autoComplete={index === 0 ? "sms-otp" : "off"}
       accessibilityLabel={index === 0 ? accessibilityLabel : undefined}
-      selectionColor={palette.primary}
+      selectionColor={COLORS.primaryContainer}
     />
   );
 
   return (
     /**
      * rowNeverMirrored(): digit positions are absolute, and Stitch pins this
-     * container to dir="ltr" for the same reason. Mirroring would put digit 1 on
-     * the right in Arabic while the code itself still reads left to right.
+     * container to dir="ltr" for the same reason.
      */
     <View style={[styles.row, style]}>
       {Array.from({ length }, (_, index) => renderBox(index))}
@@ -153,27 +139,27 @@ export function OtpBoxes({
   );
 }
 
-const makeStyles = (palette: Palette) =>
-  StyleSheet.create({
-    row: {
-      flexDirection: rowNeverMirrored(),
-      justifyContent: "center",
-      gap: spacing.md,
-    },
-    box: {
-      width: BOX_WIDTH,
-      height: BOX_HEIGHT,
-      borderRadius: radius.input,
-      borderWidth: 1,
-      borderColor: palette.borderStrong,
-      backgroundColor: palette.surfaceSunken,
-      color: palette.textPrimary,
-      ...stitchType.headlineXl,
-      lineHeight: undefined,
-      letterSpacing: 0,
-      paddingVertical: 0,
-      paddingHorizontal: 0,
-      textAlign: "center",
-      textAlignVertical: "center",
-    },
-  });
+const styles = StyleSheet.create({
+  row: {
+    flexDirection: rowNeverMirrored(),
+    justifyContent: "center",
+    gap: SPACING.md,
+  },
+  box: {
+    width: BOX_WIDTH,
+    height: BOX_HEIGHT,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    borderColor: COLORS.outline,
+    backgroundColor: COLORS.surface,
+    color: COLORS.onSurface,
+    ...typo("headlineXl"),
+    // A single centred glyph: the 44px line box would push it off centre.
+    lineHeight: undefined,
+    letterSpacing: 0,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    textAlign: "center",
+    textAlignVertical: "center",
+  },
+});
