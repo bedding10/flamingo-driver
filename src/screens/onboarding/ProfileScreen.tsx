@@ -10,37 +10,44 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useNavigation } from "@react-navigation/native";
+
+import { toApiError } from "../../api/client";
+import { AuthProgress } from "../../components/auth/AuthProgress";
 import { InputField } from "../../components/InputField";
-import { PrimaryButton } from "../../components/PrimaryButton";
-import { ReadOnlyRow } from "../../components/ReadOnlyRow";
-import { SectionCard } from "../../components/SectionCard";
-import { ProfilePhotoPicker } from "../../components/ProfilePhotoPicker";
 import { PasswordSetupCard } from "../../components/PasswordSetupCard";
-import { textAlignStart } from "../../i18n";
-import { strings } from "../../i18n/strings";
-import {
-  radius,
-  spacing,
-  touchTarget,
-  typography,
-  usePalette,
-  type Palette,
-} from "../../theme";
+import { ProfilePhotoPicker } from "../../components/ProfilePhotoPicker";
+import { ReadOnlyRow } from "../../components/ReadOnlyRow";
 import {
   useDriverProfile,
   useUpdateDriverProfile,
 } from "../../hooks/useDriverProfile";
 import { useCities, useWilayas } from "../../hooks/useGeography";
-import { toApiError } from "../../api/client";
+import { textAlignStart } from "../../i18n";
+import { strings } from "../../i18n/strings";
+import {
+  alpha,
+  COLORS,
+  RADIUS,
+  SEMANTIC,
+  SHADOW_CARD,
+  SPACING,
+  typo,
+} from "../../theme/tokens";
 import type { UpdateDriverProfileInput } from "../../types/driver";
+import { HEADER_HEIGHT, PillButton, StatCard, StickyHeader } from "../../ui";
 
-type Styles = ReturnType<typeof makeStyles>;
+/** Tailwind `max-w-md`, which is what Stitch centres the card inside. */
+const MAX_CARD_WIDTH = 448;
 
-// Phase 11 - display labels only, mirroring ActiveTripCard.
-//
-// It is a lookup table and nothing more: the level itself is decided by the
-// backend from COMPLETED trips, and no threshold (10 / 50 / 100 / 500) is
-// introduced here. An unknown level falls back to the raw server value.
+/** Stitch draws the avatar well at `w-24 h-24`; the level frame needs a little
+ *  more room, so the picker keeps its 112px hero size. */
+const AVATAR = 112;
+
+const CHIP_MIN_HEIGHT = 56;
+
+// Display labels only: the level itself is decided by the backend from
+// COMPLETED trips, and no threshold is introduced here.
 const LEVEL_LABELS: Record<string, string> = {
   BRONZE: strings.level.bronze,
   SILVER: strings.level.silver,
@@ -50,7 +57,7 @@ const LEVEL_LABELS: Record<string, string> = {
 };
 
 /**
- * Driver IDENTITY, saved through PATCH /driver/me.
+ * Stitch `basic_info_setup` - driver IDENTITY, saved through PATCH /driver/me.
  *
  * Two deliberate constraints, both dictated by the server:
  *
@@ -58,37 +65,30 @@ const LEVEL_LABELS: Record<string, string> = {
  *    this endpoint - it is how an approved record gets pushed back into review.
  * 2. The phone number is read-only. It is the identity Firebase authenticates,
  *    and PATCH would change it without re-verifying, locking the driver out of
- *    the next login. That rule survives the password feature: the password is a
- *    second door to the SAME phone-owned account, never a way to move the
- *    account to another number.
+ *    the next login.
  *
- * City is NOT read-only. Phase 8 added an authenticated, non-STAFF geography
- * surface (GET /geography/public/wilayas + /cities), so the driver picks a
- * wilaya and then a city from server data. Only cityId is sent; the wilaya is
- * derived server-side from the city, so a client cannot claim a cheaper wilaya
- * to influence pricing.
+ * City is NOT read-only: the driver picks a wilaya and then a city from server
+ * data. Only cityId is sent, because the server derives the wilaya from the
+ * city, so a client cannot claim a cheaper wilaya to influence pricing.
  *
- * PHASE 1C: the profile photo is NOT part of this form and has no Save button
- * of its own here. It travels through the document upload flow
- * (upload-url -> PUT -> POST /driver/documents), which is a different contract
- * with a different failure mode.
+ * The profile photo is NOT part of this form and has no Save button of its own
+ * here: it travels through the document upload flow, a different contract with a
+ * different failure mode.
  *
- * PHASE 1 (R-11): the largest direction pass in the audit - three
- * "row-reverse" rows and fifteen text styles. No field, endpoint or validation
- * rule was touched.
+ * REBUILT ON THE REFERENCE: one rounded-24 card carrying the 1-of-3 progress
+ * bar, the avatar well, the fields and the pill action - not the previous stack
+ * of section cards. The reference's plain city <select> is a chip grid here,
+ * because the option list comes from the geography endpoints at runtime and a
+ * native picker cannot show a wilaya number beside its Arabic name.
  *
- * PHASE 2: the vehicle block moved out to VehicleScreen. Sections 13 and 62 put
- * VEHICLE INFORMATION after DOCUMENTS in the onboarding order, which is not
- * expressible while the vehicle fields live in the screen the driver reaches
- * first. Vehicle make, model, colour, plate, year, features, ride class and the
- * review verdict are all there now, with their own delta and their own save.
- * Nothing was deleted: an approved driver still edits the car through the Menu,
- * which points at the new route.
+ * STILL ON THE OLD PALETTE, TRACKED: InputField, ReadOnlyRow,
+ * ProfilePhotoPicker and PasswordSetupCard. They are shared with the vehicle,
+ * documents and wallet screens, so they migrate with those screens rather than
+ * being forked here.
  */
 export function ProfileScreen() {
   const insets = useSafeAreaInsets();
-  const palette = usePalette();
-  const styles = useMemo(() => makeStyles(palette), [palette]);
+  const navigation = useNavigation();
   const { data: profile } = useDriverProfile();
   const mutation = useUpdateDriverProfile();
 
@@ -96,21 +96,16 @@ export function ProfileScreen() {
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
-  // - Phase 8: wilaya -> city selection, both from the backend -
   const [wilayaId, setWilayaId] = useState<string | null>(null);
   const [cityId, setCityId] = useState<string | null>(profile?.cityId ?? null);
   const wilayasQuery = useWilayas();
   const citiesQuery = useCities(wilayaId);
 
   /**
-   * One-shot hydration.
-   *
-   * The fields above are initialised from `profile`, which is undefined on the
-   * first render whenever the query has no cached data - a cold start, or a
-   * driver who opens this screen before GET /driver/me returns.
-   *
-   * It runs once per profile id and never again, so it cannot overwrite text
-   * the driver is typing while a background refetch resolves.
+   * One-shot hydration. The fields above are initialised from `profile`, which
+   * is undefined on the first render whenever the query has no cached data. It
+   * runs once per profile id and never again, so it cannot overwrite text the
+   * driver is typing while a background refetch resolves.
    */
   const hydratedFor = useRef<string | null>(null);
   useEffect(() => {
@@ -127,14 +122,10 @@ export function ProfileScreen() {
     if (trimmedName && trimmedName !== (profile?.name ?? "")) {
       next.name = trimmedName;
     }
-
-    // Phase 8: only cityId travels. wilayaId is deliberately NOT sent - the
-    // server derives it from the city, which keeps one source of truth and
-    // stops a client from claiming a wilaya it does not belong to.
+    // Only cityId travels. wilayaId is deliberately NOT sent.
     if (cityId && cityId !== (profile?.cityId ?? null)) {
       next.cityId = cityId;
     }
-
     return next;
   }, [name, cityId, profile]);
 
@@ -170,66 +161,73 @@ export function ProfileScreen() {
       <ScrollView
         contentContainerStyle={[
           styles.content,
-          { paddingTop: insets.top + spacing.xl },
-          { paddingBottom: insets.bottom + spacing["3xl"] },
+          {
+            paddingTop: insets.top + HEADER_HEIGHT + SPACING.lg,
+            paddingBottom: insets.bottom + SPACING.xxl,
+          },
         ]}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={styles.heading}>{strings.profile.title}</Text>
+        {/* `overflow: hidden` is required: the progress bar is absolutely
+            positioned at top 0 and its square ends would cross this radius. */}
+        <View style={[styles.card, SHADOW_CARD]}>
+          <AuthProgress step={1} variant="bar" />
 
-        {/* Phase 11 - the photo inside the level frame. Frame, level and trip
-            counts all come from GET /driver/me.
-            PHASE 1C: same display, now also capturable. */}
-        <View style={styles.levelHero}>
-          <ProfilePhotoPicker
-            avatarUrl={profile?.photoUrl}
-            frameUrl={profile?.profileFrameUrl}
-            size={112}
-            fallback={profile?.name ?? null}
-            loading={!profile}
-          />
-          {profile?.profileLevel ? (
-            <Text style={styles.levelText}>
-              {LEVEL_LABELS[profile.profileLevel] ?? profile.profileLevel}
-            </Text>
-          ) : null}
-        </View>
+          <Text style={styles.title}>{strings.profile.title}</Text>
 
-        <View style={styles.statsRow}>
-          <Stat
-            styles={styles}
-            label={strings.profile.ratingLabel}
-            value={profile ? profile.rating.toFixed(1) : "\u2014"}
-          />
-          <Stat
-            styles={styles}
-            label={strings.profile.tripsLabel}
-            value={
-              profile
-                ? String(profile.completedTripsCount ?? profile.totalTrips)
-                : "\u2014"
-            }
-          />
-        </View>
-
-        {/* Progress to the next level: both numbers are computed server-side,
-            and the row disappears at the top level. */}
-        {profile?.nextLevel && profile?.nextLevelAt ? (
-          <View style={styles.statsRow}>
-            <Stat
-              styles={styles}
-              label={strings.level.progress}
-              value={`${profile.completedTripsCount ?? 0} / ${profile.nextLevelAt}`}
+          {/* The photo inside the level frame. Frame, level and trip counts all
+              come from GET /driver/me. */}
+          <View style={styles.avatarBlock}>
+            <ProfilePhotoPicker
+              avatarUrl={profile?.photoUrl}
+              frameUrl={profile?.profileFrameUrl}
+              size={AVATAR}
+              fallback={profile?.name ?? null}
+              loading={!profile}
             />
-            <Stat
-              styles={styles}
-              label={strings.level.nextLevel}
-              value={LEVEL_LABELS[profile.nextLevel] ?? profile.nextLevel}
+            {profile?.profileLevel ? (
+              <Text style={styles.levelText}>
+                {LEVEL_LABELS[profile.profileLevel] ?? profile.profileLevel}
+              </Text>
+            ) : null}
+          </View>
+
+          {/* Plain "row": React Native mirrors it under RTL. */}
+          <View style={styles.statsRow}>
+            <StatCard
+              label={strings.profile.ratingLabel}
+              value={profile ? profile.rating.toFixed(1) : "\u2014"}
+              icon="star"
+              flex={1}
+            />
+            <StatCard
+              label={strings.profile.tripsLabel}
+              value={
+                profile
+                  ? String(profile.completedTripsCount ?? profile.totalTrips)
+                  : "\u2014"
+              }
+              flex={1}
             />
           </View>
-        ) : null}
 
-        <SectionCard title={strings.profile.identitySection}>
+          {/* Progress to the next level: both numbers are computed server-side,
+              and the row disappears at the top level. */}
+          {profile?.nextLevel && profile?.nextLevelAt ? (
+            <View style={styles.statsRow}>
+              <StatCard
+                label={strings.level.progress}
+                value={`${profile.completedTripsCount ?? 0} / ${profile.nextLevelAt}`}
+                flex={1}
+              />
+              <StatCard
+                label={strings.level.nextLevel}
+                value={LEVEL_LABELS[profile.nextLevel] ?? profile.nextLevel}
+                flex={1}
+              />
+            </View>
+          ) : null}
+
           <InputField
             label={strings.profile.nameLabel}
             placeholder={strings.profile.namePlaceholder}
@@ -238,13 +236,15 @@ export function ProfileScreen() {
             autoCapitalize="words"
             maxLength={120}
           />
+
           <ReadOnlyRow
             label={strings.profile.phoneLabel}
             value={profile?.phone ?? "\u2014"}
             hint={strings.profile.phoneLocked}
             ltr
           />
-          {/* Phase 8: wilaya picker, fed by GET /geography/public/wilayas */}
+
+          {/* Wilaya picker, fed by GET /geography/public/wilayas */}
           <View style={styles.pickerBlock}>
             <Text style={styles.pickerLabel}>
               {strings.profile.wilayaLabel}
@@ -252,16 +252,14 @@ export function ProfileScreen() {
             <Text style={styles.pickerHint}>{strings.profile.wilayaHint}</Text>
             {wilayasQuery.isLoading && (
               <View style={styles.pickerStatus}>
-                <ActivityIndicator size="small" color={palette.primary} />
-                <Text style={styles.pickerStatusText}>
+                <ActivityIndicator size="small" color={COLORS.primary} />
+                <Text style={styles.pickerHint}>
                   {strings.profile.wilayaLoading}
                 </Text>
               </View>
             )}
             {wilayasQuery.isError && (
-              <Text style={styles.pickerError}>
-                {strings.profile.wilayaFailed}
-              </Text>
+              <Text style={styles.error}>{strings.profile.wilayaFailed}</Text>
             )}
             {wilayasQuery.data?.length === 0 && (
               <Text style={styles.pickerHint}>
@@ -295,7 +293,7 @@ export function ProfileScreen() {
             </View>
           </View>
 
-          {/* Phase 8: city picker, only after a wilaya is chosen */}
+          {/* City picker, only after a wilaya is chosen */}
           <View style={styles.pickerBlock}>
             <Text style={styles.pickerLabel}>{strings.profile.cityLabel}</Text>
             {!wilayaId && (
@@ -307,8 +305,8 @@ export function ProfileScreen() {
             )}
             {wilayaId && citiesQuery.isLoading && (
               <View style={styles.pickerStatus}>
-                <ActivityIndicator size="small" color={palette.primary} />
-                <Text style={styles.pickerStatusText}>
+                <ActivityIndicator size="small" color={COLORS.primary} />
+                <Text style={styles.pickerHint}>
                   {strings.profile.cityLoading}
                 </Text>
               </View>
@@ -338,141 +336,106 @@ export function ProfileScreen() {
               })}
             </View>
           </View>
-        </SectionCard>
 
-        {/* PHASE 1: optional password. It has its own submit button on purpose:
-            it targets POST /auth/password/change, NOT PATCH /driver/me, and a
-            failed profile save must never lose a typed password. */}
-        <PasswordSetupCard />
+          {/* Optional password. It has its own submit button on purpose: it
+              targets POST /auth/password/change, NOT PATCH /driver/me, and a
+              failed profile save must never lose a typed password. */}
+          <PasswordSetupCard />
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-        {saved && !error ? (
-          <Text style={styles.success}>{strings.common.saved}</Text>
-        ) : null}
+          {error ? <Text style={styles.error}>{error}</Text> : null}
+          {saved && !error ? (
+            <Text style={styles.success}>{strings.common.saved}</Text>
+          ) : null}
 
-        <PrimaryButton
-          label={strings.profile.saveChanges}
-          onPress={() => void onSave()}
-          loading={mutation.isPending}
-          disabled={!dirty}
-          style={styles.save}
-        />
+          <PillButton
+            label={strings.profile.saveChanges}
+            onPress={() => void onSave()}
+            loading={mutation.isPending}
+            disabled={!dirty}
+            style={styles.save}
+          />
+        </View>
       </ScrollView>
+
+      {/* Rendered LAST so it paints over the scrolling content. */}
+      <StickyHeader
+        onBackPress={navigation.canGoBack() ? navigation.goBack : undefined}
+      />
     </KeyboardAvoidingView>
   );
 }
 
-function Stat({
-  styles,
-  label,
-  value,
-}: {
-  styles: Styles;
-  label: string;
-  value: string;
-}) {
-  return (
-    <View style={styles.stat}>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </View>
-  );
-}
-
-const makeStyles = (palette: Palette) =>
-  StyleSheet.create({
-    root: { flex: 1, backgroundColor: palette.background },
-    content: { paddingHorizontal: spacing.xl, gap: spacing.lg },
-    heading: {
-      ...typography.title,
-      color: palette.textPrimary,
-      textAlign: textAlignStart(),
-    },
-    // Plain "row": mirrored by React Native under RTL.
-    statsRow: { flexDirection: "row", gap: spacing.md },
-    levelHero: { alignItems: "center", gap: spacing.sm },
-    levelText: {
-      ...typography.caption,
-      color: palette.primaryText,
-      textAlign: "center",
-    },
-    stat: {
-      flex: 1,
-      backgroundColor: palette.surface,
-      borderRadius: radius.card,
-      borderWidth: 1,
-      borderColor: palette.border,
-      paddingVertical: spacing.lg,
-      alignItems: "center",
-    },
-    statValue: { ...typography.numeric, color: palette.primaryText },
-    // Centred inside its own stat tile, so it needs no alignment of its own.
-    statLabel: {
-      ...typography.caption,
-      color: palette.textSecondary,
-      marginTop: spacing.xs,
-    },
-    pickerBlock: { gap: spacing.xs },
-    pickerLabel: {
-      ...typography.caption,
-      color: palette.textSecondary,
-      textAlign: textAlignStart(),
-    },
-    pickerHint: {
-      ...typography.caption,
-      color: palette.textSecondary,
-      textAlign: textAlignStart(),
-    },
-    pickerError: {
-      ...typography.caption,
-      color: palette.danger,
-      textAlign: textAlignStart(),
-    },
-    pickerStatus: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing.xs,
-    },
-    pickerStatusText: {
-      ...typography.caption,
-      color: palette.textSecondary,
-    },
-    chipWrap: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: spacing.xs,
-      marginTop: spacing.xs,
-    },
-    chip: {
-      // Driver touch floor (56pt), not a normal chip size: picking a wilaya
-      // usually happens in the car, and a mis-tap means the wrong city.
-      minHeight: touchTarget.normal,
-      justifyContent: "center",
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.xs,
-      borderRadius: radius.md,
-      borderWidth: 1,
-      borderColor: palette.border,
-      backgroundColor: palette.surfaceSunken,
-    },
-    chipSelected: {
-      borderColor: palette.primary,
-      backgroundColor: palette.primaryWash,
-    },
-    chipText: {
-      ...typography.caption,
-      color: palette.textSecondary,
-    },
-    chipTextSelected: { color: palette.primaryText },
-    error: {
-      ...typography.body,
-      color: palette.danger,
-      textAlign: textAlignStart(),
-    },
-    success: {
-      ...typography.body,
-      color: palette.online,
-      textAlign: textAlignStart(),
-    },
-    save: { marginTop: spacing.sm },
-  });
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: COLORS.background },
+  content: {
+    paddingHorizontal: SPACING.gutter,
+    alignItems: "center",
+  },
+  card: {
+    width: "100%",
+    maxWidth: MAX_CARD_WIDTH,
+    borderRadius: RADIUS.card,
+    backgroundColor: COLORS.surfaceContainer,
+    borderWidth: 1,
+    borderColor: alpha(COLORS.surfaceVariant, 0.3),
+    padding: SPACING.xl,
+    paddingTop: SPACING.xxl,
+    gap: SPACING.lg,
+    overflow: "hidden",
+  },
+  title: {
+    ...typo("headlineLgMobile"),
+    color: COLORS.onSurface,
+    textAlign: "center",
+  },
+  avatarBlock: { alignItems: "center", gap: SPACING.sm },
+  levelText: { ...typo("labelMd"), color: COLORS.primary, textAlign: "center" },
+  statsRow: { flexDirection: "row", gap: SPACING.md },
+  pickerBlock: { gap: SPACING.xs },
+  pickerLabel: {
+    ...typo("labelMd"),
+    color: COLORS.onSurface,
+    textAlign: textAlignStart(),
+  },
+  pickerHint: {
+    ...typo("labelSm"),
+    color: COLORS.onSurfaceVariant,
+    textAlign: textAlignStart(),
+  },
+  pickerStatus: { flexDirection: "row", alignItems: "center", gap: SPACING.xs },
+  chipWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: SPACING.xs,
+    marginTop: SPACING.xs,
+  },
+  chip: {
+    // Driver touch floor, not a normal chip size: picking a wilaya usually
+    // happens in the car, and a mis-tap means the wrong city.
+    minHeight: CHIP_MIN_HEIGHT,
+    justifyContent: "center",
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    borderColor: COLORS.outlineVariant,
+    backgroundColor: COLORS.surface,
+  },
+  chipSelected: {
+    borderColor: COLORS.primaryContainer,
+    backgroundColor: alpha(COLORS.primaryContainer, 0.16),
+  },
+  chipText: { ...typo("labelSm"), color: COLORS.onSurfaceVariant },
+  chipTextSelected: { color: COLORS.primary },
+  error: {
+    ...typo("labelMd"),
+    color: COLORS.error,
+    textAlign: textAlignStart(),
+  },
+  success: {
+    ...typo("labelMd"),
+    color: SEMANTIC.success,
+    textAlign: textAlignStart(),
+  },
+  save: { marginTop: SPACING.sm },
+});
