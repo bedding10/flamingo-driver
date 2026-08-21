@@ -181,8 +181,17 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
     };
   }, [language, setLanguage]);
 
-  return (
-    <I18nContext.Provider value={value}>{children}</I18nContext.Provider>
+  // NOTE: this file is `index.ts`, not `index.tsx`, and it is imported as the
+  // `../i18n` module path all over the app. A `.ts` file cannot contain JSX -
+  // Babel reads `<I18nContext.Provider ...>` as TypeScript type parameters and
+  // the Metro bundle fails with an "unexpected token" parse error before Gradle
+  // ever runs. `React.createElement` is the same element without the JSX
+  // syntax, so the module entry point keeps its name and every import stays
+  // untouched.
+  return React.createElement(
+    I18nContext.Provider,
+    { value },
+    children,
   );
 }
 
