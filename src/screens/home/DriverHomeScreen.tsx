@@ -1,13 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, Linking, Pressable, StyleSheet, View } from "react-native";
+import { Alert, Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { DriverMap } from "../../components/DriverMap";
 import { RideOfferCard } from "../../components/RideOfferCard";
 import { ActiveTripCard } from "../../components/ActiveTripCard";
-import { HomeStatusCard } from "../../components/HomeStatusCard";
-import { StatusPill, type PillTone } from "../../components/StatusPill";
+import { AvailabilityToggle } from "../../components/AvailabilityToggle";
+import { StatusPill } from "../../components/StatusPill";
 import { BrandMark } from "../../components/BrandMark";
 import { Icon } from "../../components/Icon";
 import { navSpace } from "../../components/DriverTabBar";
@@ -30,7 +30,7 @@ import { connectSocket, onSocketStatus } from "../../socket/socket.service";
 import type { SocketStatus } from "../../types/socket";
 import type { DriverStackParamList } from "../../navigation/types";
 import { strings } from "../../i18n/strings";
-import { shareStrings, statusStrings } from "../../i18n/strings.phase7";
+import { shareStrings } from "../../i18n/strings.phase7";
 import { home75Strings } from "../../i18n/strings.phase75";
 import {
   radius,
@@ -49,6 +49,14 @@ import {
  * keep publishing `driver:location` because MatchingService reads that position
  * from Redis. Going OFFLINE stops the GPS, which is the only honest way to stop
  * draining the battery.
+ *
+ * BOTTOM STATUS CARD REMOVED (by request): the card that showed the vehicle line
+ * and the big "start receiving requests" button is gone. Going online is now a
+ * single switch in the top bar (AvailabilityToggle), and the map keeps the whole
+ * screen when there is nothing to act on. The vehicle make/model/plate is no
+ * longer repeated here - it lives in the vehicle screen, which is its home.
+ * What survived from that card is the part a driver cannot work without: the
+ * permission / not-approved / server-error notice, now a compact floating strip.
  *
  * SOS REMOVED: the emergency report, its pending flag and the safetyApi import
  * are gone with the rest of the SOS system, and ActiveTripCard no longer takes
@@ -78,7 +86,7 @@ export function DriverHomeScreen() {
   const profile = useDriverStore((state) => state.profile);
   const fix = useLocationStore((state) => state.fix);
 
-  const { availability, isOnline, onTrip, blocked, pending, error, toggle } =
+  const { isOnline, onTrip, blocked, pending, error, toggle } =
     useAvailability();
 
   // Offers are owned by their own hook so this screen stays a layout, not a
@@ -190,30 +198,14 @@ export function DriverHomeScreen() {
 
   // ---- derived display state ---------------------------------------------
 
-  const availabilityTone: PillTone = onTrip
-    ? "busy"
-    : isOnline
-      ? "approved"
-      : "neutral";
-  const availabilityShort = onTrip
-    ? home75Strings.pillOnTrip
-    : isOnline
-      ? home75Strings.pillOnline
-      : home75Strings.pillOffline;
-
   // The socket pill is only shown when there is something wrong: a green
-  // "connected" chip next to a green "online" chip is noise, but a driver who is
-  // online with a dead socket will never receive an offer and must be told.
+  // "connected" chip next to the switch is noise, but a driver who is online
+  // with a dead socket will never receive an offer and must be told.
   const linkBroken = link !== "connected";
   const linkLabel =
     link === "connecting" ? home75Strings.linkConnecting : home75Strings.linkDown;
 
   const vehicle = profile?.vehicle;
-  const vehicleLine = vehicle?.plate
-    ? [vehicle.make, vehicle.model].filter(Boolean).join(" ") +
-      " \u00b7 " +
-      vehicle.plate
-    : strings.home.vehicleMissing;
 
   const permissionNotice =
     permission === "servicesOff"
@@ -224,22 +216,17 @@ export function DriverHomeScreen() {
           ? strings.home.permissionDenied
           : null;
 
-  const statusLabel = onTrip
-    ? statusStrings.onTrip
-    : isOnline
-      ? statusStrings.online
-      : statusStrings.offline;
-  const statusColor = onTrip
-    ? palette.busy
-    : isOnline
-      ? palette.online
-      : palette.offline;
-
-  const hint = onTrip
-    ? home75Strings.onTripHint
-    : isOnline
-      ? home75Strings.waiting
-      : home75Strings.offlineHint;
+  /**
+   * The one line that used to live in the status card. Order matters: a denied
+   * GPS permission beats "not approved yet", which beats a transient server
+   * error, because that is the order in which the driver has to fix them.
+   */
+  const alert =
+    permissionNotice ??
+    (blocked ? strings.home.notApproved : null) ??
+    notice ??
+    error ??
+    null;
 
   // Everything floating at the bottom clears the navigation pill, which is now
   // mounted by DriverNavigator rather than by this screen.
@@ -261,7 +248,19 @@ export function DriverHomeScreen() {
       <View style={[styles.topBar, { paddingTop: insets.top + spacing.sm }]}>
         <BrandMark />
         <View style={styles.topPills}>
-          <StatusPill label={availabilityShort} tone={availabilityTone} dot />
+          {/* The only way to go online or offline. */}
+          <AvailabilityToggle
+            isOnline={isOnline}
+            onTrip={onTrip}
+            pending={pending}
+            blocked={blocked}
+            onToggle={() => void toggle()}
+            labels={{
+              online: home75Strings.pillOnline,
+              offline: home75Strings.pillOffline,
+              onTrip: home75Strings.pillOnTrip,
+            }}
+          />
           {linkBroken ? (
             <StatusPill
               label={linkLabel}
@@ -333,29 +332,28 @@ export function DriverHomeScreen() {
           onAccept={accept}
           onDecline={decline}
         />
-      ) : (
-        <HomeStatusCard
-          availability={availability}
-          statusLabel={statusLabel}
-          statusColor={statusColor}
-          vehicleLine={vehicleLine}
-          hint={hint}
-          warning={permissionNotice ?? (blocked ? strings.home.notApproved : notice)}
-          error={error}
-          pending={pending}
-          blocked={blocked}
-          bottom={bottomInset}
-          labels={{
-            goOnline: home75Strings.startReceiving,
-            goOffline: home75Strings.stopReceiving,
-            onTrip: home75Strings.onTripLocked,
-          }}
-          onToggle={() => void toggle()}
-          onWarningPress={
-            permissionNotice ? () => void Linking.openSettings() : undefined
-          }
-        />
-      )}
+      ) : alert ? (
+        // Everything that blocks work still has to be said out loud. Tapping it
+        // opens the OS settings only when the problem actually lives there.
+        <Pressable
+          accessibilityRole={permissionNotice ? "button" : "text"}
+          disabled={!permissionNotice}
+          onPress={() => void Linking.openSettings()}
+          style={[
+            styles.alert,
+            {
+              bottom: bottomInset + spacing.md,
+              backgroundColor: palette.surface,
+              borderColor: palette.border,
+            },
+          ]}
+        >
+          <Icon name="alert" size={18} color={palette.warning} />
+          <Text style={[styles.alertText, { color: palette.primaryText }]}>
+            {alert}
+          </Text>
+        </Pressable>
+      ) : null}
 
       <TripShareSheet
         visible={shareOpen}
@@ -375,7 +373,7 @@ const styles = StyleSheet.create({
     right: 0,
     top: 0,
     // Plain "row": React Native mirrors it under RTL, so the brand mark leads
-    // and the pills trail in every language.
+    // and the switch trails in every language.
     flexDirection: "row",
     alignItems: "flex-start",
     justifyContent: "space-between",
@@ -400,4 +398,19 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     ...shadows.floating,
   },
+
+  alert: {
+    position: "absolute",
+    start: spacing.lg,
+    end: spacing.lg,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.card,
+    borderWidth: 1,
+    ...shadows.floating,
+  },
+  alertText: { flex: 1, fontSize: 14, lineHeight: 20 },
 });
