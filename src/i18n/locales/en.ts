@@ -68,6 +68,23 @@ export const en = {
     tagline: "Drive with flaminGO",
   },
 
+  /**
+   * PHASE 2 - Stitch `welcome_onboarding`, the first screen an unregistered
+   * driver sees.
+   *
+   * The heading is split into `titleLead` + `titleBrand` so the brand word can
+   * take the pink accent Stitch puts on it. Splitting a sentence across keys is
+   * normally a word-order trap, but this word falls at the END of the sentence
+   * in all three languages, so the split is safe here.
+   */
+  welcome: {
+    titleLead: "Welcome to",
+    titleBrand: "flaminGO",
+    subtitle: "Join Algeria's finest fleet of drivers.",
+    start: "Start registration",
+    signIn: "Sign in",
+  },
+
   login: {
     role: "For drivers",
     phoneTitle: "Sign in",

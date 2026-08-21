@@ -68,6 +68,15 @@ export const fr: Dictionary = {
     tagline: "Conduisez avec flaminGO",
   },
 
+  /** PHASE 2 - Stitch `welcome_onboarding`. */
+  welcome: {
+    titleLead: "Bienvenue chez",
+    titleBrand: "flaminGO",
+    subtitle: "Rejoignez la flotte de chauffeurs la plus reconnue d'Algérie.",
+    start: "Commencer l'inscription",
+    signIn: "Se connecter",
+  },
+
   login: {
     role: "Pour les chauffeurs",
     phoneTitle: "Connexion",

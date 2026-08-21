@@ -9,6 +9,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { InputField } from "../../components/InputField";
 import { PrimaryButton } from "../../components/PrimaryButton";
 import { textAlignStart } from "../../i18n";
@@ -31,10 +32,13 @@ import {
 import { authApi } from "../../api";
 import { toApiError } from "../../api/client";
 import { useAuthStore } from "../../auth/auth.store";
+import type { AuthStackParamList } from "../../navigation/types";
 
 const CODE_LENGTH = 6;
 const RESEND_SECONDS = 60;
 const MIN_PASSWORD_LENGTH = 6;
+
+type Props = NativeStackScreenProps<AuthStackParamList, "Login">;
 
 /**
  * Phone -> SMS code -> backend session.
@@ -63,20 +67,31 @@ const MIN_PASSWORD_LENGTH = 6;
  * contrast at body sizes, so the filled pink stays the brand hex in both themes
  * while pink lettering darkens in light mode.
  *
- * STILL OUTSTANDING (PHASE 2, visual rebuild): Stitch splits this into three
- * screens - phone_number_entry, otp_verification and a welcome screen - each on
- * a glass panel over a dimmed map, with a three-segment progress bar, a fixed
- * +213 country box beside an LTR national-number field, and six single-character
- * OTP boxes rather than one six-digit input. None of that geometry is built yet.
- * This commit changed colour roles only.
+ * PHASE 2: WHICH DOOR OPENS FIRST
+ * `route.params.mode` decides the initial mode, because the Welcome screen has
+ * two buttons that mean different things: "Start registration" must land on the
+ * SMS flow (POST /auth/firebase is the only account-creating path the backend
+ * has) and "Sign in" must land on the password flow. The param is optional, so
+ * `navigate("Login")` from anywhere else still opens on SMS as before. It is
+ * read as a lazy initial value only: the driver can still switch doors with the
+ * mode row, and that choice must not be undone by a re-render.
+ *
+ * STILL OUTSTANDING (PHASE 2, visual rebuild): Stitch splits this into two
+ * screens - phone_number_entry and otp_verification - each on a glass panel
+ * over a dimmed map, with a three-segment progress bar, a fixed +213 country box
+ * beside an LTR national-number field, and six single-character OTP boxes rather
+ * than one six-digit input. None of that geometry is built yet. This commit
+ * changed the initial mode only.
  */
-export function LoginScreen() {
+export function LoginScreen({ route }: Props) {
   const insets = useSafeAreaInsets();
   const palette = usePalette();
   const styles = useMemo(() => makeStyles(palette), [palette]);
   const signIn = useAuthStore((state) => state.signIn);
 
-  const [mode, setMode] = useState<"sms" | "password">("sms");
+  const [mode, setMode] = useState<"sms" | "password">(
+    route.params?.mode ?? "sms",
+  );
   const [step, setStep] = useState<"phone" | "code">("phone");
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
@@ -270,200 +285,4 @@ export function LoginScreen() {
             <View style={styles.spacer} />
             <InputField
               label={pw.login.passwordLabel}
-              placeholder={pw.login.passwordPlaceholder}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              autoCapitalize="none"
-              autoCorrect={false}
-              textContentType="password"
-              editable={!busy}
-              maxLength={72}
-            />
-            {error ? <Text style={styles.error}>{error}</Text> : null}
-            <PrimaryButton
-              label={pw.login.submit}
-              onPress={() => void passwordSignIn()}
-              loading={busy}
-              disabled={!passwordReady}
-              style={styles.action}
-            />
-            <Text style={styles.footNote}>{pw.login.noPasswordHint}</Text>
-          </View>
-        ) : step === "phone" ? (
-          <View style={styles.card}>
-            <Text style={styles.title}>{strings.login.phoneTitle}</Text>
-            <Text style={styles.subtitle}>{strings.login.phoneSubtitle}</Text>
-            <InputField
-              label={strings.login.phoneLabel}
-              placeholder={strings.login.phonePlaceholder}
-              value={phone}
-              onChangeText={setPhone}
-              keyboardType="phone-pad"
-              textContentType="telephoneNumber"
-              autoComplete="tel"
-              editable={!busy}
-              numeric
-            />
-            {error ? <Text style={styles.error}>{error}</Text> : null}
-            <PrimaryButton
-              label={strings.login.sendCode}
-              onPress={sendCode}
-              loading={busy}
-              disabled={!phoneReady}
-              style={styles.action}
-            />
-          </View>
-        ) : (
-          <View style={styles.card}>
-            <Text style={styles.title}>{strings.login.codeTitle}</Text>
-            <Text style={styles.subtitle}>
-              {strings.login.codeSubtitle}
-            </Text>
-            <Text style={styles.phoneEcho}>{phone}</Text>
-            <InputField
-              label={strings.login.codeLabel}
-              placeholder={strings.login.codePlaceholder}
-              value={code}
-              onChangeText={(value) =>
-                setCode(value.replace(/\D/g, "").slice(0, CODE_LENGTH))
-              }
-              keyboardType="number-pad"
-              textContentType="oneTimeCode"
-              autoComplete="sms-otp"
-              maxLength={CODE_LENGTH}
-              editable={!busy}
-              autoFocus
-              numeric
-            />
-            {error ? <Text style={styles.error}>{error}</Text> : null}
-            <PrimaryButton
-              label={strings.login.verify}
-              onPress={verifyCode}
-              loading={busy}
-              disabled={!codeReady}
-              style={styles.action}
-            />
-            <View style={styles.footer}>
-              <Pressable onPress={backToPhone} disabled={busy} hitSlop={12}>
-                <Text style={styles.link}>{strings.login.changeNumber}</Text>
-              </Pressable>
-              {secondsLeft > 0 ? (
-                <Text style={styles.timer}>
-                  {strings.login.resendIn} {secondsLeft}{" "}
-                  {strings.login.seconds}
-                </Text>
-              ) : (
-                <Pressable onPress={sendCode} disabled={busy} hitSlop={12}>
-                  <Text style={styles.link}>{strings.login.resend}</Text>
-                </Pressable>
-              )}
-            </View>
-          </View>
-        )}
-      </ScrollView>
-    </KeyboardAvoidingView>
-  );
-}
-
-const makeStyles = (palette: Palette) =>
-  StyleSheet.create({
-    root: { flex: 1, backgroundColor: palette.background },
-    content: {
-      flexGrow: 1,
-      paddingHorizontal: spacing.xl,
-      justifyContent: "center",
-    },
-    header: { alignItems: "center", marginBottom: spacing["3xl"] },
-    // Brand lettering, so `primaryText` rather than the filled `primary`.
-    brand: { ...typography.display, color: palette.primaryText },
-    role: {
-      ...typography.label,
-      color: palette.textSecondary,
-      letterSpacing: 3,
-      marginTop: spacing.xs,
-    },
-    // Plain "row": mirrored by React Native under RTL.
-    modeRow: {
-      flexDirection: "row",
-      gap: spacing.xs,
-      marginBottom: spacing.xl,
-    },
-    mode: {
-      flex: 1,
-      minHeight: 44,
-      justifyContent: "center",
-      alignItems: "center",
-      borderRadius: radius.md,
-      borderWidth: 1,
-      borderColor: palette.border,
-      // Was withAlpha(offWhite, 0.06), which is invisible on a light
-      // background. `surfaceSunken` is the inset-well role and reads in both.
-      backgroundColor: palette.surfaceSunken,
-    },
-    modeActive: {
-      borderColor: palette.primary,
-      // primaryWash IS withAlpha(primaryContainer, 0.16) - the same value the
-      // hand-written version used, now named for what it means.
-      backgroundColor: palette.primaryWash,
-    },
-    // Centred inside its own Pressable, so it needs no alignment of its own.
-    modeText: {
-      ...typography.caption,
-      color: palette.textSecondary,
-    },
-    modeTextActive: { color: palette.primaryText },
-    card: { width: "100%" },
-    spacer: { height: spacing.md },
-    title: {
-      ...typography.title,
-      color: palette.textPrimary,
-      textAlign: textAlignStart(),
-    },
-    subtitle: {
-      ...typography.body,
-      color: palette.textSecondary,
-      textAlign: textAlignStart(),
-      marginTop: spacing.xs,
-      marginBottom: spacing.xl,
-    },
-    /**
-     * Deliberately LTR, and one of the pinned Latin-content exceptions: this
-     * echoes the number the driver just typed, normalised to E.164. A leading
-     * "+" inside an Arabic paragraph can be reordered by the bidi algorithm and
-     * land at the wrong end, so the one string that proves we are texting the
-     * right phone would be the string we render wrong. Centre plus explicit LTR.
-     */
-    phoneEcho: {
-      ...typography.numeric,
-      color: palette.primaryText,
-      textAlign: "center",
-      writingDirection: "ltr",
-      marginBottom: spacing.lg,
-    },
-    error: {
-      ...typography.caption,
-      color: palette.danger,
-      textAlign: textAlignStart(),
-      marginTop: spacing.md,
-    },
-    footNote: {
-      ...typography.caption,
-      color: palette.textSecondary,
-      textAlign: textAlignStart(),
-      marginTop: spacing.md,
-    },
-    action: { marginTop: spacing.xl },
-    // Already correct: plain "row" with space-between mirrors on its own.
-    footer: {
-      marginTop: spacing.xl,
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-    },
-    link: { ...typography.label, color: palette.primaryText },
-    timer: {
-      ...typography.caption,
-      color: palette.textSecondary,
-    },
-  });
+              placeholder={pw.login.passwordPlacehol

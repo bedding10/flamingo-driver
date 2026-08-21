@@ -3,7 +3,22 @@
  * now so navigation code never uses raw strings.
  */
 export type AuthStackParamList = {
-  Login: undefined;
+  /**
+   * PHASE 2 - Stitch `welcome_onboarding`, the first screen an unregistered
+   * driver sees. Declared FIRST in AuthNavigator so it is the initial route:
+   * section 12 makes Welcome step 1 of onboarding.
+   */
+  Welcome: undefined;
+  /**
+   * `mode` preselects which of the two doors to the SAME account opens: "sms"
+   * for a new driver, because POST /auth/firebase is the only account-creating
+   * path the backend has, or "password" for a returning one who has already set
+   * a password.
+   *
+   * Optional, so every existing `navigate("Login")` keeps compiling and still
+   * lands on the SMS flow.
+   */
+  Login: { mode?: "sms" | "password" } | undefined;
 };
 
 /**

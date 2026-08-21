@@ -65,6 +65,23 @@ export const ar: Dictionary = {
     tagline: "قُد مع flaminGO",
   },
 
+  /**
+   * PHASE 2 - Stitch `welcome_onboarding`. This copy is Stitch's own Arabic
+   * wording, not a translation of the English: the design was authored in
+   * Arabic and the reference text is what the driver is meant to read.
+   *
+   * `titleBrand` is the transliterated "فلامينغو", which is what the reference
+   * heading uses, while the header lockup stays the latin wordmark - also as
+   * Stitch draws it.
+   */
+  welcome: {
+    titleLead: "أهلاً بك في",
+    titleBrand: "فلامينغو",
+    subtitle: "انضم إلى أسطول السائقين الأكثر تميزاً في الجزائر.",
+    start: "بدء التسجيل",
+    signIn: "تسجيل الدخول",
+  },
+
   login: {
     role: "للسائقين",
     phoneTitle: "تسجيل الدخول",
