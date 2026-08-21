@@ -5,10 +5,12 @@ import React, { useMemo, useState } from "react";
 import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import type { CatalogVehicleType } from "../../api/catalog.api";
 import {
   DocumentDatesModal,
   type DocumentDates,
 } from "../../components/DocumentDatesModal";
+import { VehicleTypePicker } from "../../components/VehicleTypePicker";
 import { useDocumentUpload } from "../../hooks/useDocumentUpload";
 import { useDriverProfile } from "../../hooks/useDriverProfile";
 import { textAlignStart } from "../../i18n";
@@ -86,6 +88,10 @@ const COPY = {
     "\u0645\u062a\u0627\u0628\u0639\u0629 \u0625\u0644\u0649 \u0628\u064a\u0627\u0646\u0627\u062a \u0627\u0644\u0645\u0631\u0643\u0628\u0629",
   continueBlocked:
     "\u064a\u0631\u062c\u0649 \u0631\u0641\u0639 \u0643\u0644 \u0627\u0644\u0648\u062b\u0627\u0626\u0642 \u0627\u0644\u0645\u0637\u0644\u0648\u0628\u0629 \u0644\u0644\u0645\u062a\u0627\u0628\u0639\u0629.",
+  pickTypeHint:
+    "\u0627\u062e\u062a\u0631 \u0646\u0648\u0639 \u0645\u0631\u0643\u0628\u062a\u0643 \u0623\u0639\u0644\u0627\u0647 \u0644\u062a\u0631\u0649 \u0627\u0644\u0648\u062b\u0627\u0626\u0642 \u0627\u0644\u0645\u0637\u0644\u0648\u0628\u0629 \u0644\u0647\u0630\u0627 \u0627\u0644\u0646\u0648\u0639.",
+  typeRequired:
+    "\u0645\u0637\u0644\u0648\u0628\u0629 \u0644\u0647\u0630\u0627 \u0627\u0644\u0646\u0648\u0639",
 } as const;
 
 /**
@@ -95,6 +101,13 @@ const COPY = {
  *
  * The document slots the server accepts, no more and no less: DOC_TYPES and
  * REQUIRED_DRIVER_DOC_TYPES are the source of truth.
+ *
+ * VEHICLE KIND FIRST: the screen opens with VehicleTypePicker, so the driver
+ * declares car / motorcycle and then the exact type (economy, confort,
+ * women-only, bike ...) straight from the dashboard catalog. The chosen type's
+ * requiredDocuments are then folded into the checklist below - a bike rider is
+ * never blocked on a car-only paper. The choice itself cannot be persisted yet;
+ * the picker states why (SERVER_TODO.md section 1).
  *
  * A document is submitted, not approved: POST /driver/me/documents always stores
  * status PENDING, and only an operator can change it. Nothing here pretends
@@ -108,8 +121,9 @@ const COPY = {
  * Asking for dates after the photo would throw the photo away on any typo.
  *
  * THE STEP ACTION IS GATED ON SERVER DATA: the continue button reads
- * missingRequiredDocuments(), the same helper the list renders from, so it can
- * never enable while a slot above it still says MISSING.
+ * missingRequiredDocuments() plus the selected type's own required documents,
+ * the same data the list renders from, so it can never enable while a slot
+ * above it still says MISSING.
  *
  * REBUILT ON THE REFERENCE: each slot is its own rounded-12 card with a
  * state-coloured rail down its leading edge, a 40px icon well, an uppercase
@@ -128,6 +142,9 @@ export function DocumentsScreen() {
   const { submit, pending, error, clearError } = useDocumentUpload();
   const [notice, setNotice] = useState<string | null>(null);
   const [datesFor, setDatesFor] = useState<DocumentType | null>(null);
+  const [vehicleType, setVehicleType] = useState<CatalogVehicleType | null>(
+    null,
+  );
   const t = useTokens();
   const styles = useMemo(() => makeStyles(t), [t]);
 
@@ -169,10 +186,33 @@ export function DocumentsScreen() {
     (document) => displayDocumentStatus(document) === "REJECTED",
   );
 
+  /**
+   * Documents the CHOSEN TYPE adds on top of the global required set. Values
+   * the app has no slot for are dropped rather than rendered as a dead row -
+   * they are listed in SERVER_TODO.md section 4 instead.
+   */
+  const typeRequired = useMemo(() => {
+    const slots = DRIVER_DOC_SLOTS as readonly string[];
+    return (vehicleType?.requiredDocuments ?? []).filter(
+      (value): value is DocumentType =>
+        slots.includes(value) &&
+        !REQUIRED_DRIVER_DOC_TYPES.some((item) => item === value),
+    );
+  }, [vehicleType]);
+
+  const typeMissing = typeRequired.filter(
+    (type) => !latestDocument(documents, type),
+  );
+
   /** The gate for the next step: every REQUIRED slot has something in it. */
-  const canContinue = missing.length === 0;
+  const canContinue = missing.length === 0 && typeMissing.length === 0;
 
   const labelFor = (type: DocumentType) => SLOT_LABELS[type] ?? DOC_LABELS[type];
+  const allMissing = [...missing, ...typeMissing];
+
+  /** Progress counts the global slots plus whatever the type adds. */
+  const totalRequired = REQUIRED_DRIVER_DOC_TYPES.length + typeRequired.length;
+  const doneRequired = Math.max(totalRequired - allMissing.length, 0);
 
   return (
     <View style={styles.root}>
@@ -192,26 +232,36 @@ export function DocumentsScreen() {
         <Text style={styles.heading}>{strings.documents.title}</Text>
         <Text style={styles.subtitle}>{strings.documents.subtitle}</Text>
 
+        {/* Kind + type first: it decides which papers are asked for below. */}
+        <View style={styles.picker}>
+          <VehicleTypePicker
+            serverTypeId={profile?.vehicle?.vehicleTypeId ?? null}
+            value={vehicleType?.id ?? null}
+            onChange={setVehicleType}
+            cityId={profile?.cityId ?? null}
+          />
+        </View>
+
         {/* Stitch's onboarding progress bar, fed by the real slot counts. */}
         <View style={styles.progressTrack}>
           <View
             style={[
               styles.progressFill,
               {
-                width: `${Math.round(
-                  ((REQUIRED_DRIVER_DOC_TYPES.length - missing.length) /
-                    REQUIRED_DRIVER_DOC_TYPES.length) *
-                    100,
-                )}%`,
+                width: `${
+                  totalRequired > 0
+                    ? Math.round((doneRequired / totalRequired) * 100)
+                    : 0
+                }%`,
               },
             ]}
           />
         </View>
 
-        {missing.length > 0 ? (
+        {allMissing.length > 0 ? (
           <View style={styles.banner}>
             <Text style={styles.bannerTitle}>{p1.documents.missingTitle}</Text>
-            {missing.map((type) => (
+            {allMissing.map((type) => (
               <Text key={type} style={styles.bannerText}>
                 {"\u2022 " + labelFor(type)}
               </Text>
@@ -222,6 +272,10 @@ export function DocumentsScreen() {
             <Text style={styles.bannerOkText}>{p1.documents.allSubmitted}</Text>
           </View>
         )}
+
+        {!vehicleType ? (
+          <Text style={styles.hint}>{COPY.pickTypeHint}</Text>
+        ) : null}
 
         {hasRejected ? (
           <Text style={styles.hint}>{strings.documents.rejectedHint}</Text>
@@ -234,9 +288,11 @@ export function DocumentsScreen() {
           {DRIVER_DOC_SLOTS.map((type) => {
             const document = latestDocument(documents, type);
             const status = displayDocumentStatus(document);
-            const required = REQUIRED_DRIVER_DOC_TYPES.some(
+            const globallyRequired = REQUIRED_DRIVER_DOC_TYPES.some(
               (item) => item === type,
             );
+            const byType = typeRequired.some((item) => item === type);
+            const required = globallyRequired || byType;
             const tone = toneFor(t, status, required);
 
             return (
@@ -264,6 +320,9 @@ export function DocumentsScreen() {
                         {tone.label}
                       </Text>
                     </View>
+                    {byType && !document ? (
+                      <Text style={styles.byType}>{COPY.typeRequired}</Text>
+                    ) : null}
                   </View>
                 </View>
 
@@ -386,6 +445,7 @@ function makeStyles(t: Tokens) {
       textAlign: textAlignStart(),
       marginTop: SPACING.xs,
     },
+    picker: { marginTop: SPACING.xl },
     progressTrack: {
       height: PROGRESS_HEIGHT,
       borderRadius: RADIUS.full,
@@ -492,6 +552,11 @@ function makeStyles(t: Tokens) {
     },
     stateRow: { flexDirection: "row", alignItems: "center", gap: SPACING.xs },
     stateText: { ...typo("labelSm"), letterSpacing: 1 },
+    byType: {
+      ...typo("labelSm"),
+      color: t.colors.primary,
+      textAlign: textAlignStart(),
+    },
     continue: { marginTop: SPACING.xl },
     continueHint: {
       ...typo("labelSm"),
