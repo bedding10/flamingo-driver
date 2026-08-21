@@ -8,6 +8,7 @@ import { BootScreen } from "../screens/BootScreen";
 import { useDriverProfile } from "../hooks/useDriverProfile";
 import { strings } from "../i18n/strings";
 import { usePalette } from "../theme";
+import { missingRequiredDocuments } from "../types/driver";
 import type { OnboardingStackParamList } from "./types";
 
 const Stack = createNativeStackNavigator<OnboardingStackParamList>();
@@ -19,21 +20,33 @@ const Stack = createNativeStackNavigator<OnboardingStackParamList>();
  * availability, no trips - the server would refuse those anyway, and offering
  * them would be a promise the backend does not keep.
  *
- * ENTRY POINT (this is the part that changed): a driver who has just verified an
- * OTP has an account and nothing else - no full name, no photo, no password. The
- * first thing they must see is "complete your profile", not a review screen that
- * says an empty application is being looked at. So the initial route is Profile
- * while the basic file is empty, and Pending once it is filled.
+ * REGISTRATION ORDER, and this is the part that matters:
+ *
+ *   phone -> OTP -> BASIC INFO (photo, full name, password, city)
+ *         -> DOCUMENTS (licence, registration, insurance, ...)
+ *         -> VEHICLE INFORMATION
+ *         -> UNDER REVIEW
+ *
+ * "Under review" is the LAST step, never an interruption in the middle. A
+ * driver who has just verified an OTP has an account and nothing else, so
+ * telling them an empty application is being verified would be false.
+ *
+ * The entry point therefore walks the file and stops at the first incomplete
+ * step. Each test uses only what GET /driver/me actually returns:
+ *   - name + photo   -> the basic info step
+ *   - required docs  -> missingRequiredDocuments(), the same helper the
+ *                       documents screen uses, so the two can never disagree
+ *   - model + plate  -> the fields the server itself requires on a vehicle
+ *
+ * The account password is deliberately NOT part of any test: /driver/me exposes
+ * no "has password" flag, so guessing would bounce a returning driver back to
+ * the form on every launch.
  *
  * WHY IT WAITS FOR THE PROFILE: `initialRouteName` is read once, when the
- * navigator mounts. Mounting before GET /driver/me has answered would decide the
- * entry point from `undefined` and always send an existing driver to the form.
- * The boot screen is shown for that one request instead - it is the same screen
- * the root navigator already uses while auth is resolving, so nothing new is
- * introduced.
- *
- * Screen order after that is the onboarding order: BASIC PROFILE -> DOCUMENTS ->
- * VEHICLE INFORMATION.
+ * navigator mounts. Mounting before GET /driver/me has answered would decide
+ * the entry point from `undefined` and always send an existing driver to the
+ * form. The boot screen covers that one request - the same screen the root
+ * navigator already uses while auth resolves.
  *
  * Headers are shown here (unlike the rest of the app) because these are pushed
  * detail screens and the driver needs a way back that does not depend on the
@@ -44,18 +57,23 @@ export function OnboardingNavigator() {
   const palette = usePalette();
   const { data: profile, isPending } = useDriverProfile();
 
-  /**
-   * "Basic file empty" is deliberately judged on the two fields the profile
-   * screen collects and the server actually returns - full name and photo. The
-   * account password is NOT part of this test: /driver/me exposes no "has
-   * password" flag, so a driver who set one would be sent back to the form on
-   * every launch if we guessed.
-   */
   const initialRouteName = useMemo<keyof OnboardingStackParamList>(() => {
     if (!profile) return "Profile";
+
     const hasName = !!profile.name && profile.name.trim().length > 0;
     const hasPhoto = !!profile.photoUrl;
-    return hasName && hasPhoto ? "Pending" : "Profile";
+    if (!hasName || !hasPhoto) return "Profile";
+
+    if (missingRequiredDocuments(profile.documents).length > 0) {
+      return "Documents";
+    }
+
+    const vehicle = profile.vehicle;
+    const hasVehicle = !!vehicle?.model && !!vehicle?.plate;
+    if (!hasVehicle) return "Vehicle";
+
+    // Everything submitted: now, and only now, there is something to review.
+    return "Pending";
   }, [profile]);
 
   // One request, then the stack mounts with a decided entry point.
@@ -72,15 +90,11 @@ export function OnboardingNavigator() {
         contentStyle: { backgroundColor: palette.background },
       }}
     >
-      <Stack.Screen
-        name="Pending"
-        component={PendingApprovalScreen}
-        options={{ headerShown: false }}
-      />
       {/*
-        Stitch `basic_info_setup`: photo, full name, account password. Its own
-        header is drawn by the screen, so the stack header is hidden here - a
-        driver arriving from the OTP has nothing to go back to anyway.
+        Declared FIRST so the flow reads in onboarding order. Stitch
+        `basic_info_setup`: photo, full name, account password, city. Its own
+        header is drawn by the screen, so the stack header is hidden - a driver
+        arriving from the OTP has nothing to go back to anyway.
       */}
       <Stack.Screen
         name="Profile"
@@ -90,10 +104,7 @@ export function OnboardingNavigator() {
       <Stack.Screen
         name="Documents"
         component={DocumentsScreen}
-        options={{
-          title: strings.documents.title,
-          headerBackTitle: strings.common.back,
-        }}
+        options={{ headerShown: false }}
       />
       <Stack.Screen
         name="Vehicle"
@@ -102,6 +113,16 @@ export function OnboardingNavigator() {
           title: strings.profile.vehicleSection,
           headerBackTitle: strings.common.back,
         }}
+      />
+      {/*
+        LAST, on purpose: it is the end of the file, not a stop along the way.
+        Being declared last also means it can never become the initial route by
+        accident if `initialRouteName` ever resolves to undefined.
+      */}
+      <Stack.Screen
+        name="Pending"
+        component={PendingApprovalScreen}
+        options={{ headerShown: false }}
       />
     </Stack.Navigator>
   );

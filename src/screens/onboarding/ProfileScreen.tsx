@@ -1,3 +1,5 @@
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -10,12 +12,11 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useNavigation } from "@react-navigation/native";
 
+import { authApi } from "../../api";
 import { toApiError } from "../../api/client";
 import { AuthProgress } from "../../components/auth/AuthProgress";
 import { InputField } from "../../components/InputField";
-import { PasswordSetupCard } from "../../components/PasswordSetupCard";
 import { ProfilePhotoPicker } from "../../components/ProfilePhotoPicker";
 import { ReadOnlyRow } from "../../components/ReadOnlyRow";
 import {
@@ -25,77 +26,94 @@ import {
 import { useCities, useWilayas } from "../../hooks/useGeography";
 import { textAlignStart } from "../../i18n";
 import { strings } from "../../i18n/strings";
+import { pw } from "../../i18n/strings.password";
+import type { OnboardingStackParamList } from "../../navigation/types";
 import { alpha, RADIUS, SPACING, typo } from "../../theme/tokens";
 import { useTokens, type Tokens } from "../../theme/useTokens";
 import type { UpdateDriverProfileInput } from "../../types/driver";
-import { HEADER_HEIGHT, PillButton, StatCard, StickyHeader } from "../../ui";
+import { HEADER_HEIGHT, PillButton, StickyHeader } from "../../ui";
 
 /** Tailwind `max-w-md`, which is what Stitch centres the card inside. */
 const MAX_CARD_WIDTH = 448;
 
-/** Stitch draws the avatar well at `w-24 h-24`; the level frame needs a little
- *  more room, so the picker keeps its 112px hero size. */
+/** Stitch draws the avatar well at `w-24 h-24`. */
 const AVATAR = 112;
 
 const CHIP_MIN_HEIGHT = 56;
 
+/** Mirrors ChangePasswordDto on the server: MinLength(6), MaxLength(72). */
+const MIN_PASSWORD = 6;
+const MAX_PASSWORD = 72;
+
 /**
- * A 16% pink wash reads clearly on #101415 but almost disappears on the light
- * #fff8f8 card, so the light scheme gets a stronger fill. The selected chip
- * also keeps a tinted label, so selection is never signalled by colour alone.
+ * A 16% pink wash reads on #101415 but nearly disappears on the light #fff8f8
+ * card, so the light scheme fills harder.
  */
 const CHIP_WASH = { dark: 0.16, light: 0.22 } as const;
 
-// Display labels only: the level itself is decided by the backend from
-// COMPLETED trips, and no threshold is introduced here.
-const LEVEL_LABELS: Record<string, string> = {
-  BRONZE: strings.level.bronze,
-  SILVER: strings.level.silver,
-  GOLD: strings.level.gold,
-  DIAMOND: strings.level.diamond,
-  LEGENDARY: strings.level.legendary,
-};
+/**
+ * Local Arabic copy for this step only. Kept here rather than added to
+ * src/i18n/strings.ts, which must not be rewritten.
+ */
+const COPY = {
+  title:
+    "\u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062a \u0627\u0644\u0623\u0633\u0627\u0633\u064a\u0629",
+  subtitle:
+    "\u064a\u0631\u062c\u0649 \u0625\u062f\u062e\u0627\u0644 \u062a\u0641\u0627\u0635\u064a\u0644 \u062d\u0633\u0627\u0628\u0643 \u0644\u0644\u0645\u062a\u0627\u0628\u0639\u0629.",
+  continueToDocuments:
+    "\u0645\u062a\u0627\u0628\u0639\u0629 \u0625\u0644\u0649 \u0627\u0644\u0648\u062b\u0627\u0626\u0642",
+  photoRequired:
+    "\u0623\u0636\u0641 \u0635\u0648\u0631\u0629 \u0634\u062e\u0635\u064a\u0629 \u0623\u0648\u0644\u0627\u064b",
+  nameRequired:
+    "\u0623\u062f\u062e\u0644 \u0627\u0633\u0645\u0643 \u0627\u0644\u0643\u0627\u0645\u0644",
+} as const;
 
 /**
- * Stitch `basic_info_setup` - driver IDENTITY, saved through PATCH /driver/me.
+ * STEP 3 OF REGISTRATION - Stitch `basic_info_setup`.
  *
- * Two deliberate constraints, both dictated by the server:
+ * phone -> OTP -> THIS SCREEN -> documents -> vehicle -> review.
  *
- * 1. Only CHANGED fields are sent. Sending untouched values is not harmless on
- *    this endpoint - it is how an approved record gets pushed back into review.
- * 2. The phone number is read-only. It is the identity Firebase authenticates,
- *    and PATCH would change it without re-verifying, locking the driver out of
- *    the next login.
+ * What it collects, in the reference's order: the profile photo, the full name,
+ * the ACCOUNT PASSWORD in the field under the name, then the city. There is no
+ * email field: the driver record on the server has no email, and a form that
+ * asks for one would be asking for something nothing can store.
  *
- * City is NOT read-only: the driver picks a wilaya and then a city from server
- * data. Only cityId is sent, because the server derives the wilaya from the
- * city, so a client cannot claim a cheaper wilaya to influence pricing.
+ * Two server contracts are honoured here:
  *
- * REBUILT ON THE REFERENCE: one rounded-24 card carrying the 1-of-3 progress
- * bar, the avatar well, the fields and the pill action - not the previous stack
- * of section cards. The reference's plain city <select> is a chip grid here,
- * because the option list comes from the geography endpoints at runtime and a
- * native picker cannot show a wilaya number beside its Arabic name.
+ * 1. PATCH /driver/me receives only CHANGED fields. Re-sending untouched values
+ *    is how an approved record gets pushed back into review.
+ * 2. Only cityId travels. The server derives the wilaya from the city, so a
+ *    client cannot claim a cheaper wilaya to influence pricing.
  *
- * THEME: reads every colour through useTokens(), so the screen follows the
- * dark/light switch. Per-scheme literals live in CHIP_WASH and in makeStyles.
+ * The phone number is read-only: it is the identity Firebase authenticated, and
+ * PATCHing it would change the login without re-verifying it.
  *
- * STILL ON THE OLD PALETTE, TRACKED: InputField, ReadOnlyRow,
- * ProfilePhotoPicker and PasswordSetupCard. They are shared with the vehicle,
- * documents and wallet screens, so they migrate with those screens rather than
- * being forked here.
+ * ONE BUTTON, TWO CALLS, FIXED ORDER: profile first, password second, then
+ * navigation. The password targets POST /auth/password/change, a different
+ * endpoint with a different failure mode, so if it fails the saved profile is
+ * kept and the error names the password rather than losing the whole step.
+ *
+ * The photo travels through the document pipeline as DocumentType.PROFILE_PHOTO
+ * (an existing server value) and is stored PENDING, which is why the picker
+ * still says staff review it.
+ *
+ * NOT BUILT HERE: rating, trip count and level. A driver at step 3 has no
+ * reputation; those live on driver_profile_hub.
  */
 export function ProfileScreen() {
   const insets = useSafeAreaInsets();
-  const navigation = useNavigation();
+  const navigation =
+    useNavigation<NativeStackNavigationProp<OnboardingStackParamList>>();
   const { data: profile } = useDriverProfile();
   const mutation = useUpdateDriverProfile();
   const t = useTokens();
   const styles = useMemo(() => makeStyles(t), [t]);
 
   const [name, setName] = useState(profile?.name ?? "");
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   const [wilayaId, setWilayaId] = useState<string | null>(null);
   const [cityId, setCityId] = useState<string | null>(profile?.cityId ?? null);
@@ -103,10 +121,8 @@ export function ProfileScreen() {
   const citiesQuery = useCities(wilayaId);
 
   /**
-   * One-shot hydration. The fields above are initialised from `profile`, which
-   * is undefined on the first render whenever the query has no cached data. It
-   * runs once per profile id and never again, so it cannot overwrite text the
-   * driver is typing while a background refetch resolves.
+   * One-shot hydration, once per profile id: a background refetch must not
+   * overwrite a name the driver is halfway through typing.
    */
   const hydratedFor = useRef<string | null>(null);
   useEffect(() => {
@@ -130,27 +146,58 @@ export function ProfileScreen() {
     return next;
   }, [name, cityId, profile]);
 
-  const dirty = Object.keys(changes).length > 0;
-
-  const onSave = async () => {
+  const submit = async () => {
     setError(null);
-    setSaved(false);
 
-    if (!dirty) {
-      setError(strings.profile.nothingChanged);
+    if (!profile?.photoUrl) {
+      setError(COPY.photoRequired);
+      return;
+    }
+    if (!name.trim()) {
+      setError(COPY.nameRequired);
+      return;
+    }
+    if (password.length < MIN_PASSWORD) {
+      setError(pw.setup.tooShort);
+      return;
+    }
+    if (password.length > MAX_PASSWORD) {
+      setError(pw.setup.tooLong);
+      return;
+    }
+    if (password !== confirm) {
+      setError(pw.setup.mismatch);
+      return;
+    }
+    if (!cityId && !profile?.cityId) {
+      setError(strings.profile.citySelectPrompt);
       return;
     }
 
+    setBusy(true);
     try {
-      await mutation.mutateAsync(changes);
-      setSaved(true);
+      // 1. Identity. Skipped entirely when nothing changed, so a driver who
+      //    comes back to fix only the password does not re-open their review.
+      if (Object.keys(changes).length > 0) {
+        await mutation.mutateAsync(changes);
+      }
+
+      // 2. Password. A phone-authenticated account has no hash yet, so no
+      //    current password is sent - `undefined` is what the server reads as
+      //    "first time", while an empty string would read as a wrong secret.
+      await authApi.setPassword({ newPassword: password });
+
+      // 3. Next step of the file, never the review screen.
+      navigation.navigate("Documents");
     } catch (saveError) {
       const apiError = toApiError(saveError);
       setError(
         apiError.offline
           ? strings.errors.network
-          : apiError.message || strings.profile.saveFailed,
+          : apiError.message || pw.setup.failed,
       );
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -174,10 +221,11 @@ export function ProfileScreen() {
         <View style={[styles.card, t.shadowCard]}>
           <AuthProgress step={1} variant="bar" />
 
-          <Text style={styles.title}>{strings.profile.title}</Text>
+          <Text style={styles.title}>{COPY.title}</Text>
+          <Text style={styles.subtitle}>{COPY.subtitle}</Text>
 
-          {/* The photo inside the level frame. Frame, level and trip counts all
-              come from GET /driver/me. */}
+          {/* Camera or gallery. The upload happens immediately and lands as a
+              PENDING PROFILE_PHOTO document. */}
           <View style={styles.avatarBlock}>
             <ProfilePhotoPicker
               avatarUrl={profile?.photoUrl}
@@ -186,48 +234,7 @@ export function ProfileScreen() {
               fallback={profile?.name ?? null}
               loading={!profile}
             />
-            {profile?.profileLevel ? (
-              <Text style={styles.levelText}>
-                {LEVEL_LABELS[profile.profileLevel] ?? profile.profileLevel}
-              </Text>
-            ) : null}
           </View>
-
-          {/* Plain "row": React Native mirrors it under RTL. */}
-          <View style={styles.statsRow}>
-            <StatCard
-              caption={strings.profile.ratingLabel}
-              value={profile ? profile.rating.toFixed(1) : "\u2014"}
-              icon="star"
-              style={styles.stat}
-            />
-            <StatCard
-              caption={strings.profile.tripsLabel}
-              value={
-                profile
-                  ? String(profile.completedTripsCount ?? profile.totalTrips)
-                  : "\u2014"
-              }
-              style={styles.stat}
-            />
-          </View>
-
-          {/* Progress to the next level: both numbers are computed server-side,
-              and the row disappears at the top level. */}
-          {profile?.nextLevel && profile?.nextLevelAt ? (
-            <View style={styles.statsRow}>
-              <StatCard
-                caption={strings.level.progress}
-                value={`${profile.completedTripsCount ?? 0} / ${profile.nextLevelAt}`}
-                style={styles.stat}
-              />
-              <StatCard
-                caption={strings.level.nextLevel}
-                value={LEVEL_LABELS[profile.nextLevel] ?? profile.nextLevel}
-                style={styles.stat}
-              />
-            </View>
-          ) : null}
 
           <InputField
             label={strings.profile.nameLabel}
@@ -235,7 +242,35 @@ export function ProfileScreen() {
             value={name}
             onChangeText={setName}
             autoCapitalize="words"
+            editable={!busy}
             maxLength={120}
+          />
+
+          {/* The field UNDER the name is the account password - not an email.
+              It is what POST /auth/login will accept later, alongside the same
+              phone number. */}
+          <InputField
+            label={pw.setup.newLabel}
+            placeholder={pw.setup.placeholder}
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            autoCapitalize="none"
+            autoCorrect={false}
+            textContentType="newPassword"
+            editable={!busy}
+            maxLength={MAX_PASSWORD}
+          />
+          <InputField
+            label={pw.setup.confirmLabel}
+            placeholder={pw.setup.placeholder}
+            value={confirm}
+            onChangeText={setConfirm}
+            secureTextEntry
+            autoCapitalize="none"
+            autoCorrect={false}
+            editable={!busy}
+            maxLength={MAX_PASSWORD}
           />
 
           <ReadOnlyRow
@@ -296,7 +331,7 @@ export function ProfileScreen() {
             </View>
           </View>
 
-          {/* City picker, only after a wilaya is chosen */}
+          {/* City picker, only after a wilaya is chosen. Server data only. */}
           <View style={styles.pickerBlock}>
             <Text style={styles.pickerLabel}>{strings.profile.cityLabel}</Text>
             {!wilayaId && (
@@ -342,21 +377,13 @@ export function ProfileScreen() {
             </View>
           </View>
 
-          {/* Optional password. It has its own submit button on purpose: it
-              targets POST /auth/password/change, NOT PATCH /driver/me, and a
-              failed profile save must never lose a typed password. */}
-          <PasswordSetupCard />
-
           {error ? <Text style={styles.error}>{error}</Text> : null}
-          {saved && !error ? (
-            <Text style={styles.success}>{strings.common.saved}</Text>
-          ) : null}
 
           <PillButton
-            label={strings.profile.saveChanges}
-            onPress={() => void onSave()}
-            loading={mutation.isPending}
-            disabled={!dirty}
+            label={COPY.continueToDocuments}
+            trailingIcon="arrow-forward"
+            onPress={() => void submit()}
+            loading={busy || mutation.isPending}
             style={styles.save}
           />
         </View>
@@ -399,14 +426,12 @@ function makeStyles(t: Tokens) {
       color: t.colors.onSurface,
       textAlign: "center",
     },
-    avatarBlock: { alignItems: "center", gap: SPACING.sm },
-    levelText: {
-      ...typo("labelMd"),
-      color: t.colors.primary,
+    subtitle: {
+      ...typo("bodyMd"),
+      color: t.colors.onSurfaceVariant,
       textAlign: "center",
     },
-    statsRow: { flexDirection: "row", gap: SPACING.md },
-    stat: { flex: 1 },
+    avatarBlock: { alignItems: "center", gap: SPACING.sm },
     pickerBlock: { gap: SPACING.xs },
     pickerLabel: {
       ...typo("labelMd"),
@@ -455,11 +480,6 @@ function makeStyles(t: Tokens) {
     error: {
       ...typo("labelMd"),
       color: t.colors.error,
-      textAlign: textAlignStart(),
-    },
-    success: {
-      ...typo("labelMd"),
-      color: t.semantic.success,
       textAlign: textAlignStart(),
     },
     save: { marginTop: SPACING.sm },
