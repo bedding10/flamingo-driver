@@ -1,5 +1,6 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import React, { useMemo, useState } from "react";
 import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -13,6 +14,7 @@ import { useDriverProfile } from "../../hooks/useDriverProfile";
 import { textAlignStart } from "../../i18n";
 import { strings } from "../../i18n/strings";
 import { DOC_LABELS, p1 } from "../../i18n/strings.phase1";
+import type { OnboardingStackParamList } from "../../navigation/types";
 import { alpha, RADIUS, SPACING, typo } from "../../theme/tokens";
 import { useTokens, type Tokens } from "../../theme/useTokens";
 import {
@@ -78,8 +80,18 @@ const STATE_LABELS = {
   MISSING_OPTIONAL: "\u0627\u062e\u062a\u064a\u0627\u0631\u064a\u0629",
 } as const;
 
+/** Local copy for the step action, kept out of the shared catalogue. */
+const COPY = {
+  continueToVehicle:
+    "\u0645\u062a\u0627\u0628\u0639\u0629 \u0625\u0644\u0649 \u0628\u064a\u0627\u0646\u0627\u062a \u0627\u0644\u0645\u0631\u0643\u0628\u0629",
+  continueBlocked:
+    "\u064a\u0631\u062c\u0649 \u0631\u0641\u0639 \u0643\u0644 \u0627\u0644\u0648\u062b\u0627\u0626\u0642 \u0627\u0644\u0645\u0637\u0644\u0648\u0628\u0629 \u0644\u0644\u0645\u062a\u0627\u0628\u0639\u0629.",
+} as const;
+
 /**
- * Stitch `document_upload_list`.
+ * Stitch `document_upload_list` - STEP 4 of registration.
+ *
+ * phone -> OTP -> basic info -> THIS SCREEN -> vehicle -> review.
  *
  * The document slots the server accepts, no more and no less: DOC_TYPES and
  * REQUIRED_DRIVER_DOC_TYPES are the source of truth.
@@ -95,21 +107,23 @@ const STATE_LABELS = {
  *   3. upload + register
  * Asking for dates after the photo would throw the photo away on any typo.
  *
+ * THE STEP ACTION IS GATED ON SERVER DATA: the continue button reads
+ * missingRequiredDocuments(), the same helper the list renders from, so it can
+ * never enable while a slot above it still says MISSING.
+ *
  * REBUILT ON THE REFERENCE: each slot is its own rounded-12 card with a
  * state-coloured rail down its leading edge, a 40px icon well, an uppercase
  * state label and a pill action - replacing the single bordered list. The
  * reference's "View" button is NOT built: the stored document has no client-side
  * viewer route yet, and a button that opens nothing is worse than no button.
  *
- * The state colour is DERIVED from the server status, so the rail cannot show
- * green for a document an operator has not approved.
- *
  * THEME: every colour comes from useTokens(), so the screen follows the
  * dark/light switch.
  */
 export function DocumentsScreen() {
   const insets = useSafeAreaInsets();
-  const navigation = useNavigation();
+  const navigation =
+    useNavigation<NativeStackNavigationProp<OnboardingStackParamList>>();
   const { data: profile } = useDriverProfile();
   const { submit, pending, error, clearError } = useDocumentUpload();
   const [notice, setNotice] = useState<string | null>(null);
@@ -154,6 +168,9 @@ export function DocumentsScreen() {
   const hasRejected = (documents ?? []).some(
     (document) => displayDocumentStatus(document) === "REJECTED",
   );
+
+  /** The gate for the next step: every REQUIRED slot has something in it. */
+  const canContinue = missing.length === 0;
 
   const labelFor = (type: DocumentType) => SLOT_LABELS[type] ?? DOC_LABELS[type];
 
@@ -265,6 +282,19 @@ export function DocumentsScreen() {
             );
           })}
         </View>
+
+        {/* Step action. Disabled, with the reason spelled out, exactly like the
+            reference's greyed "continue" button. */}
+        <PillButton
+          label={COPY.continueToVehicle}
+          trailingIcon="arrow-forward"
+          disabled={!canContinue}
+          onPress={() => navigation.navigate("Vehicle")}
+          style={styles.continue}
+        />
+        {!canContinue ? (
+          <Text style={styles.continueHint}>{COPY.continueBlocked}</Text>
+        ) : null}
       </ScrollView>
 
       <DocumentDatesModal
@@ -462,5 +492,12 @@ function makeStyles(t: Tokens) {
     },
     stateRow: { flexDirection: "row", alignItems: "center", gap: SPACING.xs },
     stateText: { ...typo("labelSm"), letterSpacing: 1 },
+    continue: { marginTop: SPACING.xl },
+    continueHint: {
+      ...typo("labelSm"),
+      color: t.colors.onSurfaceVariant,
+      textAlign: "center",
+      marginTop: SPACING.sm,
+    },
   });
 }

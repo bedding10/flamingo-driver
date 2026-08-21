@@ -1,5 +1,5 @@
 import { MaterialIcons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useNavigationState } from "@react-navigation/native";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
@@ -45,6 +45,14 @@ const NOTE_WASH = { dark: 0.12, light: 0.16 } as const;
 const NOTE_BORDER = { dark: 0.4, light: 0.55 } as const;
 const HERO_BORDER = { dark: 0.1, light: 0.25 } as const;
 
+/** Local copy for the final onboarding action. */
+const COPY = {
+  sendForReview:
+    "\u0625\u0631\u0633\u0627\u0644 \u0627\u0644\u0645\u0644\u0641 \u0644\u0644\u0645\u0631\u0627\u062c\u0639\u0629",
+  reviewBlocked:
+    "\u0623\u062f\u062e\u0644 \u0627\u0644\u0637\u0631\u0627\u0632 \u0648\u0631\u0642\u0645 \u0627\u0644\u0644\u0648\u062d\u0629 \u0623\u0648\u0644\u0627\u064b.",
+} as const;
+
 /** Order-insensitive comparison, since the server deduplicates and may reorder. */
 function sameFeatures(a: string[], b: string[]): boolean {
   if (a.length !== b.length) return false;
@@ -54,7 +62,9 @@ function sameFeatures(a: string[], b: string[]): boolean {
 }
 
 /**
- * Stitch `my_vehicle` - the active vehicle, saved through PATCH /driver/me.
+ * Stitch `my_vehicle` - STEP 5, the last one the driver fills in.
+ *
+ * phone -> OTP -> basic info -> documents -> THIS SCREEN -> review.
  *
  * The server constraints that shaped this form are unchanged:
  *
@@ -74,12 +84,20 @@ function sameFeatures(a: string[], b: string[]): boolean {
  * fields on the driver PATCH. No endpoint was invented to make this screen look
  * self-contained.
  *
+ * THE FINAL ACTION ONLY EXISTS DURING ONBOARDING. This screen is registered in
+ * the driver stack too (an approved driver still has to fix a plate), and that
+ * stack has no Pending route, so the review button is rendered only when the
+ * live navigator actually declares one. It is enabled once a model AND a plate
+ * exist - the two fields the server refuses a vehicle without.
+ *
  * REBUILT ON THE REFERENCE: the hero card with the pink-wash gradient, the
  * state pill, the make/model headline and the plate badge, then the editable
  * specs below it. The reference's vehicle photograph, maintenance reminders and
  * document expiry dates are NOT built: there is no vehicle-photo field, no
  * maintenance endpoint and no per-document expiry surface on the driver API,
- * and inventing them would put fiction on a screen an operator reviews.
+ * and inventing them would put fiction on a screen an operator reviews. The
+ * vehicle PHOTOS the reference collects are uploaded on the documents step,
+ * which is the only pipeline the server exposes.
  *
  * THEME: all colours come from useTokens(), so the screen follows the
  * dark/light switch.
@@ -91,6 +109,15 @@ export function VehicleScreen() {
   const mutation = useUpdateDriverProfile();
   const t = useTokens();
   const styles = useMemo(() => makeStyles(t), [t]);
+
+  /**
+   * Is this the onboarding stack? Read from the live navigator rather than
+   * guessed from driver status: navigating to a route the current stack does
+   * not declare throws at runtime.
+   */
+  const inOnboarding = useNavigationState((state) =>
+    state.routeNames.includes("Pending"),
+  );
 
   const vehicle = profile?.vehicle ?? null;
 
@@ -152,6 +179,9 @@ export function VehicleScreen() {
   }, [make, model, color, plate, year, features, vehicle]);
 
   const dirty = Object.keys(changes).length > 0;
+
+  /** What the server itself requires before a vehicle exists at all. */
+  const vehicleReady = !!vehicle?.model && !!vehicle?.plate;
 
   const toggleFeature = (key: string) => {
     setFeatures((current) =>
@@ -364,11 +394,28 @@ export function VehicleScreen() {
 
           <PillButton
             label={strings.profile.saveChanges}
+            variant={inOnboarding ? "secondary" : "primary"}
             onPress={() => void onSave()}
             loading={mutation.isPending}
             disabled={!dirty}
             style={styles.save}
           />
+
+          {/* Last step of registration. Rendered only inside the onboarding
+              stack, which is the only stack that declares a Pending route. */}
+          {inOnboarding ? (
+            <>
+              <PillButton
+                label={COPY.sendForReview}
+                trailingIcon="arrow-forward"
+                disabled={!vehicleReady}
+                onPress={() => navigation.navigate("Pending" as never)}
+              />
+              {!vehicleReady ? (
+                <Text style={styles.cardHint}>{COPY.reviewBlocked}</Text>
+              ) : null}
+            </>
+          ) : null}
         </View>
       </ScrollView>
 
