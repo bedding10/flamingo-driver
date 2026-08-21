@@ -57,6 +57,12 @@ export type DriverStackParamList = {
    */
   Requests: undefined;
   /**
+   * Tier progression (GET /loyalty/me + the level fields on GET /driver/me) and
+   * the city / country leaderboard. The ranking half stays empty until the
+   * server exposes GET /driver/leaderboard - see SERVER_TODO.md section 2.
+   */
+  Tiers: undefined;
+  /**
    * The stored notification inbox (GET /notifications/me). It is also where a
    * tapped push lands when its payload is not a trip message.
    */
