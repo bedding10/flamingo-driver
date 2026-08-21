@@ -27,20 +27,23 @@ import {
   VEHICLE_STATUS_LABELS,
   p1,
 } from "../../i18n/strings.phase1";
-import {
-  alpha,
-  COLORS,
-  ICON_SIZE,
-  RADIUS,
-  SEMANTIC,
-  SHADOW_CARD,
-  SPACING,
-  typo,
-} from "../../theme/tokens";
+import { alpha, RADIUS, SPACING, typo } from "../../theme/tokens";
+import { useTokens, type Tokens } from "../../theme/useTokens";
 import type { UpdateDriverProfileInput } from "../../types/driver";
 import { HEADER_HEIGHT, PillButton, StickyHeader } from "../../ui";
 
 const CHIP_MIN_HEIGHT = 56;
+
+/**
+ * Per-scheme wash strengths. Every one of these reads on #101415 and is close
+ * to invisible on the light #fff8f8 surface, so the light scheme is stronger.
+ */
+const CHIP_WASH = { dark: 0.16, light: 0.22 } as const;
+const OK_WASH = { dark: 0.2, light: 0.16 } as const;
+const OK_BORDER = { dark: 0.3, light: 0.5 } as const;
+const NOTE_WASH = { dark: 0.12, light: 0.16 } as const;
+const NOTE_BORDER = { dark: 0.4, light: 0.55 } as const;
+const HERO_BORDER = { dark: 0.1, light: 0.25 } as const;
 
 /** Order-insensitive comparison, since the server deduplicates and may reorder. */
 function sameFeatures(a: string[], b: string[]): boolean {
@@ -77,12 +80,17 @@ function sameFeatures(a: string[], b: string[]): boolean {
  * document expiry dates are NOT built: there is no vehicle-photo field, no
  * maintenance endpoint and no per-document expiry surface on the driver API,
  * and inventing them would put fiction on a screen an operator reviews.
+ *
+ * THEME: all colours come from useTokens(), so the screen follows the
+ * dark/light switch.
  */
 export function VehicleScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const { data: profile } = useDriverProfile();
   const mutation = useUpdateDriverProfile();
+  const t = useTokens();
+  const styles = useMemo(() => makeStyles(t), [t]);
 
   const vehicle = profile?.vehicle ?? null;
 
@@ -219,14 +227,21 @@ export function VehicleScreen() {
 
         {/* Hero card. The state pill reports the SERVER verdict, so it cannot
             claim a vehicle is active while review is still pending. */}
-        <View style={[styles.hero, SHADOW_CARD]}>
+        <View style={[styles.hero, t.shadowCard]}>
           <View
-            style={[styles.statePill, approved ? styles.stateOk : styles.statePending]}
+            style={[
+              styles.statePill,
+              approved ? styles.stateOk : styles.statePending,
+            ]}
           >
             <Text
               style={[
                 styles.stateText,
-                { color: approved ? SEMANTIC.success : COLORS.onSurfaceVariant },
+                {
+                  color: approved
+                    ? t.semantic.success
+                    : t.colors.onSurfaceVariant,
+                },
               ]}
             >
               {vehicle?.verificationStatus
@@ -246,17 +261,15 @@ export function VehicleScreen() {
           <View style={styles.plateBadge}>
             <MaterialIcons
               name="directions-car"
-              size={ICON_SIZE.lg}
-              color={COLORS.primary}
+              size={t.iconSize.lg}
+              color={t.colors.primary}
             />
-            <Text style={styles.plateText}>
-              {vehicle?.plate ?? "\u2014"}
-            </Text>
+            <Text style={styles.plateText}>{vehicle?.plate ?? "\u2014"}</Text>
           </View>
         </View>
 
         {/* Editable specs. */}
-        <View style={[styles.card, SHADOW_CARD]}>
+        <View style={[styles.card, t.shadowCard]}>
           <Text style={styles.cardTitle}>{strings.profile.vehicleSection}</Text>
           <Text style={styles.cardHint}>{strings.profile.vehicleHint}</Text>
 
@@ -337,7 +350,9 @@ export function VehicleScreen() {
               dead end. Both values are read-only server output. */}
           {vehicle?.verificationNote ? (
             <View style={styles.noteBox}>
-              <Text style={styles.noteTitle}>{p1.profile.vehicleNoteLabel}</Text>
+              <Text style={styles.noteTitle}>
+                {p1.profile.vehicleNoteLabel}
+              </Text>
               <Text style={styles.noteText}>{vehicle.verificationNote}</Text>
             </View>
           ) : null}
@@ -364,149 +379,160 @@ export function VehicleScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.background },
-  content: { paddingHorizontal: SPACING.container, gap: SPACING.lg },
-  heading: {
-    ...typo("headlineLgMobile"),
-    color: COLORS.onSurface,
-    textAlign: textAlignStart(),
-  },
-  /** Stitch `bg-surface-container rounded-[24px] p-6` with a pink wash. */
-  hero: {
-    borderRadius: RADIUS.card,
-    backgroundColor: COLORS.surfaceContainer,
-    borderWidth: 1,
-    borderColor: alpha(COLORS.primary, 0.1),
-    padding: SPACING.xl,
-    gap: SPACING.sm,
-  },
-  statePill: {
-    alignSelf: "flex-start",
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.xs,
-    borderRadius: RADIUS.full,
-    borderWidth: 1,
-  },
-  stateOk: {
-    backgroundColor: alpha(SEMANTIC.success, 0.2),
-    borderColor: alpha(SEMANTIC.success, 0.3),
-  },
-  statePending: {
-    backgroundColor: alpha(COLORS.surfaceVariant, 0.6),
-    borderColor: COLORS.surfaceVariant,
-  },
-  stateText: { ...typo("labelSm") },
-  heroTitle: {
-    ...typo("headlineLgMobile"),
-    color: COLORS.onSurface,
-    textAlign: textAlignStart(),
-  },
-  heroSub: {
-    ...typo("bodyMd"),
-    color: COLORS.onSurfaceVariant,
-    textAlign: textAlignStart(),
-  },
-  plateBadge: {
-    alignSelf: "flex-start",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.md,
-    marginTop: SPACING.sm,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-    borderRadius: RADIUS.lg,
-    backgroundColor: COLORS.surfaceContainerHigh,
-    borderWidth: 1,
-    borderColor: COLORS.surfaceVariant,
-  },
-  plateText: {
-    ...typo("titleMd"),
-    color: COLORS.onSurface,
-    letterSpacing: 2,
-    writingDirection: "ltr",
-  },
-  card: {
-    borderRadius: RADIUS.card,
-    backgroundColor: COLORS.surfaceContainer,
-    borderWidth: 1,
-    borderColor: alpha(COLORS.surfaceVariant, 0.3),
-    padding: SPACING.xl,
-    gap: SPACING.lg,
-  },
-  cardTitle: {
-    ...typo("titleMd"),
-    color: COLORS.onSurface,
-    textAlign: textAlignStart(),
-  },
-  cardHint: {
-    ...typo("labelSm"),
-    color: COLORS.onSurfaceVariant,
-    textAlign: textAlignStart(),
-  },
-  pickerBlock: { gap: SPACING.xs },
-  pickerLabel: {
-    ...typo("labelMd"),
-    color: COLORS.onSurface,
-    textAlign: textAlignStart(),
-  },
-  pickerHint: {
-    ...typo("labelSm"),
-    color: COLORS.onSurfaceVariant,
-    textAlign: textAlignStart(),
-  },
-  // Plain "row": mirrored by React Native under RTL.
-  chipWrap: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: SPACING.xs,
-    marginTop: SPACING.xs,
-  },
-  chip: {
-    // Driver touch floor, not a normal chip size: this is filled in the car,
-    // and a mis-tap means the wrong claim about the vehicle.
-    minHeight: CHIP_MIN_HEIGHT,
-    justifyContent: "center",
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.xs,
-    borderRadius: RADIUS.lg,
-    borderWidth: 1,
-    borderColor: COLORS.outlineVariant,
-    backgroundColor: COLORS.surface,
-  },
-  chipSelected: {
-    borderColor: COLORS.primaryContainer,
-    backgroundColor: alpha(COLORS.primaryContainer, 0.16),
-  },
-  chipText: { ...typo("labelSm"), color: COLORS.onSurfaceVariant },
-  chipTextSelected: { color: COLORS.primary },
-  noteBox: {
-    padding: SPACING.md,
-    borderRadius: RADIUS.lg,
-    backgroundColor: alpha(COLORS.error, 0.12),
-    borderWidth: 1,
-    borderColor: alpha(COLORS.error, 0.4),
-  },
-  noteTitle: {
-    ...typo("labelSm"),
-    color: COLORS.error,
-    textAlign: textAlignStart(),
-  },
-  noteText: {
-    ...typo("bodyMd"),
-    color: COLORS.onSurface,
-    textAlign: textAlignStart(),
-    marginTop: 2,
-  },
-  error: {
-    ...typo("bodyMd"),
-    color: COLORS.error,
-    textAlign: textAlignStart(),
-  },
-  success: {
-    ...typo("bodyMd"),
-    color: SEMANTIC.success,
-    textAlign: textAlignStart(),
-  },
-  save: { marginTop: SPACING.sm },
-});
+function makeStyles(t: Tokens) {
+  const light = t.mode === "light";
+  const key = light ? "light" : "dark";
+
+  return StyleSheet.create({
+    root: { flex: 1, backgroundColor: t.colors.background },
+    content: { paddingHorizontal: SPACING.container, gap: SPACING.lg },
+    heading: {
+      ...typo("headlineLgMobile"),
+      color: t.colors.onSurface,
+      textAlign: textAlignStart(),
+    },
+    /** Stitch `bg-surface-container rounded-[24px] p-6` with a pink wash. */
+    hero: {
+      borderRadius: RADIUS.card,
+      backgroundColor: t.colors.surfaceContainer,
+      borderWidth: 1,
+      borderColor: alpha(t.colors.primary, HERO_BORDER[key]),
+      padding: SPACING.xl,
+      gap: SPACING.sm,
+    },
+    statePill: {
+      alignSelf: "flex-start",
+      paddingHorizontal: SPACING.md,
+      paddingVertical: SPACING.xs,
+      borderRadius: RADIUS.full,
+      borderWidth: 1,
+    },
+    stateOk: {
+      backgroundColor: alpha(t.semantic.success, OK_WASH[key]),
+      borderColor: alpha(t.semantic.success, OK_BORDER[key]),
+    },
+    statePending: {
+      // surfaceVariant is nearly the light card colour, so both the fill and
+      // the border would vanish there.
+      backgroundColor: light
+        ? alpha(t.colors.outlineVariant, 0.6)
+        : alpha(t.colors.surfaceVariant, 0.6),
+      borderColor: light ? t.colors.outlineVariant : t.colors.surfaceVariant,
+    },
+    stateText: { ...typo("labelSm") },
+    heroTitle: {
+      ...typo("headlineLgMobile"),
+      color: t.colors.onSurface,
+      textAlign: textAlignStart(),
+    },
+    heroSub: {
+      ...typo("bodyMd"),
+      color: t.colors.onSurfaceVariant,
+      textAlign: textAlignStart(),
+    },
+    plateBadge: {
+      alignSelf: "flex-start",
+      flexDirection: "row",
+      alignItems: "center",
+      gap: SPACING.md,
+      marginTop: SPACING.sm,
+      paddingHorizontal: SPACING.lg,
+      paddingVertical: SPACING.md,
+      borderRadius: RADIUS.lg,
+      backgroundColor: t.colors.surfaceContainerHigh,
+      borderWidth: 1,
+      borderColor: light ? t.colors.outlineVariant : t.colors.surfaceVariant,
+    },
+    plateText: {
+      ...typo("titleMd"),
+      color: t.colors.onSurface,
+      letterSpacing: 2,
+      writingDirection: "ltr",
+    },
+    card: {
+      borderRadius: RADIUS.card,
+      backgroundColor: t.colors.surfaceContainer,
+      borderWidth: 1,
+      borderColor: light
+        ? t.colors.outlineVariant
+        : alpha(t.colors.surfaceVariant, 0.3),
+      padding: SPACING.xl,
+      gap: SPACING.lg,
+    },
+    cardTitle: {
+      ...typo("titleMd"),
+      color: t.colors.onSurface,
+      textAlign: textAlignStart(),
+    },
+    cardHint: {
+      ...typo("labelSm"),
+      color: t.colors.onSurfaceVariant,
+      textAlign: textAlignStart(),
+    },
+    pickerBlock: { gap: SPACING.xs },
+    pickerLabel: {
+      ...typo("labelMd"),
+      color: t.colors.onSurface,
+      textAlign: textAlignStart(),
+    },
+    pickerHint: {
+      ...typo("labelSm"),
+      color: t.colors.onSurfaceVariant,
+      textAlign: textAlignStart(),
+    },
+    // Plain "row": mirrored by React Native under RTL.
+    chipWrap: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: SPACING.xs,
+      marginTop: SPACING.xs,
+    },
+    chip: {
+      // Driver touch floor, not a normal chip size: this is filled in the car,
+      // and a mis-tap means the wrong claim about the vehicle.
+      minHeight: CHIP_MIN_HEIGHT,
+      justifyContent: "center",
+      paddingHorizontal: SPACING.md,
+      paddingVertical: SPACING.xs,
+      borderRadius: RADIUS.lg,
+      borderWidth: 1,
+      borderColor: t.colors.outlineVariant,
+      backgroundColor: t.colors.surface,
+    },
+    chipSelected: {
+      borderColor: light ? t.colors.primary : t.colors.primaryContainer,
+      backgroundColor: alpha(t.colors.primaryContainer, CHIP_WASH[key]),
+    },
+    chipText: { ...typo("labelSm"), color: t.colors.onSurfaceVariant },
+    chipTextSelected: { color: t.colors.primary },
+    noteBox: {
+      padding: SPACING.md,
+      borderRadius: RADIUS.lg,
+      backgroundColor: alpha(t.colors.error, NOTE_WASH[key]),
+      borderWidth: 1,
+      borderColor: alpha(t.colors.error, NOTE_BORDER[key]),
+    },
+    noteTitle: {
+      ...typo("labelSm"),
+      color: t.colors.error,
+      textAlign: textAlignStart(),
+    },
+    noteText: {
+      ...typo("bodyMd"),
+      color: t.colors.onSurface,
+      textAlign: textAlignStart(),
+      marginTop: 2,
+    },
+    error: {
+      ...typo("bodyMd"),
+      color: t.colors.error,
+      textAlign: textAlignStart(),
+    },
+    success: {
+      ...typo("bodyMd"),
+      color: t.semantic.success,
+      textAlign: textAlignStart(),
+    },
+    save: { marginTop: SPACING.sm },
+  });
+}
