@@ -8,3 +8,5 @@ export * as geographyApi from "./geography.api";
 export * as notificationsApi from "./notifications.api";
 export * as supportApi from "./support.api";
 export * as tripShareApi from "./tripShare.api";
+export * as legalApi from "./legal.api";
+export * as catalogApi from "./catalog.api";
