@@ -1,69 +1,83 @@
-import React, { useMemo } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { MaterialIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { PrimaryButton } from "../../components/PrimaryButton";
-import { StatusPill } from "../../components/StatusPill";
-import { strings } from "../../i18n/strings";
+import React, { useEffect, useRef } from "react";
 import {
-  radius,
-  spacing,
-  typography,
-  usePalette,
-  withAlpha,
-  type Palette,
-} from "../../theme";
+  Animated,
+  Easing,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
 import { useAuthStore } from "../../auth/auth.store";
 import { useDriverProfile } from "../../hooks/useDriverProfile";
+import { strings } from "../../i18n/strings";
 import { useDriverStore } from "../../stores/driver.store";
+import {
+  alpha,
+  COLORS,
+  ICON_SIZE,
+  MOTION,
+  RADIUS,
+  SEMANTIC,
+  SHADOW_CARD,
+  SPACING,
+  typo,
+} from "../../theme/tokens";
 import {
   missingRequiredDocuments,
   type DriverProfile,
   type DriverStatus,
 } from "../../types/driver";
+import { HEADER_HEIGHT, PillButton, StickyHeader } from "../../ui";
 import type { OnboardingStackParamList } from "../../navigation/types";
 
 type Navigation = NativeStackNavigationProp<OnboardingStackParamList>;
 
+/** Stitch draws the illustration plate at `w-64 h-64` and its rows at 40px. */
+const PLATE = 240;
+const ROW_ICON = 40;
+
+type RowState = "done" | "progress";
+
+type ChecklistRow = {
+  key: string;
+  label: string;
+  icon: keyof typeof MaterialIcons.glyphMap;
+  state: RowState;
+};
+
 /**
- * Shown whenever the account is not APPROVED.
+ * Stitch `application_under_review`, shown whenever the account is not APPROVED.
  *
  * This is a hard gate on driving, not on the app: the server returns 403 for
- * POST /driver/me/availability unless the status is APPROVED, so an ONLINE button
- * here could only produce a failure the driver cannot fix. What the driver CAN do
- * is finish the file that is being reviewed, so this screen leads to the profile,
- * the documents and the vehicle, and states exactly what is still missing.
+ * POST /driver/me/availability unless the status is APPROVED, so an ONLINE
+ * button here could only produce a failure the driver cannot fix. What the
+ * driver CAN do is finish the file being reviewed, so this screen leads to the
+ * profile, the documents and the vehicle, and states exactly what is missing.
  *
  * The profile comes from the shared query, so opening this screen costs no extra
  * request and the status updates as soon as an operator approves the account.
  *
- * PHASE 1 (R-11): this screen had no `"row-reverse"` anywhere - it is a single
- * centred column - but four text styles carried a bare `writingDirection: "rtl"`
- * with no alignment beside it, which under real RTL only fought the inherited
- * direction. Removed. `title` and `body` keep `textAlign: "center"`, which is
- * correct in both directions because centre has no side to mirror.
+ * REBUILT ON THE REFERENCE, not restyled: the previous version was a stack of
+ * five buttons. Stitch specifies a haloed hourglass plate, a rounded-24 status
+ * card whose rows carry a 40px state circle (emerald check for cleared, pulsing
+ * pink for in-progress), and the actions demoted below it.
  *
- * PHASE 2: migrated off the legacy flat `colors` bag onto the palette. The
- * status badge keeps its warning wash, but the wash is now derived from
- * `palette.warning`, which is the light or dark counterpart of Stitch's #F59E0B
- * rather than one fixed dark-mode value.
+ * The reference marks Profile and Vehicle "Verified" and Documents "In
+ * Progress" as static copy. Here every row's state is DERIVED from the server
+ * profile, so the card cannot claim a document is being reviewed when the
+ * driver has not uploaded it yet.
  *
- * PHASE 2: the destinations are ordered Profile -> Documents -> Vehicle, which
- * is the order sections 13 and 62 mandate. Vehicle is a separate button because
- * it is now a separate screen; before the split it was the second half of the
- * profile form, and a driver whose car was missing was sent to "complete your
- * profile".
- *
- * STILL OUTSTANDING (PHASE 2, visual rebuild): Stitch renders this as
- * application_under_review (screenshot 16) with a review timeline and a
- * document checklist card, and driver_approved_success (screenshot 21) as the
- * cleared state. This screen is still the PHASE 1 stacked-button layout.
+ * NOT REPRODUCED: the illustration image inside the plate, which the reference
+ * serves from a Google export URL. The filled hourglass glyph carries the same
+ * meaning without a link that will rot.
  */
 export function PendingApprovalScreen() {
   const insets = useSafeAreaInsets();
-  const palette = usePalette();
-  const styles = useMemo(() => makeStyles(palette), [palette]);
   const navigation = useNavigation<Navigation>();
   const signOut = useAuthStore((state) => state.signOut);
   const query = useDriverProfile();
@@ -72,106 +86,160 @@ export function PendingApprovalScreen() {
   const profile = query.data ?? cachedProfile;
   const status = profile?.status ?? null;
   const copy = messageFor(status);
-  const checklist = missingItems(profile);
+  const rows = checklistRows(profile);
+
+  // `animate-pulse` on the in-progress row circle.
+  const pulse = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, {
+          toValue: 1,
+          duration: MOTION.pulse,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulse, {
+          toValue: 0,
+          duration: MOTION.pulse,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
+
+  const pulseStyle = {
+    opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 0.45] }),
+  };
 
   return (
-    <ScrollView
-      style={styles.root}
-      contentContainerStyle={[
-        styles.content,
-        { paddingTop: insets.top + spacing["3xl"] },
-        { paddingBottom: insets.bottom + spacing.xl },
-      ]}
-    >
-      <Text style={styles.brand}>flaminGO</Text>
+    <View style={styles.root}>
+      <StickyHeader />
 
-      <View style={styles.badge}>
-        <Text style={styles.badgeLabel}>{strings.approval.statusLabel}</Text>
-        <Text style={styles.badgeValue}>{status ?? "\u2014"}</Text>
-      </View>
+      <ScrollView
+        contentContainerStyle={[
+          styles.content,
+          {
+            paddingTop: insets.top + HEADER_HEIGHT + SPACING.xxl,
+            paddingBottom: insets.bottom + SPACING.xxl,
+          },
+        ]}
+      >
+        {/* Haloed plate. The glow is a translucent circle, not a blur filter. */}
+        <View style={styles.plateWrap}>
+          <View style={styles.plateGlow} pointerEvents="none" />
+          <View style={[styles.plate, SHADOW_CARD]}>
+            <MaterialIcons
+              name="hourglass-top"
+              size={96}
+              color={COLORS.primary}
+            />
+          </View>
+        </View>
 
-      <Text style={styles.title}>{copy.title}</Text>
-      <Text style={styles.body}>{copy.body}</Text>
+        {/* Centre never mirrors, so these two are correct in both directions. */}
+        <Text style={styles.title}>{copy.title}</Text>
+        <Text style={styles.body}>{copy.body}</Text>
 
-      <View style={styles.checklist}>
-        <Text style={styles.checklistTitle}>
-          {checklist.length ? strings.approval.checklistTitle : ""}
-        </Text>
-        {checklist.length ? (
-          checklist.map((item) => (
-            <View key={item.key} style={styles.checklistRow}>
-              <StatusPill label={item.label} tone="pending" />
+        <View style={[styles.card, SHADOW_CARD]}>
+          {rows.map((row, index) => (
+            <View key={row.key}>
+              {index > 0 ? <View style={styles.divider} /> : null}
+              <View style={styles.row}>
+                <Animated.View
+                  style={[
+                    styles.rowIcon,
+                    row.state === "done" ? styles.rowIconDone : styles.rowIconOn,
+                    row.state === "progress" ? pulseStyle : null,
+                  ]}
+                >
+                  <MaterialIcons
+                    name={row.state === "done" ? "check-circle" : row.icon}
+                    size={ICON_SIZE.lg}
+                    color={
+                      row.state === "done" ? SEMANTIC.success : COLORS.primary
+                    }
+                  />
+                </Animated.View>
+                <Text style={styles.rowLabel}>{row.label}</Text>
+              </View>
             </View>
-          ))
-        ) : (
-          <Text style={styles.body}>{strings.approval.checklistDone}</Text>
-        )}
-      </View>
+          ))}
+        </View>
 
-      {/* Ordered per sections 13 and 62: profile, then documents, then the
-          vehicle. */}
-      <PrimaryButton
-        label={strings.approval.openProfile}
-        onPress={() => navigation.navigate("Profile")}
-        style={styles.action}
-      />
-      <PrimaryButton
-        label={strings.approval.openDocuments}
-        onPress={() => navigation.navigate("Documents")}
-        style={styles.secondaryAction}
-      />
-      <PrimaryButton
-        label={strings.profile.vehicleSection}
-        onPress={() => navigation.navigate("Vehicle")}
-        style={styles.secondaryAction}
-      />
-      <PrimaryButton
-        label={strings.approval.checkAgain}
-        onPress={() => void query.refetch()}
-        loading={query.isFetching}
-        variant="outline"
-        style={styles.secondaryAction}
-      />
-      <PrimaryButton
-        label={strings.common.signOut}
-        onPress={() => void signOut()}
-        variant="outline"
-        style={styles.secondaryAction}
-      />
-    </ScrollView>
+        {/* Ordered per the onboarding contract: profile, documents, vehicle. */}
+        <View style={styles.actions}>
+          <PillButton
+            label={strings.approval.openProfile}
+            onPress={() => navigation.navigate("Profile")}
+          />
+          <PillButton
+            label={strings.approval.openDocuments}
+            variant="secondary"
+            onPress={() => navigation.navigate("Documents")}
+          />
+          <PillButton
+            label={strings.profile.vehicleSection}
+            variant="secondary"
+            onPress={() => navigation.navigate("Vehicle")}
+          />
+          <PillButton
+            label={strings.approval.checkAgain}
+            variant="secondary"
+            leadingIcon="refresh"
+            loading={query.isFetching}
+            onPress={() => void query.refetch()}
+          />
+          <PillButton
+            label={strings.common.signOut}
+            variant="secondary"
+            onPress={() => void signOut()}
+          />
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
 /**
- * What the driver still owes the review, derived only from server data.
+ * The three rows Stitch draws, each state DERIVED from server data.
  *
- * PHASE 1 narrowed this from "every document type exists" to the four the
- * server actually requires (REQUIRED_DRIVER_DOC_TYPES). The old check counted
- * optional slots too, so a complete file could still be reported as incomplete
- * and the driver had no way to clear the warning.
- *
- * A document counts as missing when it was never sent, was rejected, or has
- * expired. A PENDING one is not missing: it is waiting for an operator, and
+ * A document counts as outstanding when it was never sent, was rejected, or has
+ * expired. A PENDING one is not outstanding: it is waiting for an operator, and
  * asking for it again would only create duplicates.
- *
- * PHASE 2: a missing car is labelled with the vehicle section, not with
- * "complete your profile". The vehicle has its own screen now, so the old label
- * would have pointed the driver at the wrong one.
  */
-function missingItems(profile: DriverProfile | null | undefined) {
-  if (!profile) return [];
-  const items: Array<{ key: string; label: string }> = [];
+function checklistRows(
+  profile: DriverProfile | null | undefined,
+): ChecklistRow[] {
+  const vehicle = profile?.vehicle;
+  const vehicleReady = Boolean(vehicle && vehicle.model && vehicle.plate);
+  const documentsReady =
+    Boolean(profile) && missingRequiredDocuments(profile?.documents).length === 0;
 
-  const vehicle = profile.vehicle;
-  if (!vehicle || !vehicle.model || !vehicle.plate) {
-    items.push({ key: "vehicle", label: strings.profile.vehicleSection });
-  }
-
-  if (missingRequiredDocuments(profile.documents).length) {
-    items.push({ key: "documents", label: strings.approval.checklistDocuments });
-  }
-
-  return items;
+  return [
+    {
+      key: "profile",
+      label: strings.approval.openProfile,
+      icon: "person",
+      // The profile row clears as soon as the server has a driver record.
+      state: profile ? "done" : "progress",
+    },
+    {
+      key: "vehicle",
+      label: strings.profile.vehicleSection,
+      icon: "directions-car",
+      state: vehicleReady ? "done" : "progress",
+    },
+    {
+      key: "documents",
+      label: strings.approval.checklistDocuments,
+      icon: "description",
+      state: documentsReady ? "done" : "progress",
+    },
+  ];
 }
 
 function messageFor(status: DriverStatus | null) {
@@ -200,62 +268,75 @@ function messageFor(status: DriverStatus | null) {
   }
 }
 
-const makeStyles = (palette: Palette) =>
-  StyleSheet.create({
-    root: { flex: 1, backgroundColor: palette.background },
-    content: {
-      flexGrow: 1,
-      paddingHorizontal: spacing.xl,
-      justifyContent: "center",
-      alignItems: "center",
-    },
-    brand: {
-      ...typography.display,
-      color: palette.primaryText,
-      marginBottom: spacing.xl,
-    },
-    badge: {
-      alignItems: "center",
-      paddingVertical: spacing.md,
-      paddingHorizontal: spacing.xl,
-      borderRadius: radius.pill,
-      backgroundColor: withAlpha(palette.warning, 0.14),
-      borderWidth: 1,
-      borderColor: withAlpha(palette.warning, 0.5),
-      marginBottom: spacing.xl,
-    },
-    badgeLabel: {
-      ...typography.caption,
-      color: palette.textSecondary,
-    },
-    badgeValue: {
-      ...typography.label,
-      color: palette.warning,
-      letterSpacing: 1,
-      marginTop: 2,
-    },
-    // Centre does not mirror, so these two are correct in both directions.
-    title: {
-      ...typography.title,
-      color: palette.textPrimary,
-      textAlign: "center",
-    },
-    body: {
-      ...typography.body,
-      color: palette.textSecondary,
-      textAlign: "center",
-      marginTop: spacing.md,
-    },
-    checklist: {
-      alignSelf: "stretch",
-      alignItems: "center",
-      marginTop: spacing.lg,
-    },
-    checklistTitle: {
-      ...typography.caption,
-      color: palette.textSecondary,
-    },
-    checklistRow: { marginTop: spacing.sm },
-    action: { marginTop: spacing["3xl"], alignSelf: "stretch" },
-    secondaryAction: { marginTop: spacing.md, alignSelf: "stretch" },
-  });
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: COLORS.background },
+  content: {
+    flexGrow: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: SPACING.container,
+  },
+  plateWrap: {
+    width: PLATE,
+    height: PLATE,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: SPACING.xl,
+  },
+  plateGlow: {
+    position: "absolute",
+    width: PLATE,
+    height: PLATE,
+    borderRadius: RADIUS.full,
+    backgroundColor: alpha(COLORS.primary, 0.1),
+  },
+  plate: {
+    width: PLATE * 0.75,
+    height: PLATE * 0.75,
+    borderRadius: RADIUS.full,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: COLORS.surfaceContainer,
+    borderWidth: 1,
+    borderColor: COLORS.surfaceBright,
+  },
+  title: {
+    ...typo("headlineLgMobile"),
+    color: COLORS.onSurface,
+    textAlign: "center",
+  },
+  body: {
+    ...typo("bodyMd"),
+    color: COLORS.onSurfaceVariant,
+    textAlign: "center",
+    marginTop: SPACING.md,
+    marginBottom: SPACING.xxl,
+  },
+  /** Stitch `bg-surface-container rounded-2xl p-6 border-surface-variant/30`. */
+  card: {
+    alignSelf: "stretch",
+    borderRadius: RADIUS.card,
+    backgroundColor: COLORS.surfaceContainer,
+    borderWidth: 1,
+    borderColor: alpha(COLORS.surfaceVariant, 0.3),
+    padding: SPACING.xl,
+  },
+  // Plain "row": React Native mirrors it, so the state circle leads in Arabic.
+  row: { flexDirection: "row", alignItems: "center", gap: SPACING.lg },
+  rowIcon: {
+    width: ROW_ICON,
+    height: ROW_ICON,
+    borderRadius: RADIUS.full,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  rowIconDone: { backgroundColor: alpha(SEMANTIC.success, 0.2) },
+  rowIconOn: { backgroundColor: alpha(COLORS.primary, 0.2) },
+  rowLabel: { ...typo("titleMd"), color: COLORS.onSurface, flexShrink: 1 },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: alpha(COLORS.surfaceVariant, 0.5),
+    marginVertical: SPACING.lg,
+  },
+  actions: { alignSelf: "stretch", gap: SPACING.md, marginTop: SPACING.xxl },
+});
