@@ -1,5 +1,5 @@
 import { BlurView } from "expo-blur";
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo } from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import Animated, {
   useAnimatedStyle,
@@ -8,22 +8,17 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import {
-  alpha,
-  BLUR,
-  COLORS,
-  MOTION,
-  RADIUS,
-  SHADOW_SHEET,
-  SPACING,
-  typo,
-} from "../theme/tokens";
+import { alpha, MOTION, RADIUS, SPACING, typo } from "../theme/tokens";
+import { useTokens, type Tokens } from "../theme/useTokens";
 
 /**
  * Component 2 - Bottom sheet.
- * 24px top radius, drag handle, full backdrop blur behind it, slide-up
- * animation, and the subtle radial pink glow behind the headline
+ * 24px radius, drag handle, full backdrop blur behind it, slide-up animation,
+ * and the subtle radial pink glow behind the headline
  * (`bg-primary-container/10 rounded-full blur-xl animate-pulse`).
+ *
+ * THEME: the backdrop wash and the blur tint MUST follow the mode. A dark
+ * tint plus an 85% dark wash under a light sheet blacked out the screen.
  */
 export type BottomSheetProps = {
   visible: boolean;
@@ -33,6 +28,8 @@ export type BottomSheetProps = {
   /** Tapping the blurred backdrop closes the sheet. Off for ride offers. */
   dismissOnBackdropPress?: boolean;
   showHandle?: boolean;
+  /** Screen-reader label for the backdrop. Arabic default. */
+  closeLabel?: string;
   children?: React.ReactNode;
 };
 
@@ -43,9 +40,12 @@ export function BottomSheet({
   subtitle,
   dismissOnBackdropPress = true,
   showHandle = true,
+  closeLabel = "إغلاق",
   children,
 }: BottomSheetProps) {
   const insets = useSafeAreaInsets();
+  const t = useTokens();
+  const styles = useMemo(() => makeStyles(t), [t]);
   const progress = useSharedValue(0);
 
   useEffect(() => {
@@ -66,21 +66,21 @@ export function BottomSheet({
       onRequestClose={onClose}
     >
       <BlurView
-        intensity={BLUR.overlay}
-        tint={BLUR.tint}
+        intensity={t.blur.overlay}
+        tint={t.blur.tint}
         style={styles.backdrop}
       >
         <Pressable
           style={styles.backdropPress}
           onPress={dismissOnBackdropPress ? onClose : undefined}
           accessibilityRole="button"
-          accessibilityLabel="Close"
+          accessibilityLabel={closeLabel}
         />
 
         <Animated.View
           style={[
             styles.sheet,
-            SHADOW_SHEET,
+            t.shadowSheet,
             { marginBottom: Math.max(insets.bottom, SPACING.bottomSheetMargin) },
             sheetStyle,
           ]}
@@ -109,46 +109,58 @@ export function BottomSheet({
   );
 }
 
-const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    justifyContent: "flex-end",
-    backgroundColor: alpha(COLORS.surface, 0.85),
-  },
-  backdropPress: { ...StyleSheet.absoluteFillObject },
-  sheet: {
-    marginHorizontal: SPACING.bottomSheetMargin,
-    backgroundColor: COLORS.surface,
-    borderTopLeftRadius: RADIUS.card,
-    borderTopRightRadius: RADIUS.card,
-    borderBottomLeftRadius: RADIUS.card,
-    borderBottomRightRadius: RADIUS.card,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: COLORS.surfaceVariant,
-    overflow: "hidden",
-  },
-  handleWrap: { alignItems: "center", paddingTop: SPACING.lg, paddingBottom: SPACING.sm },
-  handle: {
-    width: 48,
-    height: 6,
-    borderRadius: RADIUS.full,
-    backgroundColor: COLORS.surfaceVariant,
-  },
-  body: { padding: SPACING.container, gap: SPACING.xl },
-  headline: { alignItems: "center", position: "relative" },
-  glow: {
-    position: "absolute",
-    top: -24,
-    height: 96,
-    width: "120%",
-    borderRadius: RADIUS.full,
-    backgroundColor: alpha(COLORS.primaryContainer, 0.1),
-  },
-  title: { ...typo("headlineLgMobile"), color: COLORS.primary, textAlign: "center" },
-  subtitle: {
-    ...typo("bodyMd"),
-    color: COLORS.onSurfaceVariant,
-    marginTop: SPACING.xs,
-    textAlign: "center",
-  },
-});
+function makeStyles(t: Tokens) {
+  return StyleSheet.create({
+    backdrop: {
+      flex: 1,
+      justifyContent: "flex-end",
+      // Dark: dim the map. Light: a much lighter veil, or the sheet loses its
+      // edge against a near-white backdrop.
+      backgroundColor: alpha(
+        t.mode === "light" ? t.colors.inverseSurface : t.colors.surface,
+        t.mode === "light" ? 0.35 : 0.85,
+      ),
+    },
+    backdropPress: { ...StyleSheet.absoluteFillObject },
+    sheet: {
+      marginHorizontal: SPACING.bottomSheetMargin,
+      backgroundColor: t.colors.surface,
+      borderRadius: RADIUS.card,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: t.colors.surfaceVariant,
+      overflow: "hidden",
+    },
+    handleWrap: {
+      alignItems: "center",
+      paddingTop: SPACING.lg,
+      paddingBottom: SPACING.sm,
+    },
+    handle: {
+      width: 48,
+      height: 6,
+      borderRadius: RADIUS.full,
+      backgroundColor: t.colors.surfaceVariant,
+    },
+    body: { padding: SPACING.container, gap: SPACING.xl },
+    headline: { alignItems: "center", position: "relative" },
+    glow: {
+      position: "absolute",
+      top: -24,
+      height: 96,
+      width: "120%",
+      borderRadius: RADIUS.full,
+      backgroundColor: alpha(t.colors.primaryContainer, 0.1),
+    },
+    title: {
+      ...typo("headlineLgMobile"),
+      color: t.colors.primary,
+      textAlign: "center",
+    },
+    subtitle: {
+      ...typo("bodyMd"),
+      color: t.colors.onSurfaceVariant,
+      marginTop: SPACING.xs,
+      textAlign: "center",
+    },
+  });
+}
