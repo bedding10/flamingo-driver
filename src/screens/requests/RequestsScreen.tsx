@@ -1,7 +1,6 @@
-import React, { useEffect, useMemo } from "react";
+import React, { useEffect } from "react";
 import {
   FlatList,
-  Pressable,
   RefreshControl,
   StyleSheet,
   Text,
@@ -9,34 +8,34 @@ import {
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+
 import { FareOpportunityCard } from "../../components/FareOpportunityCard";
 import { useFareOpportunities } from "../../hooks/useFareOpportunities";
 import { textAlignStart } from "../../i18n";
 import { requestStrings } from "../../i18n/strings.requests";
 import type { DriverStackParamList } from "../../navigation/types";
 import {
-  radius,
-  spacing,
-  typography,
-  usePalette,
-  type Palette,
-} from "../../theme";
+  alpha,
+  COLORS,
+  RADIUS,
+  SEMANTIC,
+  SPACING,
+  typo,
+} from "../../theme/tokens";
+import { PillButton } from "../../ui";
 
 /**
- * The requests page: open FareQuotes the driver may bid on.
+ * The requests page: open FareQuotes the driver may negotiate on.
  *
  * This does NOT replace the push offer card on Home. A `ride:offer` is an
  * assignment that must be answered within seconds and therefore stays a
- * full-width sheet over the map; a bidding request has a 2 minute window and
+ * full-width sheet over the map; a negotiable request has a longer window and
  * belongs in a list the driver can read at a red light.
  *
- * PHASE 1 (R-11): no rows to fix here - this screen is a single column - but
- * four text styles were pinned `textAlign: "right"` / `writingDirection: "rtl"`
- * and now resolve their own alignment. `emptyHint` keeps centre.
+ * Migrated to src/theme/tokens: surfaces, type scale and spacing now come from
+ * the single source of truth instead of the legacy palette.
  */
 export function RequestsScreen() {
-  const palette = usePalette();
-  const styles = useMemo(() => makeStyles(palette), [palette]);
   const navigation =
     useNavigation<NativeStackNavigationProp<DriverStackParamList>>();
   const {
@@ -52,10 +51,11 @@ export function RequestsScreen() {
     refresh,
     bid,
     withdraw,
+    directAccept,
   } = useFareOpportunities();
 
-  // A won bid means there is a running trip; the trip lives on Home, so staying
-  // on a list of requests the driver can no longer take would be a trap.
+  // A won request means there is a running trip; the trip lives on Home, so
+  // staying on a list the driver can no longer act on would be a trap.
   useEffect(() => {
     if (acceptedTripId) navigation.navigate("Home");
   }, [acceptedTripId, navigation]);
@@ -70,7 +70,7 @@ export function RequestsScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={refresh}
-            tintColor={palette.primary}
+            tintColor={COLORS.primary}
           />
         }
         ListHeaderComponent={
@@ -95,15 +95,13 @@ export function RequestsScreen() {
                 : requestStrings.emptyHint}
             </Text>
             {blocked ? (
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => navigation.navigate("Home")}
-                style={styles.emptyAction}
-              >
-                <Text style={styles.emptyActionLabel}>
-                  {requestStrings.offlineTitle}
-                </Text>
-              </Pressable>
+              <View style={styles.emptyAction}>
+                <PillButton
+                  label={requestStrings.offlineTitle}
+                  variant="secondary"
+                  onPress={() => navigation.navigate("Home")}
+                />
+              </View>
             ) : null}
           </View>
         }
@@ -113,6 +111,7 @@ export function RequestsScreen() {
             busy={busyId === item.id || busyId === item.myOffer?.id}
             onBid={bid}
             onWithdraw={withdraw}
+            onAccept={directAccept}
           />
         )}
       />
@@ -120,55 +119,48 @@ export function RequestsScreen() {
   );
 }
 
-const makeStyles = (palette: Palette) =>
-  StyleSheet.create({
-    root: { flex: 1, backgroundColor: palette.background },
-    list: { padding: spacing.lg, gap: spacing.md, flexGrow: 1 },
-    header: { gap: spacing.xs },
-    subtitle: {
-      ...typography.caption,
-      color: palette.textSecondary,
-      textAlign: textAlignStart(),
-    },
-    notice: {
-      ...typography.caption,
-      color: palette.info,
-      textAlign: textAlignStart(),
-    },
-    error: {
-      ...typography.caption,
-      color: palette.danger,
-      textAlign: textAlignStart(),
-    },
-    empty: {
-      flex: 1,
-      alignItems: "center",
-      justifyContent: "center",
-      gap: spacing.sm,
-      paddingVertical: spacing.xl,
-    },
-    // Centre does not mirror, so both of these are correct in any direction.
-    emptyTitle: {
-      ...typography.subtitle,
-      color: palette.textPrimary,
-      textAlign: "center",
-    },
-    emptyHint: {
-      ...typography.caption,
-      color: palette.textSecondary,
-      textAlign: "center",
-    },
-    emptyAction: {
-      marginTop: spacing.md,
-      borderRadius: radius.pill,
-      borderWidth: 1,
-      borderColor: palette.border,
-      backgroundColor: palette.surfaceSunken,
-      paddingHorizontal: spacing.xl,
-      paddingVertical: spacing.md,
-    },
-    emptyActionLabel: {
-      ...typography.subtitle,
-      color: palette.primaryText,
-    },
-  });
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: COLORS.background },
+  list: { padding: SPACING.lg, gap: SPACING.lg, flexGrow: 1 },
+  header: { gap: SPACING.xs, paddingBottom: SPACING.xs },
+  subtitle: {
+    ...typo("labelSm"),
+    color: COLORS.onSurfaceVariant,
+    textAlign: textAlignStart(),
+  },
+  notice: {
+    ...typo("labelSm"),
+    color: SEMANTIC.success,
+    textAlign: textAlignStart(),
+  },
+  error: {
+    ...typo("labelSm"),
+    color: COLORS.error,
+    textAlign: textAlignStart(),
+  },
+  empty: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: SPACING.sm,
+    paddingVertical: SPACING.xxl,
+    paddingHorizontal: SPACING.container,
+  },
+  // Centre does not mirror, so both of these are correct in any direction.
+  emptyTitle: {
+    ...typo("titleMd"),
+    color: COLORS.onSurface,
+    textAlign: "center",
+  },
+  emptyHint: {
+    ...typo("bodyMd"),
+    color: COLORS.onSurfaceVariant,
+    textAlign: "center",
+  },
+  emptyAction: {
+    marginTop: SPACING.md,
+    alignSelf: "stretch",
+    backgroundColor: alpha(COLORS.surfaceContainer, 0),
+    borderRadius: RADIUS.full,
+  },
+});
