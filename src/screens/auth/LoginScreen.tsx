@@ -10,16 +10,25 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { AuthProgress } from "../../components/auth/AuthProgress";
+import { OtpBoxes } from "../../components/auth/OtpBoxes";
+import { PhoneField } from "../../components/auth/PhoneField";
+import { BrandMark } from "../../components/BrandMark";
+import { Icon } from "../../components/Icon";
 import { InputField } from "../../components/InputField";
 import { PrimaryButton } from "../../components/PrimaryButton";
-import { textAlignStart } from "../../i18n";
-import { strings } from "../../i18n/strings";
+import { textAlignStart, useTranslation } from "../../i18n";
 import { pw } from "../../i18n/strings.password";
 import {
+  iconSize,
+  layout,
   radius,
+  shadows,
   spacing,
-  typography,
+  stitchType,
+  touchTarget,
   usePalette,
+  withAlpha,
   type Palette,
 } from "../../theme";
 import { authErrorMessage } from "../../auth/auth-errors";
@@ -37,54 +46,57 @@ import type { AuthStackParamList } from "../../navigation/types";
 const CODE_LENGTH = 6;
 const RESEND_SECONDS = 60;
 const MIN_PASSWORD_LENGTH = 6;
+const MIN_PHONE_DIGITS = 8;
+const MAX_PASSWORD_LENGTH = 72;
+const SECONDS_PER_MINUTE = 60;
+
+/** Tailwind `max-w-md`, which is what Stitch centres these cards inside. */
+const MAX_CARD_WIDTH = 448;
 
 type Props = NativeStackScreenProps<AuthStackParamList, "Login">;
+
+/** Stitch prints the countdown as 00:59, not as a raw second count. */
+function formatClock(totalSeconds: number): string {
+  const minutes = Math.floor(totalSeconds / SECONDS_PER_MINUTE);
+  const seconds = totalSeconds % SECONDS_PER_MINUTE;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
 
 /**
  * Phone -> SMS code -> backend session.
  *
  * Firebase verifies the number, then POST /auth/firebase exchanges the ID token
- * for the backend JWTs, which go straight into secure storage.
- *
- * PHASE 1 adds a SECOND door to the SAME account, not a second account: once the
- * driver has set a password from the profile screen, POST /auth/login accepts
- * the same phone number plus that password and returns the same kind of tokens.
- * Account CREATION still happens only through Firebase - the local OTP routes
- * stay disabled, and an account with no password simply fails this path.
+ * for the backend JWTs, which go straight into secure storage. There is a SECOND
+ * door to the SAME account, not a second account: once a password is set, POST
+ * /auth/login accepts the same phone plus that password. Account CREATION is
+ * still Firebase-only, because the server's local OTP routes are disabled.
  *
  * The screen holds no token and no user object; it hands the tokens to the auth
  * store and unmounts when the root tree switches to the signed-in stack.
  *
- * PHASE 1 DESIGN FOUNDATION (R-11): `modeRow` was `"row-reverse"`, `title`,
- * `subtitle`, `error` and `footNote` were pinned `textAlign: "right"`, and
- * `modeText`, `link` and `timer` carried a bare `writingDirection: "rtl"` with
- * no alignment at all. All of that predates real RTL and now double-flips.
+ * PHASE 2 - STITCH GEOMETRY, ONE COMPONENT, TWO SCREENS
+ * The reference is two designs: `phone_number_entry` and `otp_verification`.
+ * They are NOT two navigator routes here, and that is deliberate. The Firebase
+ * ConfirmationResult is a live object with a method on it, and React Navigation
+ * params must be serialisable - so a route split would force either a
+ * non-serialisable param or Firebase state hoisted into a store, both to serve a
+ * purely visual boundary. Instead each STEP renders its own layout, progress
+ * position and header behaviour, while one component owns the handle.
  *
- * PHASE 2: migrated off the legacy flat `colors` bag onto the palette, so the
- * screen finally answers to light mode instead of painting a near-black
- * background under dark-mode text. Brand pink for TEXT resolves through
- * `primaryText`, not `primary`: palettes.ts records that #FF4D8D on white fails
- * contrast at body sizes, so the filled pink stays the brand hex in both themes
- * while pink lettering darkens in light mode.
+ * `route.params.mode` decides which door opens, because the Welcome screen's two
+ * buttons mean different things: registration must land on SMS, signing in on
+ * the password form. Read as a lazy initial value only, so switching doors
+ * afterwards is not undone by a re-render.
  *
- * PHASE 2 - WHICH DOOR OPENS FIRST
- * `route.params.mode` decides the initial mode, because the Welcome screen's two
- * buttons mean different things: "Start registration" must land on the SMS flow
- * (POST /auth/firebase is the only account-creating path the backend has) and
- * "Sign in" must land on the password flow. The param is optional, so
- * `navigate("Login")` from anywhere else still opens on SMS as before, and it is
- * read as a lazy initial value only - the driver can still switch doors with the
- * mode row and that choice must not be undone by a re-render.
- *
- * STILL OUTSTANDING (PHASE 2, visual rebuild): Stitch splits this into two
- * screens - phone_number_entry and otp_verification - each on a glass panel over
- * a dimmed map, with a three-segment progress bar, a fixed +213 country box
- * beside an LTR national-number field, and six single-character OTP boxes rather
- * than one six-digit input. None of that geometry is built yet.
+ * NOT BUILT, ON PURPOSE: Stitch layers a dimmed map under both screens. Mounting
+ * a map here would request location permission before the driver even has an
+ * account, and burn battery and map loads on the one screen that needs neither.
+ * Recorded as a visual delta rather than quietly dropped.
  */
-export function LoginScreen({ route }: Props) {
+export function LoginScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
   const palette = usePalette();
+  const { t } = useTranslation();
   const styles = useMemo(() => makeStyles(palette), [palette]);
   const signIn = useAuthStore((state) => state.signIn);
 
@@ -93,17 +105,18 @@ export function LoginScreen({ route }: Props) {
   );
   const [step, setStep] = useState<"phone" | "code">("phone");
   const [phone, setPhone] = useState("");
+  const [sentTo, setSentTo] = useState("");
   const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(0);
 
-  // The confirmation handle is not state: it is never rendered, and keeping it
-  // in a ref avoids a re-render that would remount the code field mid-typing.
+  // Not state: never rendered, and a re-render here would remount the code
+  // boxes mid-typing.
   const confirmationRef = useRef<PhoneConfirmation | null>(null);
   // Guards every setState after an await: the screen unmounts the moment the
-  // session is stored, and writing state then is a leak warning at best.
+  // session is stored.
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -123,11 +136,14 @@ export function LoginScreen({ route }: Props) {
     setError(null);
     setBusy(true);
     try {
-      // Validate locally first so an obviously wrong number does not burn one
-      // of the SMS attempts Firebase rate-limits per device.
-      normalizeE164(phone);
-      confirmationRef.current = await requestPhoneCode(phone);
+      // Validated locally first so an obviously wrong number does not burn one
+      // of the SMS attempts Firebase rate-limits per device. The normalised
+      // value is what gets sent AND what gets echoed on the next step, so the
+      // driver sees the number that was actually texted.
+      const normalized = normalizeE164(phone);
+      confirmationRef.current = await requestPhoneCode(normalized);
       if (!mountedRef.current) return;
+      setSentTo(normalized);
       setCode("");
       setStep("code");
       setSecondsLeft(RESEND_SECONDS);
@@ -159,11 +175,11 @@ export function LoginScreen({ route }: Props) {
   }, [code, signIn]);
 
   /**
-   * PHASE 1 - returning driver, no SMS.
+   * Returning driver, no SMS.
    *
-   * The number is normalised to E.164 with the same helper the Firebase flow
-   * uses, because the stored User.phone came from a Firebase token: sending
-   * "0555..." would look up a row that does not exist.
+   * Normalised with the same helper the Firebase flow uses, because the stored
+   * User.phone came from a Firebase token: sending "0555..." would look up a row
+   * that does not exist.
    */
   const passwordSignIn = useCallback(async () => {
     setError(null);
@@ -180,14 +196,14 @@ export function LoginScreen({ route }: Props) {
       const apiError = toApiError(loginError);
       setError(
         apiError.offline
-          ? strings.errors.network
+          ? t("errors.network")
           : loginError instanceof Error && loginError.message === "INVALID_PHONE"
             ? authErrorMessage(loginError)
             : pw.login.failed,
       );
       setBusy(false);
     }
-  }, [password, phone, signIn]);
+  }, [password, phone, signIn, t]);
 
   const backToPhone = useCallback(() => {
     confirmationRef.current = null;
@@ -205,9 +221,54 @@ export function LoginScreen({ route }: Props) {
     setError(null);
   }, []);
 
-  const phoneReady = phone.replace(/\D/g, "").length >= 8;
+  /**
+   * On the code step, back means "wrong number" - it returns to the field and
+   * drops the pending confirmation rather than leaving the flow. Only on the
+   * phone step does it pop to Welcome, and only if there is something to pop:
+   * a deep link straight to Login must not dead-end on a dead button.
+   */
+  const onBack = useCallback(() => {
+    if (step === "code") {
+      backToPhone();
+      return;
+    }
+    if (navigation.canGoBack()) navigation.goBack();
+  }, [backToPhone, navigation, step]);
+
+  const canGoBack = step === "code" || navigation.canGoBack();
+
+  const phoneReady = phone.replace(/\D/g, "").length >= MIN_PHONE_DIGITS;
   const codeReady = code.trim().length === CODE_LENGTH;
   const passwordReady = phoneReady && password.length >= MIN_PASSWORD_LENGTH;
+
+  const modeRow = (
+    <View style={styles.modeRow}>
+      <Pressable
+        onPress={() => switchMode("sms")}
+        disabled={busy}
+        style={[styles.mode, mode === "sms" && styles.modeActive]}
+        accessibilityRole="button"
+        accessibilityState={{ selected: mode === "sms" }}
+      >
+        <Text style={[styles.modeText, mode === "sms" && styles.modeTextOn]}>
+          {pw.login.modeSms}
+        </Text>
+      </Pressable>
+      <Pressable
+        onPress={() => switchMode("password")}
+        disabled={busy}
+        style={[styles.mode, mode === "password" && styles.modeActive]}
+        accessibilityRole="button"
+        accessibilityState={{ selected: mode === "password" }}
+      >
+        <Text
+          style={[styles.modeText, mode === "password" && styles.modeTextOn]}
+        >
+          {pw.login.modePassword}
+        </Text>
+      </Pressable>
+    </View>
+  );
 
   return (
     <KeyboardAvoidingView
@@ -217,165 +278,169 @@ export function LoginScreen({ route }: Props) {
       <ScrollView
         contentContainerStyle={[
           styles.content,
-          { paddingTop: insets.top + spacing["3xl"] },
-          { paddingBottom: insets.bottom + spacing.xl },
+          {
+            paddingTop: insets.top + touchTarget.stitchMin + spacing.xl,
+            paddingBottom: Math.max(insets.bottom, layout.safeAreaBottomMin),
+          },
         ]}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={styles.header}>
-          <Text style={styles.brand}>{strings.login.brand}</Text>
-          <Text style={styles.role}>{strings.login.role}</Text>
-        </View>
-
-        {/* PHASE 1: the two doors to the same account. Hidden while an SMS is
-            being confirmed, so a mis-tap cannot drop a pending code. */}
-        {step === "phone" ? (
-          <View style={styles.modeRow}>
-            <Pressable
-              onPress={() => switchMode("sms")}
-              disabled={busy}
-              style={[styles.mode, mode === "sms" && styles.modeActive]}
-              accessibilityRole="button"
-              accessibilityState={{ selected: mode === "sms" }}
-            >
-              <Text
-                style={[
-                  styles.modeText,
-                  mode === "sms" && styles.modeTextActive,
-                ]}
-              >
-                {pw.login.modeSms}
+        <View style={styles.centre}>
+          {mode === "password" ? (
+            <View style={styles.card}>
+              <Text style={styles.titleSm}>{t("login.passwordTitle")}</Text>
+              <Text style={styles.subtitle}>
+                {t("login.passwordSubtitle")}
               </Text>
-            </Pressable>
-            <Pressable
-              onPress={() => switchMode("password")}
-              disabled={busy}
-              style={[styles.mode, mode === "password" && styles.modeActive]}
-              accessibilityRole="button"
-              accessibilityState={{ selected: mode === "password" }}
-            >
-              <Text
-                style={[
-                  styles.modeText,
-                  mode === "password" && styles.modeTextActive,
-                ]}
-              >
-                {pw.login.modePassword}
-              </Text>
-            </Pressable>
-          </View>
-        ) : null}
-
-        {mode === "password" ? (
-          <View style={styles.card}>
-            <Text style={styles.title}>{pw.login.passwordTitle}</Text>
-            <Text style={styles.subtitle}>{pw.login.passwordSubtitle}</Text>
-            <InputField
-              label={strings.login.phoneLabel}
-              placeholder={strings.login.phonePlaceholder}
-              value={phone}
-              onChangeText={setPhone}
-              keyboardType="phone-pad"
-              textContentType="telephoneNumber"
-              autoComplete="tel"
-              editable={!busy}
-              numeric
-            />
-            <View style={styles.spacer} />
-            <InputField
-              label={pw.login.passwordLabel}
-              placeholder={pw.login.passwordPlaceholder}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              autoCapitalize="none"
-              autoCorrect={false}
-              textContentType="password"
-              editable={!busy}
-              maxLength={72}
-            />
-            {error ? <Text style={styles.error}>{error}</Text> : null}
-            <PrimaryButton
-              label={pw.login.submit}
-              onPress={() => void passwordSignIn()}
-              loading={busy}
-              disabled={!passwordReady}
-              style={styles.action}
-            />
-            <Text style={styles.footNote}>{pw.login.noPasswordHint}</Text>
-          </View>
-        ) : step === "phone" ? (
-          <View style={styles.card}>
-            <Text style={styles.title}>{strings.login.phoneTitle}</Text>
-            <Text style={styles.subtitle}>{strings.login.phoneSubtitle}</Text>
-            <InputField
-              label={strings.login.phoneLabel}
-              placeholder={strings.login.phonePlaceholder}
-              value={phone}
-              onChangeText={setPhone}
-              keyboardType="phone-pad"
-              textContentType="telephoneNumber"
-              autoComplete="tel"
-              editable={!busy}
-              numeric
-            />
-            {error ? <Text style={styles.error}>{error}</Text> : null}
-            <PrimaryButton
-              label={strings.login.sendCode}
-              onPress={sendCode}
-              loading={busy}
-              disabled={!phoneReady}
-              style={styles.action}
-            />
-          </View>
-        ) : (
-          <View style={styles.card}>
-            <Text style={styles.title}>{strings.login.codeTitle}</Text>
-            <Text style={styles.subtitle}>
-              {strings.login.codeSubtitle}
-            </Text>
-            <Text style={styles.phoneEcho}>{phone}</Text>
-            <InputField
-              label={strings.login.codeLabel}
-              placeholder={strings.login.codePlaceholder}
-              value={code}
-              onChangeText={(value) =>
-                setCode(value.replace(/\D/g, "").slice(0, CODE_LENGTH))
-              }
-              keyboardType="number-pad"
-              textContentType="oneTimeCode"
-              autoComplete="sms-otp"
-              maxLength={CODE_LENGTH}
-              editable={!busy}
-              autoFocus
-              numeric
-            />
-            {error ? <Text style={styles.error}>{error}</Text> : null}
-            <PrimaryButton
-              label={strings.login.verify}
-              onPress={verifyCode}
-              loading={busy}
-              disabled={!codeReady}
-              style={styles.action}
-            />
-            <View style={styles.footer}>
-              <Pressable onPress={backToPhone} disabled={busy} hitSlop={12}>
-                <Text style={styles.link}>{strings.login.changeNumber}</Text>
-              </Pressable>
-              {secondsLeft > 0 ? (
-                <Text style={styles.timer}>
-                  {strings.login.resendIn} {secondsLeft}{" "}
-                  {strings.login.seconds}
-                </Text>
-              ) : (
-                <Pressable onPress={sendCode} disabled={busy} hitSlop={12}>
-                  <Text style={styles.link}>{strings.login.resend}</Text>
-                </Pressable>
-              )}
+              {modeRow}
+              <PhoneField
+                value={phone}
+                onChangeText={setPhone}
+                editable={!busy}
+                placeholder={t("login.phonePlaceholder")}
+                accessibilityLabel={t("login.phoneLabel")}
+              />
+              <View style={styles.gap} />
+              <InputField
+                label={t("login.passwordLabel")}
+                placeholder={pw.login.passwordPlaceholder}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+                autoCapitalize="none"
+                autoCorrect={false}
+                textContentType="password"
+                editable={!busy}
+                maxLength={MAX_PASSWORD_LENGTH}
+              />
+              {error ? <Text style={styles.error}>{error}</Text> : null}
+              <PrimaryButton
+                label={t("login.signIn")}
+                onPress={() => void passwordSignIn()}
+                loading={busy}
+                disabled={!passwordReady}
+                size="compact"
+                style={styles.action}
+              />
+              <Text style={styles.helper}>{pw.login.noPasswordHint}</Text>
             </View>
-          </View>
-        )}
+          ) : step === "phone" ? (
+            <View style={styles.card}>
+              {/* Absolute, so the card must clip - see styles.card. */}
+              <AuthProgress step={1} variant="bar" />
+              <Text style={styles.titleSm}>{t("login.phoneTitle")}</Text>
+              <Text style={styles.subtitle}>{t("login.phoneSubtitle")}</Text>
+              {modeRow}
+              <PhoneField
+                value={phone}
+                onChangeText={setPhone}
+                editable={!busy}
+                placeholder={t("login.phonePlaceholder")}
+                accessibilityLabel={t("login.phoneLabel")}
+                returnKeyType="send"
+                onSubmitEditing={() => {
+                  if (phoneReady && !busy) void sendCode();
+                }}
+              />
+              <Text style={styles.helper}>{t("login.phoneHelper")}</Text>
+              {error ? <Text style={styles.error}>{error}</Text> : null}
+              <PrimaryButton
+                label={t("login.sendCode")}
+                onPress={() => void sendCode()}
+                loading={busy}
+                disabled={!phoneReady}
+                size="compact"
+                style={styles.action}
+              />
+            </View>
+          ) : (
+            <>
+              {/* Stitch puts the OTP indicator ABOVE the panel, and lights the
+                  MIDDLE segment. */}
+              <AuthProgress step={2} variant="dashes" style={styles.dashes} />
+              <View style={styles.card}>
+                <Text style={styles.titleLg}>{t("login.codeTitle")}</Text>
+                <Text style={styles.subtitleLg}>{t("login.codeSubtitle")}</Text>
+                {/* The number that was actually texted, pinned LTR. */}
+                <Text style={styles.echo}>{sentTo}</Text>
+                <OtpBoxes
+                  value={code}
+                  onChange={setCode}
+                  length={CODE_LENGTH}
+                  editable={!busy}
+                  autoFocus
+                  accessibilityLabel={t("login.codeLabel")}
+                  style={styles.boxes}
+                />
+                <View style={styles.resendRow}>
+                  <Text style={styles.resendAsk}>
+                    {t("login.resendQuestion")}
+                  </Text>
+                  {secondsLeft > 0 ? (
+                    <Text style={styles.resendWait}>
+                      {t("login.resendIn", { time: formatClock(secondsLeft) })}
+                    </Text>
+                  ) : (
+                    <Pressable
+                      onPress={() => void sendCode()}
+                      disabled={busy}
+                      hitSlop={12}
+                      accessibilityRole="button"
+                    >
+                      <Text style={styles.resendLink}>{t("login.resend")}</Text>
+                    </Pressable>
+                  )}
+                </View>
+                {error ? <Text style={styles.error}>{error}</Text> : null}
+              </View>
+              <PrimaryButton
+                label={t("login.verify")}
+                onPress={() => void verifyCode()}
+                loading={busy}
+                disabled={!codeReady}
+                size="compact"
+                style={styles.verify}
+              />
+            </>
+          )}
+        </View>
       </ScrollView>
+
+      {/*
+        Rendered LAST so it paints over the scrolling content, which is what
+        Stitch's fixed header does. Three children with space-between keeps the
+        wordmark optically centred without a transform.
+      */}
+      <View
+        style={[
+          styles.header,
+          {
+            paddingTop: insets.top,
+            height: insets.top + touchTarget.stitchMin,
+          },
+        ]}
+      >
+        {canGoBack ? (
+          <Pressable
+            onPress={onBack}
+            hitSlop={8}
+            style={styles.headerSlot}
+            accessibilityRole="button"
+            accessibilityLabel={t("common.back")}
+          >
+            {/*
+              Stitch draws `arrow_forward` here: under RTL the back affordance
+              points RIGHT. Icon resolves that from the layout direction, and
+              section 48 forbids rendering the ligature name as text.
+            */}
+            <Icon name="back" size={iconSize.lg} color={palette.primaryText} />
+          </Pressable>
+        ) : (
+          <View style={styles.headerSlot} />
+        )}
+        <BrandMark compact size={20} />
+        <View style={styles.headerSlot} />
+      </View>
     </KeyboardAvoidingView>
   );
 }
@@ -383,21 +448,99 @@ export function LoginScreen({ route }: Props) {
 const makeStyles = (palette: Palette) =>
   StyleSheet.create({
     root: { flex: 1, backgroundColor: palette.background },
+    /**
+     * NOT REPRODUCED: Stitch's `mesh-gradient` body. The class name is in the
+     * reference but its stops are not, and inventing a gradient is a redesign.
+     */
     content: {
       flexGrow: 1,
-      paddingHorizontal: spacing.xl,
+      justifyContent: "center",
+      paddingHorizontal: layout.containerPadding,
+    },
+    centre: {
+      width: "100%",
+      maxWidth: MAX_CARD_WIDTH,
+      alignSelf: "center",
+    },
+    header: {
+      position: "absolute",
+      top: 0,
+      // Symmetric physical insets: direction-neutral, deliberately not logical.
+      left: 0,
+      right: 0,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: layout.gutter,
+      // The app's stand-in for `backdrop-blur`: its alpha is already raised
+      // because Android has no backdrop blur.
+      backgroundColor: palette.overlay,
+      ...shadows.soft,
+    },
+    /** Stitch reserves a touch-target-wide slot on BOTH sides to centre the
+     *  wordmark, including where there is no button to put in it. */
+    headerSlot: {
+      width: touchTarget.stitchMin,
+      height: touchTarget.stitchMin,
+      alignItems: "center",
       justifyContent: "center",
     },
-    header: { alignItems: "center", marginBottom: spacing["3xl"] },
-    // Brand lettering, so `primaryText` rather than the filled `primary`.
-    brand: { ...typography.display, color: palette.primaryText },
-    role: {
-      ...typography.label,
+    /**
+     * `overflow: hidden` is REQUIRED, not cosmetic: AuthProgress's bar variant
+     * is absolutely positioned at top 0 and its square ends would cross this
+     * radius without it.
+     */
+    card: {
+      width: "100%",
+      borderRadius: radius.card,
+      padding: spacing["2xl"],
+      backgroundColor: palette.overlay,
+      borderWidth: 1,
+      borderColor: withAlpha(palette.border, 0.3),
+      overflow: "hidden",
+      ...shadows.floating,
+    },
+    dashes: { marginBottom: spacing["3xl"] },
+    /** phone_number_entry heads with headline-lg-mobile. */
+    titleSm: {
+      ...stitchType.headlineLgMobile,
+      color: palette.textPrimary,
+      textAlign: textAlignStart(),
+      marginBottom: spacing.sm,
+    },
+    /** otp_verification heads a size larger, with headline-xl. */
+    titleLg: {
+      ...stitchType.headlineXl,
+      color: palette.textPrimary,
+      textAlign: textAlignStart(),
+      marginBottom: spacing.sm,
+    },
+    subtitle: {
+      ...stitchType.bodyMd,
       color: palette.textSecondary,
-      letterSpacing: 3,
+      textAlign: textAlignStart(),
+      marginBottom: spacing["2xl"],
+    },
+    subtitleLg: {
+      ...stitchType.bodyLg,
+      color: palette.textSecondary,
+      textAlign: textAlignStart(),
+    },
+    /**
+     * A pinned Latin-content exception, same list as the brand wordmark and the
+     * plate field: a leading "+" inside an Arabic paragraph can be reordered by
+     * the bidi algorithm and land at the wrong end, which would mean rendering
+     * the one string that proves we texted the right number incorrectly.
+     */
+    echo: {
+      ...stitchType.titleMd,
+      color: palette.textPrimary,
+      textAlign: textAlignStart(),
+      writingDirection: "ltr",
       marginTop: spacing.xs,
     },
-    // Plain "row": mirrored by React Native under RTL.
+    boxes: { marginTop: spacing.lg },
+    // Plain "row": mirrored by React Native, so it reads correctly in all three.
     modeRow: {
       flexDirection: "row",
       gap: spacing.xs,
@@ -405,79 +548,51 @@ const makeStyles = (palette: Palette) =>
     },
     mode: {
       flex: 1,
-      minHeight: 44,
-      justifyContent: "center",
+      minHeight: touchTarget.stitchMin,
       alignItems: "center",
+      justifyContent: "center",
       borderRadius: radius.md,
       borderWidth: 1,
       borderColor: palette.border,
-      // Was withAlpha(offWhite, 0.06), which is invisible on a light
-      // background. `surfaceSunken` is the inset-well role and reads in both.
       backgroundColor: palette.surfaceSunken,
     },
     modeActive: {
       borderColor: palette.primary,
-      // primaryWash IS withAlpha(primaryContainer, 0.16) - the same value the
-      // hand-written version used, now named for what it means.
       backgroundColor: palette.primaryWash,
     },
     // Centred inside its own Pressable, so it needs no alignment of its own.
-    modeText: {
-      ...typography.caption,
-      color: palette.textSecondary,
+    modeText: { ...stitchType.labelSm, color: palette.textSecondary },
+    modeTextOn: { color: palette.primaryText },
+    resendRow: {
+      flexDirection: "row",
+      justifyContent: "center",
+      alignItems: "center",
+      gap: spacing.sm,
+      marginTop: spacing.lg,
     },
-    modeTextActive: { color: palette.primaryText },
-    card: { width: "100%" },
-    spacer: { height: spacing.md },
-    title: {
-      ...typography.title,
-      color: palette.textPrimary,
-      textAlign: textAlignStart(),
-    },
-    subtitle: {
-      ...typography.body,
-      color: palette.textSecondary,
-      textAlign: textAlignStart(),
-      marginTop: spacing.xs,
-      marginBottom: spacing.xl,
-    },
-    /**
-     * Deliberately LTR, and one of the pinned Latin-content exceptions: this
-     * echoes the number the driver just typed, normalised to E.164. A leading
-     * "+" inside an Arabic paragraph can be reordered by the bidi algorithm and
-     * land at the wrong end, so the one string that proves we are texting the
-     * right phone would be the string we render wrong. Centre plus explicit LTR.
-     */
-    phoneEcho: {
-      ...typography.numeric,
-      color: palette.primaryText,
-      textAlign: "center",
+    resendAsk: { ...stitchType.labelMd, color: palette.textSecondary },
+    /** Brand LETTERING, so primaryText rather than the filled primary. */
+    resendLink: { ...stitchType.labelMd, color: palette.primaryText },
+    /** Stitch renders the waiting state as the same button, disabled. */
+    resendWait: {
+      ...stitchType.labelMd,
+      color: palette.textMuted,
       writingDirection: "ltr",
-      marginBottom: spacing.lg,
+    },
+    gap: { height: spacing.md },
+    helper: {
+      ...stitchType.labelSm,
+      color: palette.textSecondary,
+      textAlign: textAlignStart(),
+      marginTop: spacing.sm,
     },
     error: {
-      ...typography.caption,
+      ...stitchType.labelSm,
       color: palette.danger,
       textAlign: textAlignStart(),
       marginTop: spacing.md,
     },
-    footNote: {
-      ...typography.caption,
-      color: palette.textSecondary,
-      textAlign: textAlignStart(),
-      marginTop: spacing.md,
-    },
-    action: { marginTop: spacing.xl },
-    // Already correct: plain "row" with space-between mirrors on its own.
-    footer: {
-      marginTop: spacing.xl,
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-    },
-    link: { ...typography.label, color: palette.primaryText },
-    timer: {
-      ...typography.caption,
-      color: palette.textSecondary,
-    },
+    action: { marginTop: spacing["2xl"] },
+    /** Stitch pins the confirm button BELOW the panel, after a 16px spacer. */
+    verify: { marginTop: spacing.lg },
   });
