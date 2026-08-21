@@ -26,7 +26,6 @@ import {
   stopLocationTracking,
   type LocationPermissionResult,
 } from "../../services/location.service";
-import { safetyApi } from "../../api";
 import { connectSocket, onSocketStatus } from "../../socket/socket.service";
 import type { SocketStatus } from "../../types/socket";
 import type { DriverStackParamList } from "../../navigation/types";
@@ -44,34 +43,30 @@ import {
 /**
  * The screen a driver looks at all day.
  *
- * PHASE 7 made it map-first. PHASE 7.5 finished the job: the only permanent
- * chrome is the brand mark and one status pill at the top, a floating status
- * card and the floating navigation at the bottom. Everything is inset from the
- * screen edges, nothing is glued to them, and the map is visible behind all of
- * it. The round map controls now carry real icons instead of glyph characters.
+ * This screen is never unmounted while the driver is signed in, it owns GPS
+ * publishing, socket status and the trip lifecycle, and tracking follows
+ * AVAILABILITY rather than the screen lifecycle - a driver who is ONLINE must
+ * keep publishing `driver:location` because MatchingService reads that position
+ * from Redis. Going OFFLINE stops the GPS, which is the only honest way to stop
+ * draining the battery.
  *
- * What deliberately did NOT change: this screen is still never unmounted while
- * the driver is signed in, it still owns GPS publishing, socket status and the
- * trip lifecycle, and tracking still follows AVAILABILITY rather than the screen
- * lifecycle - a driver who is ONLINE must keep publishing `driver:location`
- * because MatchingService reads that position from Redis. Going OFFLINE stops
- * the GPS, which is the only honest way to stop draining the battery.
+ * SOS REMOVED: the emergency report, its pending flag and the safetyApi import
+ * are gone with the rest of the SOS system, and ActiveTripCard no longer takes
+ * an `onSos` prop.
  *
- * PHASE 1 (R-8): the bottom navigation is no longer rendered here. It lived in
- * this screen with `active="map"` hardcoded, which meant it only existed on one
- * of its three sections. It is now mounted once in DriverNavigator so it
- * persists across Requests and Menu too. This screen keeps `navSpace()` because
- * its floating cards still have to clear that bar, and it subscribes to
- * `onRecenter` so the bar's centre item can still recentre the camera - that
- * follow flag is local state and stays local.
+ * TRACKING DISCLOSURE REMOVED (by request): the in-app "location tracking while
+ * you work" dialog is gone, so `startLocationTracking` is now called WITHOUT a
+ * `disclose` callback. Per the service contract that means no background
+ * permission is requested at all and delivery stays on the foreground watcher.
+ * The consequence is deliberate and worth stating: with the screen off, Android
+ * can suspend that watcher, `driver:location` stops and matching can stop
+ * seeing this driver. Re-enabling background delivery later requires a
+ * disclosure dialog again - Play policy will not accept the OS prompt cold.
  *
- * PHASE 1 (R-11): the top bar was `flexDirection: "row-reverse"`, which
- * double-flipped now that real RTL is enabled, and the map control column was
- * pinned with `left`, which never mirrors. Now `"row"` and `end`.
- *
- * Performance: no state added that changes on a GPS fix. `fix` is read from the
- * store exactly as before, the palette comes from a memoised context, and the
- * cards below are the same memoised components.
+ * The bottom navigation is mounted once in DriverNavigator, not here, so it
+ * persists across Requests and Menu. This screen keeps `navSpace()` because its
+ * floating cards still have to clear that bar, and it subscribes to `onRecenter`
+ * so the bar's centre item can recentre the camera.
  */
 export function DriverHomeScreen() {
   const insets = useSafeAreaInsets();
@@ -103,8 +98,8 @@ export function DriverHomeScreen() {
   // Trip has actually been accepted by the backend.
   const activeRoute = useTripRoute(trip);
 
-  // PHASE 4: unread messages and callability for the running trip, both read
-  // from GET /trip-communication/:tripId. Nothing is decided locally.
+  // Unread messages and callability for the running trip, both read from
+  // GET /trip-communication/:tripId. Nothing is decided locally.
   const {
     unreadCount,
     callablePhone,
@@ -113,32 +108,6 @@ export function DriverHomeScreen() {
   } = useTripCommunication(trip);
 
   const [shareOpen, setShareOpen] = useState(false);
-
-  // SOS.
-  //
-  // `fix` is the last accepted GPS fix held by the location store. It can be
-  // null when tracking is off, and the report still goes out without a
-  // position: a report with no coordinates beats no report at all. Nothing here
-  // is trusted by the server - the device sends a trip id, the server verifies
-  // the trip belongs to this driver, stamps the time and stores the position.
-  const [sosPending, setSosPending] = useState(false);
-  const raiseSos = useCallback(async () => {
-    if (sosPending) return;
-    setSosPending(true);
-    try {
-      await safetyApi.reportSos({
-        tripId: trip?.id,
-        lat: fix?.lat,
-        lng: fix?.lng,
-        type: "SOS",
-      });
-      Alert.alert(strings.safety.sentTitle, strings.safety.sentBody);
-    } catch {
-      Alert.alert(strings.safety.errorTitle, strings.safety.errorBody);
-    } finally {
-      setSosPending(false);
-    }
-  }, [sosPending, trip, fix]);
 
   const [link, setLink] = useState<SocketStatus>("idle");
   const [permission, setPermission] = useState<LocationPermissionResult | null>(
@@ -150,37 +119,6 @@ export function DriverHomeScreen() {
   // service is idempotent per mode, and this keeps the effect from even calling
   // it when nothing changed.
   const trackingModeRef = useRef<"idle" | "trip" | null>(null);
-
-  /**
-   * The background-location disclosure, shown before the OS prompt.
-   *
-   * Play policy requires the driver to be told what is collected and why BEFORE
-   * the system dialog appears, and Android never re-prompts once a driver
-   * refuses - so firing the system dialog cold would burn the only chance we
-   * get. Declining is not an error: tracking stays foreground-only.
-   */
-  const discloseBackground = useCallback(
-    () =>
-      new Promise<boolean>((resolve) => {
-        Alert.alert(
-          strings.tracking.disclosureTitle,
-          strings.tracking.disclosureBody,
-          [
-            {
-              text: strings.tracking.disclosureDecline,
-              style: "cancel",
-              onPress: () => resolve(false),
-            },
-            {
-              text: strings.tracking.disclosureAccept,
-              onPress: () => resolve(true),
-            },
-          ],
-          { cancelable: false },
-        );
-      }),
-    [],
-  );
 
   useEffect(() => {
     // The socket is session-owned and already open after login; this only
@@ -201,16 +139,15 @@ export function DriverHomeScreen() {
     if (trackingModeRef.current === desired) return;
 
     trackingModeRef.current = desired;
-    void startLocationTracking(desired, {
-      disclose: discloseBackground,
-    }).then((result) => {
+    // No `disclose`: foreground-only tracking, no background prompt.
+    void startLocationTracking(desired).then((result) => {
       if (!cancelled) setPermission(result);
     });
 
     return () => {
       cancelled = true;
     };
-  }, [isOnline, onTrip, discloseBackground]);
+  }, [isOnline, onTrip]);
 
   // Leaving the signed-in stack entirely (sign-out) must not leave the GPS on.
   useEffect(() => {
@@ -247,7 +184,7 @@ export function DriverHomeScreen() {
    */
   const dialPassenger = useCallback(() => {
     void callPassenger().then((ok) => {
-      if (!ok) Alert.alert(strings.safety.errorTitle, strings.chat.callFailed);
+      if (!ok) Alert.alert(strings.chat.callFailed, undefined);
     });
   }, [callPassenger]);
 
@@ -315,9 +252,9 @@ export function DriverHomeScreen() {
         follow={follow}
         onPanByUser={onPanByUser}
         route={activeRoute}
-        // PHASE 2: picks the marker artwork. The class is the one staff approved
-        // on the vehicle, so an unapproved or missing vehicle falls back to the
-        // car marker rather than blocking the map.
+        // Picks the marker artwork. The class is the one staff approved on the
+        // vehicle, so an unapproved or missing vehicle falls back to the car
+        // marker rather than blocking the map.
         rideClass={vehicle?.rideClass ?? null}
       />
 
@@ -383,7 +320,6 @@ export function DriverHomeScreen() {
           bottomInset={bottomInset}
           onAdvance={() => void advance()}
           onCancel={() => void cancelTripNow()}
-          onSos={() => void raiseSos()}
           onChat={openChat}
           onCall={callablePhone ? dialPassenger : undefined}
           unreadCount={unreadCount}
@@ -439,7 +375,7 @@ const styles = StyleSheet.create({
     right: 0,
     top: 0,
     // Plain "row": React Native mirrors it under RTL, so the brand mark leads
-    // and the pills trail in every language. See the R-11 note above.
+    // and the pills trail in every language.
     flexDirection: "row",
     alignItems: "flex-start",
     justifyContent: "space-between",
@@ -451,7 +387,7 @@ const styles = StyleSheet.create({
   controls: {
     position: "absolute",
     // `end`, not `left`: the control column belongs on the trailing edge, which
-    // mirrors with the layout. `left` would stay put in both directions.
+    // mirrors with the layout.
     end: spacing.lg,
     gap: spacing.sm,
   },
