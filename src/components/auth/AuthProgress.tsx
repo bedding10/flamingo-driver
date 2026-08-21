@@ -1,8 +1,9 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 
 import { useTranslation } from "../../i18n";
-import { COLORS, RADIUS, SPACING } from "../../theme/tokens";
+import { RADIUS, SPACING } from "../../theme/tokens";
+import { useTokens, type Tokens } from "../../theme/useTokens";
 
 /** Stitch: `h-1` bar on the phone screen, `h-1.5 w-8` dashes on the OTP one. */
 const BAR_HEIGHT = 4;
@@ -39,6 +40,8 @@ export function AuthProgress({
   style,
 }: Props) {
   const { t } = useTranslation();
+  const tokens = useTokens();
+  const styles = useMemo(() => makeStyles(tokens), [tokens]);
 
   return (
     <View
@@ -60,29 +63,38 @@ export function AuthProgress({
   );
 }
 
-const styles = StyleSheet.create({
-  /**
-   * Stitch `absolute top-0 left-0 right-0`. NOTE: the card that holds this must
-   * clip its content, or these square ends cross its corner radius.
-   */
-  bar: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: BAR_HEIGHT,
-    // Plain "row": RN mirrors it, so step 1 sits at the leading edge.
-    flexDirection: "row",
-    gap: SPACING.sm,
-  },
-  segment: { flex: 1, height: BAR_HEIGHT },
-  dashes: {
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: SPACING.sm,
-  },
-  dash: { height: DASH_HEIGHT, width: DASH_WIDTH, borderRadius: RADIUS.full },
-  /** A filled brand surface, so primary-container. */
-  on: { backgroundColor: COLORS.primaryContainer },
-  off: { backgroundColor: COLORS.surfaceVariant },
-});
+function makeStyles(t: Tokens) {
+  return StyleSheet.create({
+    /**
+     * Stitch `absolute top-0 left-0 right-0`. NOTE: the card that holds this
+     * must clip its content, or these square ends cross its corner radius.
+     */
+    bar: {
+      position: "absolute",
+      top: 0,
+      left: 0,
+      right: 0,
+      height: BAR_HEIGHT,
+      // Plain "row": RN mirrors it, so step 1 sits at the leading edge.
+      flexDirection: "row",
+      gap: SPACING.sm,
+    },
+    segment: { flex: 1, height: BAR_HEIGHT },
+    dashes: {
+      flexDirection: "row",
+      justifyContent: "center",
+      gap: SPACING.sm,
+    },
+    dash: { height: DASH_HEIGHT, width: DASH_WIDTH, borderRadius: RADIUS.full },
+    /** Brand constant: a filled surface, so primary-container in both schemes. */
+    on: { backgroundColor: t.colors.primaryContainer },
+    /**
+     * On light, surface-variant is within a shade of the card fill and the
+     * unvisited steps vanish, so the indicator stops indicating anything.
+     */
+    off: {
+      backgroundColor:
+        t.mode === "light" ? t.colors.outlineVariant : t.colors.surfaceVariant,
+    },
+  });
+}
